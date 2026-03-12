@@ -11,7 +11,7 @@
 ## Hitos frontend
 | Hito | Nombre | Estado frontend | Tests | Documentacion | Commit | Observaciones |
 |------|--------|-----------------|-------|---------------|--------|---------------|
-| 1 | Inicializacion y orden del proyecto | Completado | OK (`flutter test`) | Completada | Hecho (`7d60e05`, `ea8e76b`) | Documentacion base creada, test de smoke aprobado y cierre de hito confirmado. |
+| 1 | Inicializacion y orden del proyecto | Completado | OK (`flutter test`) | Completada | Hecho (`7d60e05`, `ea8e76b`, `8ecd571`) | Documentacion base creada, test de smoke aprobado y cierre de hito confirmado. |
 | 3 | Configuracion base frontend Flutter Desktop + estructura del cliente | Pendiente | Pendiente | Pendiente | Pendiente | Estructura de app y organizacion por modulos. |
 | 4 | Modelo de dominio de reservas | Pendiente | Pendiente | Pendiente | Pendiente | Modelos de datos y serializacion. |
 | 6 | Pantallas base de agenda y creacion de reserva | Pendiente | Pendiente | Pendiente | Pendiente | Primer flujo operativo de UI. |
@@ -23,7 +23,7 @@
 ## Pendientes inmediatos frontend
 - Definir convencion interna de carpetas para capas UI/servicios/modelos en Hito 3.
 - Alinear naming de app (`quedras` vs `quadras`) para evitar inconsistencias.
-- Esperar inicio formal de Hito 3 luego de cierre global del Hito 1 en tablero.
+- Preparar inicio formal de Hito 3 en cuanto se habilite el frente de cliente.
 
 ## Bloqueos frontend
 - Ninguno tecnico propio.
