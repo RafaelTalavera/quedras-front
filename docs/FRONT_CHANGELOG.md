@@ -29,3 +29,11 @@
   - Documentacion de seguimiento en `docs/`
 - Motivo del cambio: Registrar baseline frontend y seguimiento operativo en control de versiones.
 - Impacto funcional: Sin cambios funcionales nuevos.
+
+## 2026-03-12 | Hito 1 | Revalidacion de frontend y cierre documental
+- Componente afectado: Frontend (calidad + documentacion)
+- Archivos tocados:
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Revalidar `flutter test` y confirmar cierre de frontend para Hito 1.
+- Impacto funcional: Sin cambios funcionales en UI.

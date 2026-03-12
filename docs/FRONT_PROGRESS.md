@@ -2,7 +2,7 @@
 
 ## Estado general frontend
 - Proyecto: QUEDRAS Frontend
-- Estado: En progreso (sin bloqueos propios; depende del cierre de Hito 1 backend)
+- Estado: En progreso (Hito 1 frontend validado y cerrado)
 - Ultimo hito trabajado: Hito 1 - Inicializacion y orden del proyecto
 - Ultima actualizacion: 2026-03-12
 - Fuente de verdad global: `C:/Users/Public/Documents/Proyectos/quadras/docs/TABLERO_PROGRESO.md`
@@ -11,7 +11,7 @@
 ## Hitos frontend
 | Hito | Nombre | Estado frontend | Tests | Documentacion | Commit | Observaciones |
 |------|--------|-----------------|-------|---------------|--------|---------------|
-| 1 | Inicializacion y orden del proyecto | Completado | OK (`flutter test`) | Completada | Hecho (`7d60e05`) | Documentacion base creada y test de smoke aprobado. |
+| 1 | Inicializacion y orden del proyecto | Completado | OK (`flutter test`) | Completada | Hecho (`7d60e05`, `ea8e76b`) | Documentacion base creada, test de smoke aprobado y cierre de hito confirmado. |
 | 3 | Configuracion base frontend Flutter Desktop + estructura del cliente | Pendiente | Pendiente | Pendiente | Pendiente | Estructura de app y organizacion por modulos. |
 | 4 | Modelo de dominio de reservas | Pendiente | Pendiente | Pendiente | Pendiente | Modelos de datos y serializacion. |
 | 6 | Pantallas base de agenda y creacion de reserva | Pendiente | Pendiente | Pendiente | Pendiente | Primer flujo operativo de UI. |
@@ -23,8 +23,8 @@
 ## Pendientes inmediatos frontend
 - Definir convencion interna de carpetas para capas UI/servicios/modelos en Hito 3.
 - Alinear naming de app (`quedras` vs `quadras`) para evitar inconsistencias.
-- Mantener sincronizacion con el desbloqueo backend de Hito 1 antes de iniciar integraciones.
+- Esperar inicio formal de Hito 3 luego de cierre global del Hito 1 en tablero.
 
 ## Bloqueos frontend
 - Ninguno tecnico propio.
-- Dependencia externa: Hito 1 global bloqueado por tests backend.
+- Ninguna dependencia bloqueante activa.
