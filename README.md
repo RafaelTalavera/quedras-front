@@ -1,16 +1,24 @@
-# quedras
+# QUEDRAS Frontend
 
-A new Flutter project.
+Cliente Flutter Desktop para operacion interna de reservas de cancha.
 
-## Getting Started
+## Ejecucion local
+```powershell
+flutter run -d windows --dart-define=QUEDRAS_API_BASE_URL=http://127.0.0.1:8080/api/v1
+```
 
-This project is a starting point for a Flutter application.
+## Validacion tecnica
+```powershell
+flutter test
+flutter analyze
+```
 
-A few resources to get you started if this is your first Flutter project:
+## Build de Windows
+```powershell
+flutter build windows --release --dart-define=QUEDRAS_API_BASE_URL=http://127.0.0.1:8080/api/v1
+```
 
-- [Lab: Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Cookbook: Useful Flutter samples](https://docs.flutter.dev/cookbook)
-
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Documentacion de soporte
+- `docs/INSTALACION_FRONTEND_HOTEL.md`
+- `docs/VALIDACION_FRONTEND_HITO10.md`
+- `docs/FRONT_PROGRESS.md`

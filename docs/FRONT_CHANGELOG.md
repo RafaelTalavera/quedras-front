@@ -187,3 +187,22 @@
   - `docs/FRONT_CHANGELOG.md`
 - Motivo del cambio: Validar adaptador HTTP de reservas, actualizar dobles de `ApiClient` y consolidar cierre documental del Hito 9.
 - Impacto funcional: `flutter test` y `flutter analyze` en verde con cobertura de escenarios de exito y error en integracion local.
+
+## 2026-03-12 | Hito 10 | Preparacion de instalacion y preflight frontend
+- Componente afectado: Frontend (documentacion + scripts operativos)
+- Archivos tocados:
+  - `README.md`
+  - `docs/INSTALACION_FRONTEND_HOTEL.md`
+  - `docs/VALIDACION_FRONTEND_HITO10.md`
+  - `scripts/frontend_preflight.ps1`
+- Motivo del cambio: Consolidar guia de instalacion/ejecucion del cliente y script de preflight para validar entorno de despliegue.
+- Impacto funcional: Sin cambios en logica de UI; mejora la capacidad de instalacion y soporte operativo.
+
+## 2026-03-12 | Hito 10 | Validacion tecnica y deteccion de bloqueo de build
+- Componente afectado: Frontend (calidad + gobernanza)
+- Archivos tocados:
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+  - `docs/VALIDACION_FRONTEND_HITO10.md`
+- Motivo del cambio: Ejecutar `flutter test`, `flutter analyze`, `flutter build windows --release` y documentar bloqueo real por toolchain Visual Studio incompleto.
+- Impacto funcional: Flujo funcional validado en desarrollo; build instalable Windows bloqueado hasta completar instalacion de Visual Studio.

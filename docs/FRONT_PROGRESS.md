@@ -2,11 +2,11 @@
 
 ## Estado general frontend
 - Proyecto: QUEDRAS Frontend
-- Estado: En progreso (Hito 9 completado en frontend)
-- Ultimo hito trabajado: Hito 9 - Conexion frontend-backend local
+- Estado: Bloqueado (Hito 10 en ejecucion)
+- Ultimo hito trabajado: Hito 10 - Validacion integral, documentacion final y preparacion para instalacion
 - Ultima actualizacion: 2026-03-12
 - Fuente de verdad global: `C:/Users/Public/Documents/Proyectos/quadras/docs/TABLERO_PROGRESO.md`
-- Proximo paso frontend: Avanzar a Hito 10 para validacion integral y preparacion de instalacion.
+- Proximo paso frontend: Completar toolchain de Visual Studio y reintentar build Windows release.
 
 ## Hitos frontend
 | Hito | Nombre | Estado frontend | Tests | Documentacion | Commit | Observaciones |
@@ -19,13 +19,13 @@
 | 7 | Validacion de solapamientos y reglas de negocio | Completado | OK (`flutter test`, `flutter analyze`) | Completada | Hecho (commit de cierre de Hito 7 frontend) | Reglas de horario, duracion y solapamiento alineadas al backend con mensajes consistentes. |
 | 8 | Edicion y cancelacion de reservas | Completado | OK (`flutter test`, `flutter analyze`) | Completada | Hecho (commit de cierre de Hito 8 frontend) | Agenda permite editar/cancelar reservas con reglas de estado y mensajes alineados al backend. |
 | 9 | Conexion frontend-backend local | Completado | OK (`flutter test`, `flutter analyze`) | Completada | Hecho (commit de cierre de Hito 9 frontend) | Servicio de reservas conectado por HTTP local con manejo de errores de API y red. |
-| 10 | Validacion integral, documentacion final y preparacion para instalacion | Pendiente | Pendiente | Pendiente | Pendiente | Cierre de version instalable. |
+| 10 | Validacion integral, documentacion final y preparacion para instalacion | Bloqueado | `flutter test` OK, `flutter analyze` OK, `flutter build windows --release` bloqueado | En progreso | Pendiente | Build Windows bloqueado por instalacion incompleta de Visual Studio Build Tools. |
 
 ## Pendientes inmediatos frontend
-- Iniciar Hito 10 para pruebas integrales de flujo completo en entorno local.
-- Definir checklist de instalacion/ejecucion para puesto operativo del hotel.
+- Completar instalacion de Visual Studio Build Tools para desktop Windows.
+- Reintentar `flutter build windows --release` y validar artefacto de instalacion.
 - Mantener alineacion de naming de entorno (`quedras`/`quadras`) para evitar confusion operativa.
 
 ## Bloqueos frontend
-- Ninguno tecnico propio.
-- Ninguna dependencia bloqueante activa.
+- Toolchain Windows incompleto: `Unable to find suitable Visual Studio toolchain`.
+- `flutter doctor -v`: `The current Visual Studio installation is incomplete.`
