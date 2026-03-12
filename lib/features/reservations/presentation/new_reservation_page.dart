@@ -13,6 +13,10 @@ class NewReservationPage extends StatefulWidget {
 }
 
 class _NewReservationPageState extends State<NewReservationPage> {
+  static const int _openingMinutes = 7 * 60;
+  static const int _closingMinutes = 23 * 60;
+  static const Set<int> _allowedDurationsMinutes = <int>{60, 90, 120};
+
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   late final TextEditingController _guestController;
   late final TextEditingController _notesController;
@@ -204,6 +208,12 @@ class _NewReservationPageState extends State<NewReservationPage> {
                 ),
                 SizedBox(height: 12),
                 _FieldHint(label: 'Estado inicial', hint: 'SCHEDULED'),
+                SizedBox(height: 12),
+                _FieldHint(
+                  label: 'Reglas Hito 7',
+                  hint:
+                      'Horario 07:00-23:00 | Duraciones 60/90/120 min | Sin solapamientos',
+                ),
               ],
             ),
           ),
@@ -263,9 +273,27 @@ class _NewReservationPageState extends State<NewReservationPage> {
       return;
     }
 
-    if (_toMinutes(_startTime) >= _toMinutes(_endTime)) {
+    final int startMinutes = _toMinutes(_startTime);
+    final int endMinutes = _toMinutes(_endTime);
+
+    if (startMinutes >= endMinutes) {
       setState(() {
         _error = 'La hora de inicio debe ser menor a la hora de fin.';
+        _success = null;
+      });
+      return;
+    }
+    if (startMinutes < _openingMinutes || endMinutes > _closingMinutes) {
+      setState(() {
+        _error = 'Reservation must be within operating hours 07:00 to 23:00.';
+        _success = null;
+      });
+      return;
+    }
+    final int durationMinutes = endMinutes - startMinutes;
+    if (!_allowedDurationsMinutes.contains(durationMinutes)) {
+      setState(() {
+        _error = 'Reservation duration must be 60, 90 or 120 minutes.';
         _success = null;
       });
       return;
@@ -304,10 +332,11 @@ class _NewReservationPageState extends State<NewReservationPage> {
       if (!mounted) {
         return;
       }
+      final String errorMessage = _resolveErrorMessage(error);
       setState(() {
         _saving = false;
         _success = null;
-        _error = 'No se pudo crear la reserva: $error';
+        _error = errorMessage;
       });
     }
   }
@@ -325,6 +354,16 @@ class _NewReservationPageState extends State<NewReservationPage> {
   }
 
   static int _toMinutes(TimeOfDay value) => (value.hour * 60) + value.minute;
+
+  static String _resolveErrorMessage(Object error) {
+    if (error is StateError) {
+      final String rawMessage = error.message.toString().trim();
+      if (rawMessage.isNotEmpty) {
+        return rawMessage;
+      }
+    }
+    return error.toString();
+  }
 
   static String _formatDateApi(DateTime date) {
     final String month = date.month.toString().padLeft(2, '0');

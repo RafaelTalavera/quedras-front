@@ -130,3 +130,20 @@
   - `docs/FRONT_CHANGELOG.md`
 - Motivo del cambio: Crear formulario de alta con validaciones locales y persistencia en memoria para flujo operativo inicial.
 - Impacto funcional: Se habilita alta de reservas en cliente con mensajes de exito/error, listo para evolucionar reglas en Hito 7.
+
+## 2026-03-12 | Hito 7 | Reglas de solapamiento y negocio en cliente
+- Componente afectado: Frontend (servicio de reservas + formulario de alta)
+- Archivos tocados:
+  - `lib/features/reservations/application/reservation_app_service.dart`
+  - `lib/features/reservations/presentation/new_reservation_page.dart`
+  - `test/features/reservations/application/reservation_app_service_test.dart`
+- Motivo del cambio: Alinear el cliente con las reglas de backend para horario operativo, duraciones permitidas y rechazo de solapamientos.
+- Impacto funcional: La UI y el servicio en memoria bloquean reservas invalidas y muestran mensajes consistentes con API.
+
+## 2026-03-12 | Hito 7 | Validacion tecnica y cierre documental frontend
+- Componente afectado: Frontend (calidad + seguimiento)
+- Archivos tocados:
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Ejecutar `flutter test` y `flutter analyze` en verde y consolidar cierre del Hito 7 en el seguimiento frontend.
+- Impacto funcional: Frontend validado y listo para iniciar Hito 8 sin cambios fuera del alcance del hito.

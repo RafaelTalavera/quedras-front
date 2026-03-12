@@ -33,6 +33,82 @@ void main() {
     expect(reservations.length, 1);
     expect(reservations.first.guestName, 'Pedro Lima');
   });
+
+  test('InMemoryReservationAppService rechaza solapamientos', () async {
+    final InMemoryReservationAppService service =
+        InMemoryReservationAppService();
+    final String today = _todayDate();
+
+    await expectLater(
+      () => service.create(
+        CreateReservationModel(
+          guestName: 'Conflicto Horario',
+          reservationDate: today,
+          startTime: '08:30:00',
+          endTime: '09:30:00',
+          notes: null,
+        ),
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (StateError error) => error.message.toString(),
+          'message',
+          'Reservation overlaps with an existing booking.',
+        ),
+      ),
+    );
+  });
+
+  test(
+    'InMemoryReservationAppService rechaza horario fuera de ventana',
+    () async {
+      final InMemoryReservationAppService service =
+          InMemoryReservationAppService();
+
+      await expectLater(
+        () => service.create(
+          CreateReservationModel(
+            guestName: 'Horario Fuera',
+            reservationDate: '2026-03-20',
+            startTime: '06:00:00',
+            endTime: '07:00:00',
+            notes: null,
+          ),
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (StateError error) => error.message.toString(),
+            'message',
+            'Reservation must be within operating hours 07:00 to 23:00.',
+          ),
+        ),
+      );
+    },
+  );
+
+  test('InMemoryReservationAppService rechaza duracion no permitida', () async {
+    final InMemoryReservationAppService service =
+        InMemoryReservationAppService();
+
+    await expectLater(
+      () => service.create(
+        CreateReservationModel(
+          guestName: 'Duracion Fuera',
+          reservationDate: '2026-03-20',
+          startTime: '10:00:00',
+          endTime: '10:45:00',
+          notes: null,
+        ),
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (StateError error) => error.message.toString(),
+          'message',
+          'Reservation duration must be 60, 90 or 120 minutes.',
+        ),
+      ),
+    );
+  });
 }
 
 String _todayDate() {

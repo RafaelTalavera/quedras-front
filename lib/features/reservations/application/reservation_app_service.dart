@@ -9,6 +9,10 @@ abstract interface class ReservationAppService {
 }
 
 final class InMemoryReservationAppService implements ReservationAppService {
+  static const int _openingMinutes = 7 * 60;
+  static const int _closingMinutes = 23 * 60;
+  static const Set<int> _allowedDurationsMinutes = <int>{60, 90, 120};
+
   InMemoryReservationAppService()
     : _items = <ReservationModel>[
         ReservationModel(
@@ -61,8 +65,36 @@ final class InMemoryReservationAppService implements ReservationAppService {
         'El nombre del huesped debe tener al menos 3 caracteres.',
       );
     }
-    if (_timeToMinutes(input.startTime) >= _timeToMinutes(input.endTime)) {
+    final int startMinutes = _timeToMinutes(input.startTime);
+    final int endMinutes = _timeToMinutes(input.endTime);
+
+    if (startMinutes >= endMinutes) {
       throw StateError('La hora de inicio debe ser anterior a la hora de fin.');
+    }
+    if (startMinutes < _openingMinutes || endMinutes > _closingMinutes) {
+      throw StateError(
+        'Reservation must be within operating hours 07:00 to 23:00.',
+      );
+    }
+
+    final int durationMinutes = endMinutes - startMinutes;
+    if (!_allowedDurationsMinutes.contains(durationMinutes)) {
+      throw StateError('Reservation duration must be 60, 90 or 120 minutes.');
+    }
+
+    final bool overlaps = _items.any((ReservationModel existing) {
+      if (existing.reservationDate != input.reservationDate) {
+        return false;
+      }
+      if (existing.status == ReservationStatus.cancelled) {
+        return false;
+      }
+      final int existingStart = _timeToMinutes(existing.startTime);
+      final int existingEnd = _timeToMinutes(existing.endTime);
+      return existingStart < endMinutes && existingEnd > startMinutes;
+    });
+    if (overlaps) {
+      throw StateError('Reservation overlaps with an existing booking.');
     }
 
     final DateTime now = DateTime.now().toUtc();
