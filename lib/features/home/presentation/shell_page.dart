@@ -4,15 +4,22 @@ import 'package:flutter/material.dart';
 
 import '../../../app/router/app_routes.dart';
 import '../../../core/network/api_client.dart';
+import '../../reservations/application/reservation_app_service.dart';
 import '../../dashboard/presentation/dashboard_page.dart';
 import '../../reservations/presentation/new_reservation_page.dart';
 import '../../schedule/presentation/schedule_page.dart';
 
 class ShellPage extends StatefulWidget {
-  const ShellPage({required this.section, required this.apiClient, super.key});
+  const ShellPage({
+    required this.section,
+    required this.apiClient,
+    required this.reservationAppService,
+    super.key,
+  });
 
   final AppSection section;
   final ApiClient apiClient;
+  final ReservationAppService reservationAppService;
 
   @override
   State<ShellPage> createState() => _ShellPageState();
@@ -89,9 +96,13 @@ class _ShellPageState extends State<ShellPage> {
       case AppSection.dashboard:
         return DashboardPage(apiClient: widget.apiClient);
       case AppSection.schedule:
-        return const SchedulePage();
+        return SchedulePage(
+          reservationAppService: widget.reservationAppService,
+        );
       case AppSection.newReservation:
-        return const NewReservationPage();
+        return NewReservationPage(
+          reservationAppService: widget.reservationAppService,
+        );
     }
   }
 

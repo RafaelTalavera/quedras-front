@@ -108,3 +108,25 @@
   - `docs/FRONT_CHANGELOG.md`
 - Motivo del cambio: Registrar que Hito 5 se implementa en backend, revalidando frontend sin cambios funcionales.
 - Impacto funcional: Sin cambios en UI; cliente listo para iniciar Hito 6 con API disponible.
+
+## 2026-03-12 | Hito 6 | Pantalla base de agenda diaria
+- Componente afectado: Frontend (feature schedule)
+- Archivos tocados:
+  - `lib/features/schedule/presentation/schedule_page.dart`
+  - `lib/features/reservations/application/reservation_app_service.dart`
+  - `lib/features/home/presentation/shell_page.dart`
+  - `lib/app/router/app_router.dart`
+  - `lib/app/quedras_app.dart`
+- Motivo del cambio: Implementar agenda diaria operativa con carga, error, estado vacio y refresco por fecha.
+- Impacto funcional: La app permite visualizar reservas del dia con estados locales y recarga manual.
+
+## 2026-03-12 | Hito 6 | Formulario base de nueva reserva
+- Componente afectado: Frontend (feature reservations)
+- Archivos tocados:
+  - `lib/features/reservations/presentation/new_reservation_page.dart`
+  - `lib/features/reservations/application/reservation_app_service.dart`
+  - `test/features/reservations/application/reservation_app_service_test.dart`
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Crear formulario de alta con validaciones locales y persistencia en memoria para flujo operativo inicial.
+- Impacto funcional: Se habilita alta de reservas en cliente con mensajes de exito/error, listo para evolucionar reglas en Hito 7.

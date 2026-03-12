@@ -3,26 +3,50 @@ import 'package:flutter/material.dart';
 import '../core/config/backend_config.dart';
 import '../core/network/api_client.dart';
 import '../core/network/local_http_client.dart';
+import '../features/reservations/application/reservation_app_service.dart';
 import 'router/app_router.dart';
 import 'router/app_routes.dart';
 
-class QuedrasApp extends StatelessWidget {
-  const QuedrasApp({super.key, ApiClient? apiClient}) : _apiClient = apiClient;
+class QuedrasApp extends StatefulWidget {
+  const QuedrasApp({
+    super.key,
+    ApiClient? apiClient,
+    ReservationAppService? reservationAppService,
+  }) : _apiClient = apiClient,
+       _reservationAppService = reservationAppService;
 
   final ApiClient? _apiClient;
+  final ReservationAppService? _reservationAppService;
+
+  @override
+  State<QuedrasApp> createState() => _QuedrasAppState();
+}
+
+class _QuedrasAppState extends State<QuedrasApp> {
+  late final ApiClient _apiClient;
+  late final ReservationAppService _reservationAppService;
+
+  @override
+  void initState() {
+    super.initState();
+    _apiClient =
+        widget._apiClient ?? LocalHttpClient(baseUrl: BackendConfig.apiBaseUrl);
+    _reservationAppService =
+        widget._reservationAppService ?? InMemoryReservationAppService();
+  }
 
   @override
   Widget build(BuildContext context) {
-    final ApiClient apiClient =
-        _apiClient ?? LocalHttpClient(baseUrl: BackendConfig.apiBaseUrl);
-
     return MaterialApp(
       title: 'QUEDRAS',
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(),
       initialRoute: AppRoutes.dashboard,
-      onGenerateRoute: (settings) =>
-          AppRouter.generateRoute(settings: settings, apiClient: apiClient),
+      onGenerateRoute: (settings) => AppRouter.generateRoute(
+        settings: settings,
+        apiClient: _apiClient,
+        reservationAppService: _reservationAppService,
+      ),
     );
   }
 
