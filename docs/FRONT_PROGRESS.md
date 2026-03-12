@@ -11,7 +11,7 @@
 ## Hitos frontend
 | Hito | Nombre | Estado frontend | Tests | Documentacion | Commit | Observaciones |
 |------|--------|-----------------|-------|---------------|--------|---------------|
-| 1 | Inicializacion y orden del proyecto | Completado | OK (`flutter test`) | Completada | Pendiente | Documentacion base creada y test de smoke aprobado. |
+| 1 | Inicializacion y orden del proyecto | Completado | OK (`flutter test`) | Completada | Hecho (`7d60e05`) | Documentacion base creada y test de smoke aprobado. |
 | 3 | Configuracion base frontend Flutter Desktop + estructura del cliente | Pendiente | Pendiente | Pendiente | Pendiente | Estructura de app y organizacion por modulos. |
 | 4 | Modelo de dominio de reservas | Pendiente | Pendiente | Pendiente | Pendiente | Modelos de datos y serializacion. |
 | 6 | Pantallas base de agenda y creacion de reserva | Pendiente | Pendiente | Pendiente | Pendiente | Primer flujo operativo de UI. |

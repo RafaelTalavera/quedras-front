@@ -21,3 +21,11 @@
   - `test/widget_test.dart` (ejecutado sin cambios)
 - Motivo del cambio: Ejecutar `flutter test` para validar estabilidad base.
 - Impacto funcional: Sin cambios funcionales; test de smoke aprobado.
+
+## 2026-03-12 | Hito 1 | Commit frontend de inicializacion
+- Componente afectado: Frontend (codigo base + documentacion)
+- Archivos tocados:
+  - Estructura base Flutter Desktop (`lib/`, `test/`, `windows/`, `pubspec*`)
+  - Documentacion de seguimiento en `docs/`
+- Motivo del cambio: Registrar baseline frontend y seguimiento operativo en control de versiones.
+- Impacto funcional: Sin cambios funcionales nuevos.
