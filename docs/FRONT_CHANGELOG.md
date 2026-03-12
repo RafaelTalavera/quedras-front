@@ -206,3 +206,13 @@
   - `docs/VALIDACION_FRONTEND_HITO10.md`
 - Motivo del cambio: Ejecutar `flutter test`, `flutter analyze`, `flutter build windows --release` y documentar bloqueo real por toolchain Visual Studio incompleto.
 - Impacto funcional: Flujo funcional validado en desarrollo; build instalable Windows bloqueado hasta completar instalacion de Visual Studio.
+
+## 2026-03-12 | Hito 10 | Resolucion de toolchain y cierre de build Windows
+- Componente afectado: Frontend (instalacion + validacion final)
+- Archivos tocados:
+  - `docs/INSTALACION_FRONTEND_HOTEL.md`
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/VALIDACION_FRONTEND_HITO10.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Resolver prerequisitos de Visual Studio para Flutter Desktop y confirmar build release de Windows sin bloqueos.
+- Impacto funcional: Frontend queda cerrando Hito 10 con `flutter test`, `flutter analyze`, `flutter doctor -v` y `flutter build windows --release` en OK.

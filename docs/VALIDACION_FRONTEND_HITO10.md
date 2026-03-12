@@ -8,16 +8,15 @@
 |---|---|---|
 | Pruebas | `flutter test` | OK |
 | Analisis estatico | `flutter analyze` | OK |
-| Build Windows release | `flutter build windows --release` | Bloqueado |
-| Diagnostico de toolchain | `flutter doctor -v` | Visual Studio incompleto |
+| Build Windows release | `flutter build windows --release` | OK (`build/windows/x64/runner/Release/quedras.exe`) |
+| Diagnostico de toolchain | `flutter doctor -v` | OK (`No issues found!`) |
 
-## Bloqueo detectado
-- `flutter build windows --release` falla con:
-  - `Unable to find suitable Visual Studio toolchain`
-- `flutter doctor -v` reporta:
-  - `Visual Studio Build Tools 2019 ...`
-  - `The current Visual Studio installation is incomplete.`
+## Resolucion de toolchain
+- Se instalo `Visual Studio Community 2022` con workload `Desktop development with C++` y componentes requeridos para Flutter Desktop.
+- `flutter doctor -v` detecta correctamente:
+  - `Visual Studio Community 2022 version 17.14.37027.9`
+  - `Windows 10 SDK version 10.0.26100.0`
 
 ## Impacto
-- La aplicacion puede ejecutarse en modo desarrollo y pasar pruebas/analyze.
-- El artefacto instalable Windows requiere completar la instalacion de Visual Studio Build Tools.
+- La aplicacion queda validada en pruebas, analisis estatico y build release de Windows.
+- Se habilita cierre completo de Hito 10 sin bloqueos tecnicos en frontend.

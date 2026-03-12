@@ -6,6 +6,7 @@ Instalar y ejecutar el cliente Flutter Desktop conectado al backend local del ho
 ## Prerequisitos
 - Windows 10/11.
 - Flutter SDK estable instalado.
+- Visual Studio 2022 con workload `Desktop development with C++` (incluyendo MSVC, CMake tools y Windows SDK).
 - `flutter doctor -v` sin errores bloqueantes para desktop Windows.
 - Backend QUEDRAS operativo en red local.
 
