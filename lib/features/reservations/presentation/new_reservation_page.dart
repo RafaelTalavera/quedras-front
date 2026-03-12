@@ -17,7 +17,7 @@ class NewReservationPage extends StatelessWidget {
         ),
         const SizedBox(height: 8),
         Text(
-          'Formulario base preparado para el flujo de alta del Hito 6.',
+          'Contrato de dominio listo; el formulario operativo se implementa en Hito 6.',
           style: Theme.of(
             context,
           ).textTheme.bodyLarge?.copyWith(color: const Color(0xFF4E6071)),
@@ -39,6 +39,36 @@ class NewReservationPage extends StatelessWidget {
                 _FieldHint(
                   label: 'Horario',
                   hint: 'Pendiente de implementacion',
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(18),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: const <Widget>[
+                Text(
+                  'Contrato JSON (Hito 4)',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    color: Color(0xFF2A3B4C),
+                  ),
+                ),
+                SizedBox(height: 8),
+                _FieldHint(
+                  label: 'Campos base',
+                  hint:
+                      'id, guestName, reservationDate, startTime, endTime, status, notes',
+                ),
+                SizedBox(height: 12),
+                _FieldHint(
+                  label: 'Estados',
+                  hint: 'SCHEDULED, COMPLETED, CANCELLED',
                 ),
               ],
             ),

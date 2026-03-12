@@ -81,3 +81,22 @@
   - `docs/FRONT_CHANGELOG.md`
 - Motivo del cambio: Validar estabilidad de la nueva estructura con `flutter test` y `flutter analyze`, y dejar trazabilidad documental.
 - Impacto funcional: Frontend base queda estable para iniciar Hito 4.
+
+## 2026-03-12 | Hito 4 | Modelos de reserva y contrato de serializacion
+- Componente afectado: Frontend (dominio de reservas)
+- Archivos tocados:
+  - `lib/features/reservations/domain/reservation_status.dart`
+  - `lib/features/reservations/domain/reservation_model.dart`
+  - `lib/features/reservations/domain/create_reservation_model.dart`
+  - `lib/features/reservations/presentation/new_reservation_page.dart`
+- Motivo del cambio: Definir contrato de datos del cliente alineado con backend para preparar los siguientes hitos.
+- Impacto funcional: La UI mantiene comportamiento actual; se agregan estructuras de dominio reutilizables para API y vistas.
+
+## 2026-03-12 | Hito 4 | Pruebas de serializacion y cierre documental frontend
+- Componente afectado: Frontend (calidad + seguimiento)
+- Archivos tocados:
+  - `test/features/reservations/domain/reservation_models_test.dart`
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Validar `fromJson/toJson` de reservas y registrar cierre de frontend del Hito 4.
+- Impacto funcional: Contrato frontend validado en `flutter test` y `flutter analyze`.
