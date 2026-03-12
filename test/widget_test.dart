@@ -1,30 +1,40 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:quedras/main.dart';
+import 'package:quedras/app/quedras_app.dart';
+import 'package:quedras/core/network/api_client.dart';
 
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('Carga shell inicial y permite navegar por secciones', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(QuedrasApp(apiClient: _FakeApiClient()));
+    await tester.pumpAndSettle();
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    expect(find.text('QUEDRAS'), findsOneWidget);
+    expect(find.text('Panel operativo del hotel'), findsOneWidget);
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    await tester.tap(find.text('Agenda'));
+    await tester.pumpAndSettle();
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    expect(find.text('Agenda de cancha'), findsOneWidget);
   });
+}
+
+class _FakeApiClient implements ApiClient {
+  @override
+  Future<ApiResponse> get(String path, {Map<String, String>? headers}) async {
+    return const ApiResponse(
+      statusCode: 200,
+      body: '{"service":"quadras-api","status":"UP","environment":"test"}',
+    );
+  }
+
+  @override
+  Future<ApiResponse> post(
+    String path, {
+    Map<String, String>? headers,
+    String? body,
+  }) async {
+    return const ApiResponse(statusCode: 200, body: '{}');
+  }
 }

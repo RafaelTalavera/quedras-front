@@ -61,3 +61,23 @@
   - `docs/FRONT_CHANGELOG.md`
 - Motivo del cambio: Reflejar cierre tecnico de Hito 2 backend y habilitar inicio de Hito 3 frontend.
 - Impacto funcional: Sin cambios funcionales en UI.
+
+## 2026-03-12 | Hito 3 | Configuracion base de shell desktop y arquitectura cliente
+- Componente afectado: Frontend (aplicacion Flutter Desktop)
+- Archivos tocados:
+  - `lib/main.dart`
+  - `lib/app/**`
+  - `lib/core/**`
+  - `lib/features/**`
+  - `test/widget_test.dart`
+- Motivo del cambio: Reemplazar app de contador por shell operativa con rutas base y cliente HTTP desacoplado para backend local.
+- Impacto funcional: Se habilita estructura base de cliente para agenda y reservas sin implementar aun logica de negocio.
+
+## 2026-03-12 | Hito 3 | Validacion tecnica de frontend base
+- Componente afectado: Frontend (calidad)
+- Archivos tocados:
+  - `test/widget_test.dart`
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Validar estabilidad de la nueva estructura con `flutter test` y `flutter analyze`, y dejar trazabilidad documental.
+- Impacto funcional: Frontend base queda estable para iniciar Hito 4.
