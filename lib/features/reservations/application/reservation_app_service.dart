@@ -1,11 +1,19 @@
 import '../domain/create_reservation_model.dart';
 import '../domain/reservation_model.dart';
 import '../domain/reservation_status.dart';
+import '../domain/update_reservation_model.dart';
 
 abstract interface class ReservationAppService {
   Future<List<ReservationModel>> listByDate(String reservationDate);
 
   Future<ReservationModel> create(CreateReservationModel input);
+
+  Future<ReservationModel> update(
+    int reservationId,
+    UpdateReservationModel input,
+  );
+
+  Future<ReservationModel> cancel(int reservationId);
 }
 
 final class InMemoryReservationAppService implements ReservationAppService {
@@ -60,14 +68,139 @@ final class InMemoryReservationAppService implements ReservationAppService {
   Future<ReservationModel> create(CreateReservationModel input) async {
     await Future<void>.delayed(const Duration(milliseconds: 360));
 
-    if (input.guestName.trim().length < 3) {
+    _validateGuestName(input.guestName);
+    final int startMinutes = _timeToMinutes(input.startTime);
+    final int endMinutes = _timeToMinutes(input.endTime);
+    _validateTimeWindowAndDuration(
+      startMinutes: startMinutes,
+      endMinutes: endMinutes,
+    );
+    _validateOverlapping(
+      reservationDate: input.reservationDate,
+      startMinutes: startMinutes,
+      endMinutes: endMinutes,
+      excludedReservationId: null,
+    );
+
+    final DateTime now = DateTime.now().toUtc();
+    final ReservationModel created = ReservationModel(
+      id: _nextId++,
+      guestName: input.guestName,
+      reservationDate: input.reservationDate,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      status: ReservationStatus.scheduled,
+      notes: _normalizeNotes(input.notes),
+      createdAt: now,
+      updatedAt: now,
+    );
+    _items.add(created);
+    return created;
+  }
+
+  @override
+  Future<ReservationModel> update(
+    int reservationId,
+    UpdateReservationModel input,
+  ) async {
+    await Future<void>.delayed(const Duration(milliseconds: 360));
+
+    final int index = _indexById(reservationId);
+    if (index < 0) {
+      throw StateError('Reservation $reservationId not found');
+    }
+
+    final ReservationModel existing = _items[index];
+    _validateCanEdit(existing);
+    _validateGuestName(input.guestName);
+
+    final int startMinutes = _timeToMinutes(input.startTime);
+    final int endMinutes = _timeToMinutes(input.endTime);
+    _validateTimeWindowAndDuration(
+      startMinutes: startMinutes,
+      endMinutes: endMinutes,
+    );
+    _validateOverlapping(
+      reservationDate: input.reservationDate,
+      startMinutes: startMinutes,
+      endMinutes: endMinutes,
+      excludedReservationId: reservationId,
+    );
+
+    final ReservationModel updated = ReservationModel(
+      id: reservationId,
+      guestName: input.guestName,
+      reservationDate: input.reservationDate,
+      startTime: input.startTime,
+      endTime: input.endTime,
+      status: existing.status,
+      notes: _normalizeNotes(input.notes),
+      createdAt: existing.createdAt,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    _items[index] = updated;
+    return updated;
+  }
+
+  @override
+  Future<ReservationModel> cancel(int reservationId) async {
+    await Future<void>.delayed(const Duration(milliseconds: 260));
+
+    final int index = _indexById(reservationId);
+    if (index < 0) {
+      throw StateError('Reservation $reservationId not found');
+    }
+
+    final ReservationModel existing = _items[index];
+    if (existing.status == ReservationStatus.completed) {
+      throw StateError('Completed reservations cannot be cancelled.');
+    }
+    if (existing.status == ReservationStatus.cancelled) {
+      return existing;
+    }
+
+    final ReservationModel cancelled = ReservationModel(
+      id: existing.id,
+      guestName: existing.guestName,
+      reservationDate: existing.reservationDate,
+      startTime: existing.startTime,
+      endTime: existing.endTime,
+      status: ReservationStatus.cancelled,
+      notes: existing.notes,
+      createdAt: existing.createdAt,
+      updatedAt: DateTime.now().toUtc(),
+    );
+    _items[index] = cancelled;
+    return cancelled;
+  }
+
+  int _indexById(int reservationId) {
+    return _items.indexWhere(
+      (ReservationModel item) => item.id == reservationId,
+    );
+  }
+
+  void _validateCanEdit(ReservationModel reservation) {
+    if (reservation.status == ReservationStatus.cancelled) {
+      throw StateError('Cancelled reservations cannot be edited.');
+    }
+    if (reservation.status == ReservationStatus.completed) {
+      throw StateError('Completed reservations cannot be edited.');
+    }
+  }
+
+  static void _validateGuestName(String guestName) {
+    if (guestName.trim().length < 3) {
       throw StateError(
         'El nombre del huesped debe tener al menos 3 caracteres.',
       );
     }
-    final int startMinutes = _timeToMinutes(input.startTime);
-    final int endMinutes = _timeToMinutes(input.endTime);
+  }
 
+  static void _validateTimeWindowAndDuration({
+    required int startMinutes,
+    required int endMinutes,
+  }) {
     if (startMinutes >= endMinutes) {
       throw StateError('La hora de inicio debe ser anterior a la hora de fin.');
     }
@@ -81,12 +214,23 @@ final class InMemoryReservationAppService implements ReservationAppService {
     if (!_allowedDurationsMinutes.contains(durationMinutes)) {
       throw StateError('Reservation duration must be 60, 90 or 120 minutes.');
     }
+  }
 
+  void _validateOverlapping({
+    required String reservationDate,
+    required int startMinutes,
+    required int endMinutes,
+    required int? excludedReservationId,
+  }) {
     final bool overlaps = _items.any((ReservationModel existing) {
-      if (existing.reservationDate != input.reservationDate) {
+      if (existing.reservationDate != reservationDate) {
         return false;
       }
       if (existing.status == ReservationStatus.cancelled) {
+        return false;
+      }
+      if (excludedReservationId != null &&
+          existing.id == excludedReservationId) {
         return false;
       }
       final int existingStart = _timeToMinutes(existing.startTime);
@@ -96,21 +240,13 @@ final class InMemoryReservationAppService implements ReservationAppService {
     if (overlaps) {
       throw StateError('Reservation overlaps with an existing booking.');
     }
+  }
 
-    final DateTime now = DateTime.now().toUtc();
-    final ReservationModel created = ReservationModel(
-      id: _nextId++,
-      guestName: input.guestName,
-      reservationDate: input.reservationDate,
-      startTime: input.startTime,
-      endTime: input.endTime,
-      status: ReservationStatus.scheduled,
-      notes: input.notes,
-      createdAt: now,
-      updatedAt: now,
-    );
-    _items.add(created);
-    return created;
+  static String? _normalizeNotes(String? notes) {
+    if (notes == null || notes.trim().isEmpty) {
+      return null;
+    }
+    return notes.trim();
   }
 
   static int _timeToMinutes(String value) {

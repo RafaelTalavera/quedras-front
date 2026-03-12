@@ -2,11 +2,11 @@
 
 ## Estado general frontend
 - Proyecto: QUEDRAS Frontend
-- Estado: En progreso (Hito 7 completado en frontend)
-- Ultimo hito trabajado: Hito 7 - Validacion de solapamientos y reglas de negocio
+- Estado: En progreso (Hito 8 completado en frontend)
+- Ultimo hito trabajado: Hito 8 - Edicion y cancelacion de reservas
 - Ultima actualizacion: 2026-03-12
 - Fuente de verdad global: `C:/Users/Public/Documents/Proyectos/quadras/docs/TABLERO_PROGRESO.md`
-- Proximo paso frontend: Avanzar a Hito 8 para edicion y cancelacion de reservas.
+- Proximo paso frontend: Avanzar a Hito 9 para conexion frontend-backend local.
 
 ## Hitos frontend
 | Hito | Nombre | Estado frontend | Tests | Documentacion | Commit | Observaciones |
@@ -17,13 +17,13 @@
 | 5 | API backend de reservas | N/A | OK (`flutter test`, `flutter analyze`) | Completada | Hecho documental (sin cambios de codigo frontend) | Hito de backend validado y sincronizado en seguimiento frontend. |
 | 6 | Pantallas base de agenda y creacion de reserva | Completado | OK (`flutter test`, `flutter analyze`) | Completada | Hecho (commit de cierre de Hito 6 frontend) | Agenda diaria y formulario operativo con validaciones y estados locales. |
 | 7 | Validacion de solapamientos y reglas de negocio | Completado | OK (`flutter test`, `flutter analyze`) | Completada | Hecho (commit de cierre de Hito 7 frontend) | Reglas de horario, duracion y solapamiento alineadas al backend con mensajes consistentes. |
-| 8 | Edicion y cancelacion de reservas | Pendiente | Pendiente | Pendiente | Pendiente | Mantenimiento de reservas desde cliente. |
+| 8 | Edicion y cancelacion de reservas | Completado | OK (`flutter test`, `flutter analyze`) | Completada | Hecho (commit de cierre de Hito 8 frontend) | Agenda permite editar/cancelar reservas con reglas de estado y mensajes alineados al backend. |
 | 9 | Conexion frontend-backend local | Pendiente | Pendiente | Pendiente | Pendiente | Integracion HTTP contra backend local. |
 | 10 | Validacion integral, documentacion final y preparacion para instalacion | Pendiente | Pendiente | Pendiente | Pendiente | Cierre de version instalable. |
 
 ## Pendientes inmediatos frontend
-- Iniciar Hito 8 para habilitar edicion y cancelacion desde agenda.
-- Definir flujo de estado para reserva cancelada y su reflejo en UI.
+- Iniciar Hito 9 para integrar cliente Flutter con API local del backend.
+- Definir estrategia de fallback cuando el backend local no este disponible.
 - Mantener alineacion de naming de entorno (`quedras`/`quadras`) para evitar confusion operativa.
 
 ## Bloqueos frontend

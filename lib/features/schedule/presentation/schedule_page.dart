@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../reservations/application/reservation_app_service.dart';
 import '../../reservations/domain/reservation_model.dart';
 import '../../reservations/domain/reservation_status.dart';
+import '../../reservations/domain/update_reservation_model.dart';
 
 class SchedulePage extends StatefulWidget {
   const SchedulePage({required this.reservationAppService, super.key});
@@ -17,6 +18,7 @@ class _SchedulePageState extends State<SchedulePage> {
   late DateTime _selectedDate;
   bool _loading = false;
   String? _error;
+  int? _processingReservationId;
   List<ReservationModel> _reservations = const <ReservationModel>[];
 
   @override
@@ -65,7 +67,17 @@ class _SchedulePageState extends State<SchedulePage> {
                 .map(
                   (ReservationModel reservation) => Padding(
                     padding: const EdgeInsets.only(bottom: 10),
-                    child: _ReservationTile(reservation: reservation),
+                    child: _ReservationTile(
+                      reservation: reservation,
+                      processing: _processingReservationId == reservation.id,
+                      onEdit: reservation.status == ReservationStatus.scheduled
+                          ? () => _openEditReservation(reservation)
+                          : null,
+                      onCancel:
+                          reservation.status == ReservationStatus.scheduled
+                          ? () => _cancelReservation(reservation)
+                          : null,
+                    ),
                   ),
                 )
                 .toList(),
@@ -120,10 +132,161 @@ class _SchedulePageState extends State<SchedulePage> {
     }
   }
 
+  Future<void> _openEditReservation(ReservationModel reservation) async {
+    final int? reservationId = reservation.id;
+    if (reservationId == null) {
+      return;
+    }
+
+    final _EditReservationDraft? draft =
+        await showDialog<_EditReservationDraft>(
+          context: context,
+          builder: (BuildContext dialogContext) {
+            return _EditReservationDialog(reservation: reservation);
+          },
+        );
+    if (draft == null) {
+      return;
+    }
+
+    setState(() {
+      _processingReservationId = reservationId;
+      _error = null;
+    });
+
+    try {
+      await widget.reservationAppService.update(
+        reservationId,
+        UpdateReservationModel(
+          guestName: draft.guestName,
+          reservationDate: _formatDateApi(draft.reservationDate),
+          startTime: _formatTimeApi(draft.startTime),
+          endTime: _formatTimeApi(draft.endTime),
+          notes: draft.notes,
+        ),
+      );
+      await _loadReservations();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Reserva actualizada correctamente.')),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = _resolveErrorMessage(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _processingReservationId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _cancelReservation(ReservationModel reservation) async {
+    final int? reservationId = reservation.id;
+    if (reservationId == null) {
+      return;
+    }
+
+    final bool confirmed =
+        await showDialog<bool>(
+          context: context,
+          builder: (BuildContext dialogContext) {
+            return AlertDialog(
+              title: const Text('Cancelar reserva'),
+              content: Text(
+                'Se cancelara la reserva de ${reservation.guestName}. Esta accion no elimina el registro.',
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(false),
+                  child: const Text('Volver'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(true),
+                  child: const Text('Cancelar reserva'),
+                ),
+              ],
+            );
+          },
+        ) ??
+        false;
+
+    if (!confirmed) {
+      return;
+    }
+
+    setState(() {
+      _processingReservationId = reservationId;
+      _error = null;
+    });
+
+    try {
+      await widget.reservationAppService.cancel(reservationId);
+      await _loadReservations();
+      if (!mounted) {
+        return;
+      }
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Reserva cancelada.')));
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = _resolveErrorMessage(error);
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _processingReservationId = null;
+        });
+      }
+    }
+  }
+
   static String _formatDateApi(DateTime date) {
     final String month = date.month.toString().padLeft(2, '0');
     final String day = date.day.toString().padLeft(2, '0');
     return '${date.year}-$month-$day';
+  }
+
+  static DateTime _parseDateApi(String value) {
+    final DateTime? parsed = DateTime.tryParse(value);
+    return parsed ?? DateTime.now();
+  }
+
+  static TimeOfDay _parseTimeApi(String value) {
+    final List<String> parts = value.split(':');
+    if (parts.length < 2) {
+      return const TimeOfDay(hour: 9, minute: 0);
+    }
+    final int hour = int.tryParse(parts[0]) ?? 9;
+    final int minute = int.tryParse(parts[1]) ?? 0;
+    return TimeOfDay(hour: hour, minute: minute);
+  }
+
+  static String _formatTimeApi(TimeOfDay value) {
+    final String hour = value.hour.toString().padLeft(2, '0');
+    final String minute = value.minute.toString().padLeft(2, '0');
+    return '$hour:$minute:00';
+  }
+
+  static String _resolveErrorMessage(Object error) {
+    if (error is StateError) {
+      final String rawMessage = error.message.toString().trim();
+      if (rawMessage.isNotEmpty) {
+        return rawMessage;
+      }
+    }
+    return error.toString();
   }
 
   static String _formatDateDisplay(DateTime date) {
@@ -264,10 +427,249 @@ class _EmptyCard extends StatelessWidget {
   }
 }
 
-class _ReservationTile extends StatelessWidget {
-  const _ReservationTile({required this.reservation});
+final class _EditReservationDraft {
+  const _EditReservationDraft({
+    required this.guestName,
+    required this.reservationDate,
+    required this.startTime,
+    required this.endTime,
+    required this.notes,
+  });
+
+  final String guestName;
+  final DateTime reservationDate;
+  final TimeOfDay startTime;
+  final TimeOfDay endTime;
+  final String? notes;
+}
+
+class _EditReservationDialog extends StatefulWidget {
+  const _EditReservationDialog({required this.reservation});
 
   final ReservationModel reservation;
+
+  @override
+  State<_EditReservationDialog> createState() => _EditReservationDialogState();
+}
+
+class _EditReservationDialogState extends State<_EditReservationDialog> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  late final TextEditingController _guestController;
+  late final TextEditingController _notesController;
+  late DateTime _selectedDate;
+  late TimeOfDay _startTime;
+  late TimeOfDay _endTime;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _guestController = TextEditingController(
+      text: widget.reservation.guestName,
+    );
+    _notesController = TextEditingController(
+      text: widget.reservation.notes ?? '',
+    );
+    _selectedDate = _SchedulePageState._parseDateApi(
+      widget.reservation.reservationDate,
+    );
+    _startTime = _SchedulePageState._parseTimeApi(widget.reservation.startTime);
+    _endTime = _SchedulePageState._parseTimeApi(widget.reservation.endTime);
+  }
+
+  @override
+  void dispose() {
+    _guestController.dispose();
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Editar reserva'),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                TextFormField(
+                  controller: _guestController,
+                  decoration: const InputDecoration(labelText: 'Huesped'),
+                  validator: (String? value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Ingrese el nombre del huesped.';
+                    }
+                    if (value.trim().length < 3) {
+                      return 'El nombre debe tener al menos 3 caracteres.';
+                    }
+                    if (value.trim().length > 120) {
+                      return 'El nombre no puede superar 120 caracteres.';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    OutlinedButton.icon(
+                      onPressed: _pickDate,
+                      icon: const Icon(Icons.calendar_month_rounded),
+                      label: Text(
+                        'Fecha: ${_SchedulePageState._formatDateDisplay(_selectedDate)}',
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _pickStartTime,
+                      icon: const Icon(Icons.schedule_rounded),
+                      label: Text('Inicio: ${_formatTime(_startTime)}'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _pickEndTime,
+                      icon: const Icon(Icons.timer_rounded),
+                      label: Text('Fin: ${_formatTime(_endTime)}'),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _notesController,
+                  decoration: const InputDecoration(
+                    labelText: 'Notas (opcional)',
+                  ),
+                  minLines: 2,
+                  maxLines: 3,
+                  validator: (String? value) {
+                    if (value != null && value.trim().length > 500) {
+                      return 'Las notas no pueden superar 500 caracteres.';
+                    }
+                    return null;
+                  },
+                ),
+                if (_error != null) ...<Widget>[
+                  const SizedBox(height: 10),
+                  Text(
+                    _error!,
+                    style: const TextStyle(color: Color(0xFF8A1C1C)),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cerrar'),
+        ),
+        FilledButton.icon(
+          onPressed: _submit,
+          icon: const Icon(Icons.save_rounded),
+          label: const Text('Guardar cambios'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _pickDate() async {
+    final DateTime now = DateTime.now();
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: now.subtract(const Duration(days: 365)),
+      lastDate: now.add(const Duration(days: 365)),
+      helpText: 'Fecha de reserva',
+    );
+    if (picked == null) {
+      return;
+    }
+    setState(() {
+      _selectedDate = picked;
+    });
+  }
+
+  Future<void> _pickStartTime() async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _startTime,
+      helpText: 'Hora de inicio',
+    );
+    if (picked == null) {
+      return;
+    }
+    setState(() {
+      _startTime = picked;
+    });
+  }
+
+  Future<void> _pickEndTime() async {
+    final TimeOfDay? picked = await showTimePicker(
+      context: context,
+      initialTime: _endTime,
+      helpText: 'Hora de fin',
+    );
+    if (picked == null) {
+      return;
+    }
+    setState(() {
+      _endTime = picked;
+    });
+  }
+
+  void _submit() {
+    final FormState? form = _formKey.currentState;
+    if (form == null || !form.validate()) {
+      return;
+    }
+
+    final int startMinutes = (_startTime.hour * 60) + _startTime.minute;
+    final int endMinutes = (_endTime.hour * 60) + _endTime.minute;
+    if (startMinutes >= endMinutes) {
+      setState(() {
+        _error = 'La hora de inicio debe ser anterior a la hora de fin.';
+      });
+      return;
+    }
+
+    Navigator.of(context).pop(
+      _EditReservationDraft(
+        guestName: _guestController.text.trim(),
+        reservationDate: _selectedDate,
+        startTime: _startTime,
+        endTime: _endTime,
+        notes: _notesController.text.trim().isEmpty
+            ? null
+            : _notesController.text.trim(),
+      ),
+    );
+  }
+
+  static String _formatTime(TimeOfDay value) {
+    final String hour = value.hour.toString().padLeft(2, '0');
+    final String minute = value.minute.toString().padLeft(2, '0');
+    return '$hour:$minute';
+  }
+}
+
+class _ReservationTile extends StatelessWidget {
+  const _ReservationTile({
+    required this.reservation,
+    required this.processing,
+    this.onEdit,
+    this.onCancel,
+  });
+
+  final ReservationModel reservation;
+  final bool processing;
+  final VoidCallback? onEdit;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -333,6 +735,25 @@ class _ReservationTile extends StatelessWidget {
               Text(
                 reservation.notes!,
                 style: const TextStyle(color: Color(0xFF526073)),
+              ),
+            ],
+            if (onEdit != null || onCancel != null) ...<Widget>[
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                children: <Widget>[
+                  OutlinedButton.icon(
+                    onPressed: processing ? null : onEdit,
+                    icon: const Icon(Icons.edit_calendar_rounded),
+                    label: const Text('Editar'),
+                  ),
+                  FilledButton.tonalIcon(
+                    onPressed: processing ? null : onCancel,
+                    icon: const Icon(Icons.cancel_rounded),
+                    label: Text(processing ? 'Procesando...' : 'Cancelar'),
+                  ),
+                ],
               ),
             ],
           ],

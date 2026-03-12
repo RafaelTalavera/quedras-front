@@ -147,3 +147,21 @@
   - `docs/FRONT_CHANGELOG.md`
 - Motivo del cambio: Ejecutar `flutter test` y `flutter analyze` en verde y consolidar cierre del Hito 7 en el seguimiento frontend.
 - Impacto funcional: Frontend validado y listo para iniciar Hito 8 sin cambios fuera del alcance del hito.
+
+## 2026-03-12 | Hito 8 | Edicion y cancelacion de reservas en agenda
+- Componente afectado: Frontend (feature schedule + servicio de reservas)
+- Archivos tocados:
+  - `lib/features/schedule/presentation/schedule_page.dart`
+  - `lib/features/reservations/application/reservation_app_service.dart`
+  - `lib/features/reservations/domain/update_reservation_model.dart`
+  - `test/features/reservations/application/reservation_app_service_test.dart`
+- Motivo del cambio: Habilitar mantenimiento operativo de reservas desde la agenda mediante acciones de editar y cancelar.
+- Impacto funcional: La UI permite actualizar datos de turnos y cancelarlos con controles de estado, manteniendo reglas de solapamiento/horario/duracion.
+
+## 2026-03-12 | Hito 8 | Validacion tecnica y cierre documental frontend
+- Componente afectado: Frontend (calidad + seguimiento)
+- Archivos tocados:
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Ejecutar `flutter test` y `flutter analyze` en verde y registrar cierre del Hito 8 en seguimiento frontend.
+- Impacto funcional: Frontend estable para iniciar Hito 9 de integracion local con backend.
