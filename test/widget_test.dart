@@ -2,12 +2,18 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:quedras/app/quedras_app.dart';
 import 'package:quedras/core/network/api_client.dart';
+import 'package:quedras/features/reservations/application/reservation_app_service.dart';
 
 void main() {
   testWidgets('Carga shell inicial y permite navegar por secciones', (
     WidgetTester tester,
   ) async {
-    await tester.pumpWidget(QuedrasApp(apiClient: _FakeApiClient()));
+    await tester.pumpWidget(
+      QuedrasApp(
+        apiClient: _FakeApiClient(),
+        reservationAppService: InMemoryReservationAppService(),
+      ),
+    );
     await tester.pumpAndSettle();
 
     expect(find.text('QUEDRAS'), findsOneWidget);
@@ -31,6 +37,24 @@ class _FakeApiClient implements ApiClient {
 
   @override
   Future<ApiResponse> post(
+    String path, {
+    Map<String, String>? headers,
+    String? body,
+  }) async {
+    return const ApiResponse(statusCode: 200, body: '{}');
+  }
+
+  @override
+  Future<ApiResponse> put(
+    String path, {
+    Map<String, String>? headers,
+    String? body,
+  }) async {
+    return const ApiResponse(statusCode: 200, body: '{}');
+  }
+
+  @override
+  Future<ApiResponse> patch(
     String path, {
     Map<String, String>? headers,
     String? body,

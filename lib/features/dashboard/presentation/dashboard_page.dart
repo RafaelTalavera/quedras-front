@@ -36,7 +36,7 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Base de cliente lista para agenda y reservas.',
+          'Cliente integrado con backend local para agenda y reservas.',
           style: textTheme.bodyLarge?.copyWith(color: const Color(0xFF4E6071)),
         ),
         const SizedBox(height: 20),
@@ -60,8 +60,8 @@ class _DashboardPageState extends State<DashboardPage> {
             ),
             const _InfoCard(
               title: 'Modulo actual',
-              value: 'Hito 3 - Base de cliente',
-              caption: 'Sin logica funcional de reservas en esta etapa.',
+              value: 'Hito 9 - Integracion local',
+              caption: 'Reservas operando sobre API backend local.',
               accentColor: Color(0xFF4A4E69),
             ),
           ],

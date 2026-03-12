@@ -2,11 +2,11 @@
 
 ## Estado general frontend
 - Proyecto: QUEDRAS Frontend
-- Estado: En progreso (Hito 8 completado en frontend)
-- Ultimo hito trabajado: Hito 8 - Edicion y cancelacion de reservas
+- Estado: En progreso (Hito 9 completado en frontend)
+- Ultimo hito trabajado: Hito 9 - Conexion frontend-backend local
 - Ultima actualizacion: 2026-03-12
 - Fuente de verdad global: `C:/Users/Public/Documents/Proyectos/quadras/docs/TABLERO_PROGRESO.md`
-- Proximo paso frontend: Avanzar a Hito 9 para conexion frontend-backend local.
+- Proximo paso frontend: Avanzar a Hito 10 para validacion integral y preparacion de instalacion.
 
 ## Hitos frontend
 | Hito | Nombre | Estado frontend | Tests | Documentacion | Commit | Observaciones |
@@ -18,12 +18,12 @@
 | 6 | Pantallas base de agenda y creacion de reserva | Completado | OK (`flutter test`, `flutter analyze`) | Completada | Hecho (commit de cierre de Hito 6 frontend) | Agenda diaria y formulario operativo con validaciones y estados locales. |
 | 7 | Validacion de solapamientos y reglas de negocio | Completado | OK (`flutter test`, `flutter analyze`) | Completada | Hecho (commit de cierre de Hito 7 frontend) | Reglas de horario, duracion y solapamiento alineadas al backend con mensajes consistentes. |
 | 8 | Edicion y cancelacion de reservas | Completado | OK (`flutter test`, `flutter analyze`) | Completada | Hecho (commit de cierre de Hito 8 frontend) | Agenda permite editar/cancelar reservas con reglas de estado y mensajes alineados al backend. |
-| 9 | Conexion frontend-backend local | Pendiente | Pendiente | Pendiente | Pendiente | Integracion HTTP contra backend local. |
+| 9 | Conexion frontend-backend local | Completado | OK (`flutter test`, `flutter analyze`) | Completada | Hecho (commit de cierre de Hito 9 frontend) | Servicio de reservas conectado por HTTP local con manejo de errores de API y red. |
 | 10 | Validacion integral, documentacion final y preparacion para instalacion | Pendiente | Pendiente | Pendiente | Pendiente | Cierre de version instalable. |
 
 ## Pendientes inmediatos frontend
-- Iniciar Hito 9 para integrar cliente Flutter con API local del backend.
-- Definir estrategia de fallback cuando el backend local no este disponible.
+- Iniciar Hito 10 para pruebas integrales de flujo completo en entorno local.
+- Definir checklist de instalacion/ejecucion para puesto operativo del hotel.
 - Mantener alineacion de naming de entorno (`quedras`/`quadras`) para evitar confusion operativa.
 
 ## Bloqueos frontend

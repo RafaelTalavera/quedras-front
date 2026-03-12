@@ -165,3 +165,25 @@
   - `docs/FRONT_CHANGELOG.md`
 - Motivo del cambio: Ejecutar `flutter test` y `flutter analyze` en verde y registrar cierre del Hito 8 en seguimiento frontend.
 - Impacto funcional: Frontend estable para iniciar Hito 9 de integracion local con backend.
+
+## 2026-03-12 | Hito 9 | Integracion HTTP local del modulo de reservas
+- Componente afectado: Frontend (red + aplicacion de reservas)
+- Archivos tocados:
+  - `lib/core/network/api_client.dart`
+  - `lib/core/network/local_http_client.dart`
+  - `lib/features/reservations/infrastructure/http_reservation_app_service.dart`
+  - `lib/app/quedras_app.dart`
+  - `lib/features/dashboard/presentation/dashboard_page.dart`
+  - `lib/features/reservations/presentation/new_reservation_page.dart`
+- Motivo del cambio: Reemplazar el servicio en memoria por adaptador HTTP local y completar operaciones `list/create/update/cancel` contra API backend.
+- Impacto funcional: El frontend opera con datos persistidos del backend local y maneja errores de conectividad/red en mensajes controlados.
+
+## 2026-03-12 | Hito 9 | Pruebas de integracion del cliente y cierre documental
+- Componente afectado: Frontend (calidad + seguimiento)
+- Archivos tocados:
+  - `test/features/reservations/infrastructure/http_reservation_app_service_test.dart`
+  - `test/widget_test.dart`
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Validar adaptador HTTP de reservas, actualizar dobles de `ApiClient` y consolidar cierre documental del Hito 9.
+- Impacto funcional: `flutter test` y `flutter analyze` en verde con cobertura de escenarios de exito y error en integracion local.

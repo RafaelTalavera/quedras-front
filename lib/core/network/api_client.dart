@@ -6,6 +6,18 @@ abstract interface class ApiClient {
     Map<String, String>? headers,
     String? body,
   });
+
+  Future<ApiResponse> put(
+    String path, {
+    Map<String, String>? headers,
+    String? body,
+  });
+
+  Future<ApiResponse> patch(
+    String path, {
+    Map<String, String>? headers,
+    String? body,
+  });
 }
 
 final class ApiResponse {

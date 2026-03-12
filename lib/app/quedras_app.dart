@@ -4,6 +4,7 @@ import '../core/config/backend_config.dart';
 import '../core/network/api_client.dart';
 import '../core/network/local_http_client.dart';
 import '../features/reservations/application/reservation_app_service.dart';
+import '../features/reservations/infrastructure/http_reservation_app_service.dart';
 import 'router/app_router.dart';
 import 'router/app_routes.dart';
 
@@ -32,7 +33,8 @@ class _QuedrasAppState extends State<QuedrasApp> {
     _apiClient =
         widget._apiClient ?? LocalHttpClient(baseUrl: BackendConfig.apiBaseUrl);
     _reservationAppService =
-        widget._reservationAppService ?? InMemoryReservationAppService();
+        widget._reservationAppService ??
+        HttpReservationAppService(apiClient: _apiClient);
   }
 
   @override

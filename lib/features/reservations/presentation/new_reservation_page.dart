@@ -58,7 +58,7 @@ class _NewReservationPageState extends State<NewReservationPage> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Alta operativa con validaciones locales y guardado en memoria.',
+          'Alta operativa con validaciones locales y envio a backend local.',
           style: textTheme.bodyLarge?.copyWith(color: const Color(0xFF4E6071)),
         ),
         const SizedBox(height: 20),
