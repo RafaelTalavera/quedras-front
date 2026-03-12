@@ -100,3 +100,11 @@
   - `docs/FRONT_CHANGELOG.md`
 - Motivo del cambio: Validar `fromJson/toJson` de reservas y registrar cierre de frontend del Hito 4.
 - Impacto funcional: Contrato frontend validado en `flutter test` y `flutter analyze`.
+
+## 2026-03-12 | Hito 5 | Sincronizacion frontend de hito backend (N/A funcional)
+- Componente afectado: Frontend (seguimiento + calidad)
+- Archivos tocados:
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Registrar que Hito 5 se implementa en backend, revalidando frontend sin cambios funcionales.
+- Impacto funcional: Sin cambios en UI; cliente listo para iniciar Hito 6 con API disponible.
