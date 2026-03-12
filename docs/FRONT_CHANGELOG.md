@@ -45,3 +45,11 @@
   - `docs/FRONT_CHANGELOG.md`
 - Motivo del cambio: Ejecutar `flutter test` y mantener trazabilidad de que Hito 2 no introduce cambios funcionales en cliente.
 - Impacto funcional: Sin cambios funcionales en UI.
+
+## 2026-03-12 | Hito 2 | Sincronizacion por bloqueo de backend
+- Componente afectado: Frontend (seguimiento)
+- Archivos tocados:
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Reflejar que el cierre del Hito 2 depende de resolver credenciales MySQL en backend.
+- Impacto funcional: Sin cambios funcionales en UI.
