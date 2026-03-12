@@ -2,7 +2,7 @@
 
 ## Estado general frontend
 - Proyecto: QUEDRAS Frontend
-- Estado: En progreso (sin cambios funcionales en Hito 2, backend bloqueado por credenciales MySQL)
+- Estado: En progreso (sin cambios funcionales en Hito 2, backend validado)
 - Ultimo hito trabajado: Hito 2 - Configuracion base backend Spring Boot + MySQL + estructura de capas (sin implementacion frontend)
 - Ultima actualizacion: 2026-03-12
 - Fuente de verdad global: `C:/Users/Public/Documents/Proyectos/quadras/docs/TABLERO_PROGRESO.md`
@@ -23,8 +23,8 @@
 ## Pendientes inmediatos frontend
 - Definir convencion interna de carpetas para capas UI/servicios/modelos en Hito 3.
 - Alinear naming de app (`quedras` vs `quadras`) para evitar inconsistencias.
-- Mantener smoke tests en verde mientras se cierra Hito 2 en backend.
+- Preparar inicio de implementacion de Hito 3.
 
 ## Bloqueos frontend
 - Ninguno tecnico propio.
-- Dependencia externa: Hito 2 backend bloqueado por credenciales de BD local.
+- Ninguna dependencia bloqueante activa.

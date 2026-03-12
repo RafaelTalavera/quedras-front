@@ -53,3 +53,11 @@
   - `docs/FRONT_CHANGELOG.md`
 - Motivo del cambio: Reflejar que el cierre del Hito 2 depende de resolver credenciales MySQL en backend.
 - Impacto funcional: Sin cambios funcionales en UI.
+
+## 2026-03-12 | Hito 2 | Sincronizacion tras desbloqueo de backend
+- Componente afectado: Frontend (seguimiento)
+- Archivos tocados:
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Reflejar cierre tecnico de Hito 2 backend y habilitar inicio de Hito 3 frontend.
+- Impacto funcional: Sin cambios funcionales en UI.
