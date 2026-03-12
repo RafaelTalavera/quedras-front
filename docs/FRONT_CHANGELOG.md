@@ -37,3 +37,11 @@
   - `docs/FRONT_CHANGELOG.md`
 - Motivo del cambio: Revalidar `flutter test` y confirmar cierre de frontend para Hito 1.
 - Impacto funcional: Sin cambios funcionales en UI.
+
+## 2026-03-12 | Hito 2 | Revalidacion de frontend durante avance backend
+- Componente afectado: Frontend (calidad y seguimiento)
+- Archivos tocados:
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Ejecutar `flutter test` y mantener trazabilidad de que Hito 2 no introduce cambios funcionales en cliente.
+- Impacto funcional: Sin cambios funcionales en UI.
