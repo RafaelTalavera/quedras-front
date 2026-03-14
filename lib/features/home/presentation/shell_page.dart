@@ -382,7 +382,7 @@ class _BrandHeader extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('QUEDRAS', style: headlineStyle),
+            Text('COSTANORTE', style: headlineStyle),
             Text(
               'Reservas internas del hotel',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(

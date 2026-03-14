@@ -1,22 +1,22 @@
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:quedras/app/quedras_app.dart';
-import 'package:quedras/core/network/api_client.dart';
-import 'package:quedras/features/reservations/application/reservation_app_service.dart';
+import 'package:costanorte/app/costanorte_app.dart';
+import 'package:costanorte/core/network/api_client.dart';
+import 'package:costanorte/features/reservations/application/reservation_app_service.dart';
 
 void main() {
   testWidgets('Carga shell inicial y permite navegar por secciones', (
     WidgetTester tester,
   ) async {
     await tester.pumpWidget(
-      QuedrasApp(
+      CostaNorteApp(
         apiClient: _FakeApiClient(),
         reservationAppService: InMemoryReservationAppService(),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('QUEDRAS'), findsOneWidget);
+    expect(find.text('COSTANORTE'), findsOneWidget);
     expect(find.text('Panel operativo del hotel'), findsOneWidget);
 
     await tester.tap(find.text('Agenda'));
@@ -31,7 +31,7 @@ class _FakeApiClient implements ApiClient {
   Future<ApiResponse> get(String path, {Map<String, String>? headers}) async {
     return const ApiResponse(
       statusCode: 200,
-      body: '{"service":"quadras-api","status":"UP","environment":"test"}',
+      body: '{"service":"costanorte-api","status":"UP","environment":"test"}',
     );
   }
 

@@ -8,8 +8,8 @@ import '../features/reservations/infrastructure/http_reservation_app_service.dar
 import 'router/app_router.dart';
 import 'router/app_routes.dart';
 
-class QuedrasApp extends StatefulWidget {
-  const QuedrasApp({
+class CostaNorteApp extends StatefulWidget {
+  const CostaNorteApp({
     super.key,
     ApiClient? apiClient,
     ReservationAppService? reservationAppService,
@@ -20,10 +20,10 @@ class QuedrasApp extends StatefulWidget {
   final ReservationAppService? _reservationAppService;
 
   @override
-  State<QuedrasApp> createState() => _QuedrasAppState();
+  State<CostaNorteApp> createState() => _CostaNorteAppState();
 }
 
-class _QuedrasAppState extends State<QuedrasApp> {
+class _CostaNorteAppState extends State<CostaNorteApp> {
   late final ApiClient _apiClient;
   late final ReservationAppService _reservationAppService;
 
@@ -40,7 +40,7 @@ class _QuedrasAppState extends State<QuedrasApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'QUEDRAS',
+      title: 'CostaNorte',
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(),
       initialRoute: AppRoutes.dashboard,

@@ -1,10 +1,10 @@
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quedras/core/network/api_client.dart';
-import 'package:quedras/features/reservations/domain/create_reservation_model.dart';
-import 'package:quedras/features/reservations/domain/update_reservation_model.dart';
-import 'package:quedras/features/reservations/infrastructure/http_reservation_app_service.dart';
+import 'package:costanorte/core/network/api_client.dart';
+import 'package:costanorte/features/reservations/domain/create_reservation_model.dart';
+import 'package:costanorte/features/reservations/domain/update_reservation_model.dart';
+import 'package:costanorte/features/reservations/infrastructure/http_reservation_app_service.dart';
 
 void main() {
   test('HttpReservationAppService lista reservas por fecha', () async {

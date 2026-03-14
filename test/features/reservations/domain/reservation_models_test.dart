@@ -1,7 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
-import 'package:quedras/features/reservations/domain/create_reservation_model.dart';
-import 'package:quedras/features/reservations/domain/reservation_model.dart';
-import 'package:quedras/features/reservations/domain/reservation_status.dart';
+import 'package:costanorte/features/reservations/domain/create_reservation_model.dart';
+import 'package:costanorte/features/reservations/domain/reservation_model.dart';
+import 'package:costanorte/features/reservations/domain/reservation_status.dart';
 
 void main() {
   test('ReservationModel parsea JSON backend y conserva contrato', () {

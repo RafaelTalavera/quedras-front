@@ -1,4 +1,4 @@
-# FRONT CHANGELOG - QUEDRAS
+# FRONT CHANGELOG - COSTANORTE
 
 ## 2026-03-12 | Hito 1 | Inicializacion y orden del proyecto
 - Componente afectado: Frontend (gestion documental y control de avance)
@@ -216,3 +216,25 @@
   - `docs/FRONT_CHANGELOG.md`
 - Motivo del cambio: Resolver prerequisitos de Visual Studio para Flutter Desktop y confirmar build release de Windows sin bloqueos.
 - Impacto funcional: Frontend queda cerrando Hito 10 con `flutter test`, `flutter analyze`, `flutter doctor -v` y `flutter build windows --release` en OK.
+
+## 2026-03-14 | Hito 11 | Renombre seguro de frontend a COSTANORTE (fase 1)
+- Componente afectado: Frontend (branding + configuracion + build)
+- Archivos tocados:
+  - `pubspec.yaml`
+  - `lib/main.dart`
+  - `lib/app/costanorte_app.dart` (renombrado desde `lib/app/quedras_app.dart`)
+  - `lib/core/config/backend_config.dart`
+  - `lib/features/home/presentation/shell_page.dart`
+  - `lib/features/dashboard/presentation/dashboard_page.dart`
+  - `windows/CMakeLists.txt`
+  - `windows/runner/main.cpp`
+  - `windows/runner/Runner.rc`
+  - `scripts/frontend_preflight.ps1`
+  - `test/**`
+  - `README.md`
+  - `docs/INSTALACION_FRONTEND_HOTEL.md`
+  - `docs/VALIDACION_FRONTEND_HITO10.md`
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Migrar nombre comercial de QUEDRAS a COSTANORTE sin romper entornos actuales, manteniendo fallback de `QUEDRAS_API_BASE_URL`.
+- Impacto funcional: App desktop y ejecutable Windows pasan a `CostaNorte` / `costanorte.exe` con pruebas y build release en verde.

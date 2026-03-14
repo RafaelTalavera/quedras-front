@@ -1,12 +1,12 @@
-# FRONT PROGRESS - QUEDRAS
+# FRONT PROGRESS - COSTANORTE
 
 ## Estado general frontend
-- Proyecto: QUEDRAS Frontend
-- Estado: Completado (Hito 10 cerrado)
-- Ultimo hito trabajado: Hito 10 - Validacion integral, documentacion final y preparacion para instalacion
-- Ultima actualizacion: 2026-03-12
+- Proyecto: COSTANORTE Frontend
+- Estado: Completado (Hito 11 frontend)
+- Ultimo hito trabajado: Hito 11 - Renombre seguro de QUEDRAS a COSTANORTE (fase 1)
+- Ultima actualizacion: 2026-03-14
 - Fuente de verdad global: `C:/Users/Public/Documents/Proyectos/quadras/docs/TABLERO_PROGRESO.md`
-- Proximo paso frontend: Ejecutar instalacion piloto en puesto operativo del hotel y validar flujo E2E contra backend local.
+- Proximo paso frontend: Esperar cierre global de tablero para continuar Hito 12 con nuevas funcionalidades del cliente.
 
 ## Hitos frontend
 | Hito | Nombre | Estado frontend | Tests | Documentacion | Commit | Observaciones |
@@ -20,11 +20,12 @@
 | 8 | Edicion y cancelacion de reservas | Completado | OK (`flutter test`, `flutter analyze`) | Completada | Hecho (commit de cierre de Hito 8 frontend) | Agenda permite editar/cancelar reservas con reglas de estado y mensajes alineados al backend. |
 | 9 | Conexion frontend-backend local | Completado | OK (`flutter test`, `flutter analyze`) | Completada | Hecho (commit de cierre de Hito 9 frontend) | Servicio de reservas conectado por HTTP local con manejo de errores de API y red. |
 | 10 | Validacion integral, documentacion final y preparacion para instalacion | Completado | `flutter test` OK, `flutter analyze` OK, `flutter doctor -v` OK, `flutter build windows --release` OK | Completada | Hecho (`f3a5963` + commit de cierre actual) | Toolchain de Windows resuelto con Visual Studio Community y binario release generado en `build/windows/x64/runner/Release/`. |
+| 11 | Renombre seguro de QUEDRAS a COSTANORTE (fase 1) | Completado | `flutter pub get` OK, `flutter test` OK, `flutter analyze` OK, `flutter build windows --release` OK | Completada | Hecho (commit frontend de Hito 11) | App renombrada a COSTANORTE con binario `costanorte.exe` y compatibilidad temporal con `QUEDRAS_API_BASE_URL`. |
 
 ## Pendientes inmediatos frontend
 - Ejecutar prueba de instalacion en un equipo limpio del hotel.
-- Validar conectividad con backend local usando `--dart-define=QUEDRAS_API_BASE_URL`.
-- Mantener alineacion de naming de entorno (`quedras`/`quadras`) para evitar confusion operativa.
+- Validar conectividad con backend local usando `--dart-define=COSTANORTE_API_BASE_URL`.
+- Planificar fase 2 de renombre interno (paquetes/rutas de repositorio) cuando el cliente lo apruebe.
 
 ## Bloqueos frontend
-- Sin bloqueos abiertos en frontend para cierre de Hito 10.
+- Sin bloqueos abiertos en frontend para Hito 11.

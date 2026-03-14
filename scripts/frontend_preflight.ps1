@@ -10,5 +10,5 @@ flutter test
 flutter analyze
 
 if (-not $SkipBuild) {
-    flutter build windows --release --dart-define="QUEDRAS_API_BASE_URL=$ApiBaseUrl"
+    flutter build windows --release --dart-define="COSTANORTE_API_BASE_URL=$ApiBaseUrl"
 }

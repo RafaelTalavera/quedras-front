@@ -55,7 +55,8 @@ class _DashboardPageState extends State<DashboardPage> {
             const _InfoCard(
               title: 'Base URL',
               value: BackendConfig.apiBaseUrl,
-              caption: 'Configurable via --dart-define=QUEDRAS_API_BASE_URL',
+              caption:
+                  'Configurable via --dart-define=COSTANORTE_API_BASE_URL',
               accentColor: Color(0xFF13505B),
             ),
             const _InfoCard(
