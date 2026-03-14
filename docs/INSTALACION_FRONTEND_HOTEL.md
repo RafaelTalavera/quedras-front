@@ -20,6 +20,12 @@ flutter doctor -v
 flutter run -d windows --dart-define=COSTANORTE_API_BASE_URL=http://127.0.0.1:8080/api/v1
 ```
 
+## Acceso de prueba para QA/local
+- Usuario: `operador.demo`
+- Clave: `Costanorte2026!`
+- Rol esperado: `OPERATOR`
+- Nota: credencial valida para entorno local y pruebas; en despliegues reales debe redefinirse desde backend.
+
 ## Pruebas y analisis recomendados
 ```powershell
 flutter test
@@ -43,3 +49,4 @@ Salida esperada:
 - Si el backend corre en otra IP/puerto, ajustar `COSTANORTE_API_BASE_URL`.
 - Compatibilidad temporal: tambien se acepta `QUEDRAS_API_BASE_URL`.
 - La app no depende de internet para operar, solo de conectividad con backend local.
+- El login consume `POST /api/v1/auth/login` y las pantallas protegidas envian `Authorization: Bearer <jwt>`.

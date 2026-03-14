@@ -1,6 +1,7 @@
 enum AppSection { dashboard, schedule, newReservation }
 
 final class AppRoutes {
+  static const String login = '/login';
   static const String dashboard = '/';
   static const String schedule = '/agenda';
   static const String newReservation = '/reservas/nueva';

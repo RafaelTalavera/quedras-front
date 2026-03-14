@@ -1,29 +1,69 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:costanorte/app/costanorte_app.dart';
 import 'package:costanorte/core/network/api_client.dart';
+import 'package:costanorte/features/auth/application/auth_app_service.dart';
+import 'package:costanorte/features/auth/domain/auth_session.dart';
 import 'package:costanorte/features/reservations/application/reservation_app_service.dart';
 
 void main() {
-  testWidgets('Carga shell inicial y permite navegar por secciones', (
+  testWidgets('Login inicial, navegacion autenticada y logout', (
     WidgetTester tester,
   ) async {
+    final _FakeAuthAppService authAppService = _FakeAuthAppService();
+    await tester.binding.setSurfaceSize(const Size(800, 1400));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+
     await tester.pumpWidget(
       CostaNorteApp(
         apiClient: _FakeApiClient(),
+        authAppService: authAppService,
         reservationAppService: InMemoryReservationAppService(),
       ),
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('COSTANORTE'), findsOneWidget);
+    expect(find.text('Iniciar sesion'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextFormField).at(1), 'Costanorte2026!');
+    await tester.tap(find.text('Entrar al sistema'));
+    await tester.pumpAndSettle();
+
+    expect(authAppService.lastUsername, 'operador.demo');
     expect(find.text('Panel operativo del hotel'), findsOneWidget);
 
     await tester.tap(find.text('Agenda'));
     await tester.pumpAndSettle();
 
     expect(find.text('Agenda de cancha'), findsOneWidget);
+
+    await tester.tap(find.text('Salir'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Iniciar sesion'), findsOneWidget);
   });
+}
+
+final class _FakeAuthAppService implements AuthAppService {
+  String? lastUsername;
+  String? lastPassword;
+
+  @override
+  Future<AuthSession> login({
+    required String username,
+    required String password,
+  }) async {
+    lastUsername = username;
+    lastPassword = password;
+    return const AuthSession(
+      accessToken: 'test-jwt',
+      tokenType: 'Bearer',
+      expiresInSeconds: 1800,
+      username: 'operador.demo',
+      role: 'OPERATOR',
+    );
+  }
 }
 
 class _FakeApiClient implements ApiClient {

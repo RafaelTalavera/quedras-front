@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 
 import '../../../app/router/app_routes.dart';
 import '../../../core/network/api_client.dart';
-import '../../reservations/application/reservation_app_service.dart';
+import '../../auth/application/session_controller.dart';
+import '../../auth/domain/auth_session.dart';
 import '../../dashboard/presentation/dashboard_page.dart';
+import '../../reservations/application/reservation_app_service.dart';
 import '../../reservations/presentation/new_reservation_page.dart';
 import '../../schedule/presentation/schedule_page.dart';
 
@@ -13,12 +15,14 @@ class ShellPage extends StatefulWidget {
   const ShellPage({
     required this.section,
     required this.apiClient,
+    required this.sessionController,
     required this.reservationAppService,
     super.key,
   });
 
   final AppSection section;
   final ApiClient apiClient;
+  final SessionController sessionController;
   final ReservationAppService reservationAppService;
 
   @override
@@ -27,25 +31,38 @@ class ShellPage extends StatefulWidget {
 
 class _ShellPageState extends State<ShellPage> {
   late AppSection _selectedSection;
+  bool _redirectingToLogin = false;
 
   @override
   void initState() {
     super.initState();
     _selectedSection = widget.section;
+    widget.sessionController.addListener(_handleSessionChanged);
   }
 
   @override
   void didUpdateWidget(covariant ShellPage oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.sessionController != widget.sessionController) {
+      oldWidget.sessionController.removeListener(_handleSessionChanged);
+      widget.sessionController.addListener(_handleSessionChanged);
+    }
     if (oldWidget.section != widget.section) {
       _selectedSection = widget.section;
     }
   }
 
   @override
+  void dispose() {
+    widget.sessionController.removeListener(_handleSessionChanged);
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final bool compactLayout = MediaQuery.of(context).size.width < 960;
     final Widget content = _buildContent();
+    final AuthSession? session = widget.sessionController.session;
 
     return Scaffold(
       body: DecoratedBox(
@@ -76,12 +93,16 @@ class _ShellPageState extends State<ShellPage> {
               child: compactLayout
                   ? _CompactShell(
                       section: _selectedSection,
+                      session: session,
                       onSectionSelected: _goToSection,
+                      onLogout: _logout,
                       content: content,
                     )
                   : _DesktopShell(
                       section: _selectedSection,
+                      session: session,
                       onSectionSelected: _goToSection,
+                      onLogout: _logout,
                       content: content,
                     ),
             ),
@@ -119,17 +140,38 @@ class _ShellPageState extends State<ShellPage> {
       context,
     ).pushReplacementNamed(AppRoutes.routeBySection(section));
   }
+
+  void _logout() {
+    widget.sessionController.clearSession();
+  }
+
+  void _handleSessionChanged() {
+    if (widget.sessionController.isAuthenticated ||
+        !mounted ||
+        _redirectingToLogin) {
+      return;
+    }
+
+    _redirectingToLogin = true;
+    Navigator.of(
+      context,
+    ).pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
+  }
 }
 
 class _DesktopShell extends StatelessWidget {
   const _DesktopShell({
     required this.section,
+    required this.session,
     required this.onSectionSelected,
+    required this.onLogout,
     required this.content,
   });
 
   final AppSection section;
+  final AuthSession? session;
   final ValueChanged<AppSection> onSectionSelected;
+  final VoidCallback onLogout;
   final Widget content;
 
   @override
@@ -150,7 +192,9 @@ class _DesktopShell extends StatelessWidget {
                 ),
                 child: _NavigationPanel(
                   section: section,
+                  session: session,
                   onSectionSelected: onSectionSelected,
+                  onLogout: onLogout,
                 ),
               ),
             ),
@@ -189,12 +233,16 @@ class _DesktopShell extends StatelessWidget {
 class _CompactShell extends StatelessWidget {
   const _CompactShell({
     required this.section,
+    required this.session,
     required this.onSectionSelected,
+    required this.onLogout,
     required this.content,
   });
 
   final AppSection section;
+  final AuthSession? session;
   final ValueChanged<AppSection> onSectionSelected;
+  final VoidCallback onLogout;
   final Widget content;
 
   @override
@@ -205,7 +253,9 @@ class _CompactShell extends StatelessWidget {
         children: <Widget>[
           _CompactTopBar(
             section: section,
+            session: session,
             onSectionSelected: onSectionSelected,
+            onLogout: onLogout,
           ),
           const SizedBox(height: 12),
           Expanded(
@@ -240,11 +290,15 @@ class _CompactShell extends StatelessWidget {
 class _NavigationPanel extends StatelessWidget {
   const _NavigationPanel({
     required this.section,
+    required this.session,
     required this.onSectionSelected,
+    required this.onLogout,
   });
 
   final AppSection section;
+  final AuthSession? session;
   final ValueChanged<AppSection> onSectionSelected;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -253,6 +307,10 @@ class _NavigationPanel extends StatelessWidget {
         const Padding(
           padding: EdgeInsets.fromLTRB(18, 26, 18, 20),
           child: _BrandHeader(),
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
+          child: _SessionCard(session: session),
         ),
         Expanded(
           child: NavigationRail(
@@ -282,6 +340,17 @@ class _NavigationPanel extends StatelessWidget {
             ],
           ),
         ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(18, 0, 18, 22),
+          child: SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onLogout,
+              icon: const Icon(Icons.logout_rounded),
+              label: const Text('Salir'),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -290,11 +359,15 @@ class _NavigationPanel extends StatelessWidget {
 class _CompactTopBar extends StatelessWidget {
   const _CompactTopBar({
     required this.section,
+    required this.session,
     required this.onSectionSelected,
+    required this.onLogout,
   });
 
   final AppSection section;
+  final AuthSession? session;
   final ValueChanged<AppSection> onSectionSelected;
+  final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
@@ -310,7 +383,19 @@ class _CompactTopBar extends StatelessWidget {
           ),
           child: Column(
             children: <Widget>[
-              const _BrandHeader(compact: true),
+              Row(
+                children: <Widget>[
+                  const Expanded(child: _BrandHeader(compact: true)),
+                  const SizedBox(width: 10),
+                  FilledButton.tonalIcon(
+                    onPressed: onLogout,
+                    icon: const Icon(Icons.logout_rounded),
+                    label: const Text('Salir'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              _SessionCard(session: session, compact: true),
               const SizedBox(height: 10),
               SegmentedButton<AppSection>(
                 showSelectedIcon: false,
@@ -338,6 +423,85 @@ class _CompactTopBar extends StatelessWidget {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SessionCard extends StatelessWidget {
+  const _SessionCard({required this.session, this.compact = false});
+
+  final AuthSession? session;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    final AuthSession? activeSession = session;
+    if (activeSession == null) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 12 : 14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: const Color(0xFFF0F7F6),
+        border: Border.all(color: const Color(0x1F167D85)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Sesion activa',
+            style: Theme.of(context).textTheme.labelLarge?.copyWith(
+              color: const Color(0xFF4D6574),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            activeSession.username,
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+              color: const Color(0xFF0A3440),
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              _SessionPill(label: activeSession.role),
+              const _SessionPill(label: 'JWT activo'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SessionPill extends StatelessWidget {
+  const _SessionPill({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: const Color(0xFF167D85),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 12,
+          fontWeight: FontWeight.w700,
         ),
       ),
     );

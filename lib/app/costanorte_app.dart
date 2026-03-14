@@ -2,7 +2,11 @@ import 'package:flutter/material.dart';
 
 import '../core/config/backend_config.dart';
 import '../core/network/api_client.dart';
+import '../core/network/authorized_api_client.dart';
 import '../core/network/local_http_client.dart';
+import '../features/auth/application/auth_app_service.dart';
+import '../features/auth/application/session_controller.dart';
+import '../features/auth/infrastructure/http_auth_app_service.dart';
 import '../features/reservations/application/reservation_app_service.dart';
 import '../features/reservations/infrastructure/http_reservation_app_service.dart';
 import 'router/app_router.dart';
@@ -12,11 +16,17 @@ class CostaNorteApp extends StatefulWidget {
   const CostaNorteApp({
     super.key,
     ApiClient? apiClient,
+    AuthAppService? authAppService,
+    SessionController? sessionController,
     ReservationAppService? reservationAppService,
   }) : _apiClient = apiClient,
+       _authAppService = authAppService,
+       _sessionController = sessionController,
        _reservationAppService = reservationAppService;
 
   final ApiClient? _apiClient;
+  final AuthAppService? _authAppService;
+  final SessionController? _sessionController;
   final ReservationAppService? _reservationAppService;
 
   @override
@@ -24,17 +34,28 @@ class CostaNorteApp extends StatefulWidget {
 }
 
 class _CostaNorteAppState extends State<CostaNorteApp> {
-  late final ApiClient _apiClient;
+  late final ApiClient _rawApiClient;
+  late final ApiClient _authorizedApiClient;
+  late final AuthAppService _authAppService;
+  late final SessionController _sessionController;
   late final ReservationAppService _reservationAppService;
 
   @override
   void initState() {
     super.initState();
-    _apiClient =
+    _sessionController = widget._sessionController ?? SessionController();
+    _rawApiClient =
         widget._apiClient ?? LocalHttpClient(baseUrl: BackendConfig.apiBaseUrl);
+    _authorizedApiClient = AuthorizedApiClient(
+      delegate: _rawApiClient,
+      authorizationHeaderProvider: () => _sessionController.authorizationHeader,
+      onUnauthorized: _sessionController.clearSession,
+    );
+    _authAppService =
+        widget._authAppService ?? HttpAuthAppService(apiClient: _rawApiClient);
     _reservationAppService =
         widget._reservationAppService ??
-        HttpReservationAppService(apiClient: _apiClient);
+        HttpReservationAppService(apiClient: _authorizedApiClient);
   }
 
   @override
@@ -43,10 +64,12 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
       title: 'CostaNorte',
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(),
-      initialRoute: AppRoutes.dashboard,
+      initialRoute: AppRoutes.login,
       onGenerateRoute: (settings) => AppRouter.generateRoute(
         settings: settings,
-        apiClient: _apiClient,
+        apiClient: _authorizedApiClient,
+        authAppService: _authAppService,
+        sessionController: _sessionController,
         reservationAppService: _reservationAppService,
       ),
     );

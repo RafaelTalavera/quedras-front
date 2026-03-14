@@ -36,7 +36,7 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Cliente integrado con backend local para agenda y reservas.',
+          'Cliente autenticado con JWT local para agenda y reservas protegidas por rol.',
           style: textTheme.bodyLarge?.copyWith(color: const Color(0xFF4E6071)),
         ),
         const SizedBox(height: 20),
@@ -55,15 +55,20 @@ class _DashboardPageState extends State<DashboardPage> {
             const _InfoCard(
               title: 'Base URL',
               value: BackendConfig.apiBaseUrl,
-              caption:
-                  'Configurable via --dart-define=COSTANORTE_API_BASE_URL',
+              caption: 'Configurable via --dart-define=COSTANORTE_API_BASE_URL',
               accentColor: Color(0xFF13505B),
             ),
             const _InfoCard(
               title: 'Modulo actual',
-              value: 'Hito 9 - Integracion local',
-              caption: 'Reservas operando sobre API backend local.',
+              value: 'Hito 12 - Seguridad JWT',
+              caption: 'Login, sesion y autorizacion con rol OPERATOR.',
               accentColor: Color(0xFF4A4E69),
+            ),
+            const _InfoCard(
+              title: 'Seguridad activa',
+              value: 'Bearer + rol',
+              caption: 'Las reservas viajan autenticadas contra backend local.',
+              accentColor: Color(0xFF167D85),
             ),
           ],
         ),

@@ -2,11 +2,11 @@
 
 ## Estado general frontend
 - Proyecto: COSTANORTE Frontend
-- Estado: Completado (Hito 11 frontend)
-- Ultimo hito trabajado: Hito 11 - Renombre seguro de QUEDRAS a COSTANORTE (fase 1)
+- Estado: Completado (Hito 12 frontend)
+- Ultimo hito trabajado: Hito 12 - Seguridad de usuarios con JWT y rol inicial
 - Ultima actualizacion: 2026-03-14
 - Fuente de verdad global: `C:/Users/Public/Documents/Proyectos/quadras/docs/TABLERO_PROGRESO.md`
-- Proximo paso frontend: Esperar cierre global de tablero para continuar Hito 12 con nuevas funcionalidades del cliente.
+- Proximo paso frontend: Preparar fase de multiples roles y politicas de autorizacion por pantalla cuando backend lo habilite.
 
 ## Hitos frontend
 | Hito | Nombre | Estado frontend | Tests | Documentacion | Commit | Observaciones |
@@ -21,11 +21,12 @@
 | 9 | Conexion frontend-backend local | Completado | OK (`flutter test`, `flutter analyze`) | Completada | Hecho (commit de cierre de Hito 9 frontend) | Servicio de reservas conectado por HTTP local con manejo de errores de API y red. |
 | 10 | Validacion integral, documentacion final y preparacion para instalacion | Completado | `flutter test` OK, `flutter analyze` OK, `flutter doctor -v` OK, `flutter build windows --release` OK | Completada | Hecho (`f3a5963` + commit de cierre actual) | Toolchain de Windows resuelto con Visual Studio Community y binario release generado en `build/windows/x64/runner/Release/`. |
 | 11 | Renombre seguro de QUEDRAS a COSTANORTE (fase 1) | Completado | `flutter pub get` OK, `flutter test` OK, `flutter analyze` OK, `flutter build windows --release` OK | Completada | Hecho (commit frontend de Hito 11) | App renombrada a COSTANORTE con binario `costanorte.exe` y compatibilidad temporal con `QUEDRAS_API_BASE_URL`. |
+| 12 | Seguridad de usuarios con JWT y rol inicial | Completado | OK (`flutter test`, `flutter analyze`, `flutter build windows --release`) | Completada | Hecho (commit de cierre Hito 12 frontend) | Login implementado con sesion JWT en memoria, logout, guard de rutas y envio de `Authorization: Bearer <token>` al backend. |
 
 ## Pendientes inmediatos frontend
-- Ejecutar prueba de instalacion en un equipo limpio del hotel.
-- Validar conectividad con backend local usando `--dart-define=COSTANORTE_API_BASE_URL`.
+- Planificar persistencia segura o renovacion controlada de sesion si el producto deja de ser solo local/operativo.
+- Preparar ampliacion de roles y permisos por pantalla cuando backend exponga nuevos perfiles.
 - Planificar fase 2 de renombre interno (paquetes/rutas de repositorio) cuando el cliente lo apruebe.
 
 ## Bloqueos frontend
-- Sin bloqueos abiertos en frontend para Hito 11.
+- Sin bloqueos abiertos; Hito 12 frontend completado.

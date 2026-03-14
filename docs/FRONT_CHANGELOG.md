@@ -238,3 +238,29 @@
   - `docs/FRONT_CHANGELOG.md`
 - Motivo del cambio: Migrar nombre comercial de QUEDRAS a COSTANORTE sin romper entornos actuales, manteniendo fallback de `QUEDRAS_API_BASE_URL`.
 - Impacto funcional: App desktop y ejecutable Windows pasan a `CostaNorte` / `costanorte.exe` con pruebas y build release en verde.
+
+## 2026-03-14 | Hito 12 | Login JWT, guard de rutas y sesion operativa
+- Componente afectado: Frontend (autenticacion + red + shell principal)
+- Archivos tocados:
+  - `lib/app/costanorte_app.dart`
+  - `lib/app/router/app_router.dart`
+  - `lib/app/router/app_routes.dart`
+  - `lib/core/network/authorized_api_client.dart`
+  - `lib/features/auth/**`
+  - `lib/features/home/presentation/shell_page.dart`
+  - `lib/features/dashboard/presentation/dashboard_page.dart`
+  - `test/widget_test.dart`
+  - `test/core/network/authorized_api_client_test.dart`
+  - `test/features/auth/infrastructure/http_auth_app_service_test.dart`
+- Motivo del cambio: Integrar autenticacion real contra backend local con `POST /api/v1/auth/login`, sesion JWT en memoria, logout y consumo autenticado del modulo de reservas.
+- Impacto funcional: La app inicia en login, protege rutas internas, adjunta `Authorization: Bearer <token>` a llamadas autenticadas y redirige al login si la sesion queda invalida.
+
+## 2026-03-14 | Hito 12 | Validacion tecnica y cierre documental frontend
+- Componente afectado: Frontend (calidad + documentacion operativa)
+- Archivos tocados:
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+  - `docs/INSTALACION_FRONTEND_HOTEL.md`
+  - `docs/VALIDACION_FRONTEND_HITO12.md`
+- Motivo del cambio: Ejecutar `flutter test`, `flutter analyze` y `flutter build windows --release`, y documentar el usuario demo con el flujo operativo del Hito 12.
+- Impacto funcional: Frontend del Hito 12 queda validado, documentado y listo para uso local con backend JWT activo.
