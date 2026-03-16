@@ -2,11 +2,11 @@
 
 ## Estado general frontend
 - Proyecto: COSTANORTE Frontend
-- Estado: Completado (Hito 12 frontend)
-- Ultimo hito trabajado: Hito 12 - Seguridad de usuarios con JWT y rol inicial
-- Ultima actualizacion: 2026-03-14
+- Estado: En progreso (reenfoque comercial post Hito 12)
+- Ultimo hito trabajado: Post Hito 12 - Reenfoque comercial, modulos visibles y salida pt-BR
+- Ultima actualizacion: 2026-03-16
 - Fuente de verdad global: `C:/Users/Public/Documents/Proyectos/quadras/docs/TABLERO_PROGRESO.md`
-- Proximo paso frontend: Preparar fase de multiples roles y politicas de autorizacion por pantalla cuando backend lo habilite.
+- Proximo paso frontend: Conectar `Massagens` y `Tours e Viagens` a contratos backend reales y cerrar una validacion release cuando haya contenido final aprobado.
 
 ## Hitos frontend
 | Hito | Nombre | Estado frontend | Tests | Documentacion | Commit | Observaciones |
@@ -23,10 +23,18 @@
 | 11 | Renombre seguro de QUEDRAS a COSTANORTE (fase 1) | Completado | `flutter pub get` OK, `flutter test` OK, `flutter analyze` OK, `flutter build windows --release` OK | Completada | Hecho (commit frontend de Hito 11) | App renombrada a COSTANORTE con binario `costanorte.exe` y compatibilidad temporal con `QUEDRAS_API_BASE_URL`. |
 | 12 | Seguridad de usuarios con JWT y rol inicial | Completado | OK (`flutter test`, `flutter analyze`, `flutter build windows --release`) | Completada | Hecho (commit de cierre Hito 12 frontend) | Login implementado con sesion JWT en memoria, logout, guard de rutas y envio de `Authorization: Bearer <token>` al backend. |
 
+## Actualizacion post Hito 12
+- Fecha: 2026-03-16
+- Alcance visible reducido a 3 modulos funcionales (`Massagens`, `Quadras`, `Tours e Viagens`) mas `Configuracoes`.
+- El shell mantiene el layout base, pero elimina el dashboard tecnico y cualquier texto de infraestructura visible al operador.
+- `Quadras` unifica agenda y alta dentro del mismo modulo.
+- Mensajes visibles y errores propagados a la UI normalizados a portugues de Brasil (`pt-BR`).
+- Validaciones ejecutadas en esta fase: `flutter analyze`, `flutter test`.
+
 ## Pendientes inmediatos frontend
-- Planificar persistencia segura o renovacion controlada de sesion si el producto deja de ser solo local/operativo.
-- Preparar ampliacion de roles y permisos por pantalla cuando backend exponga nuevos perfiles.
-- Planificar fase 2 de renombre interno (paquetes/rutas de repositorio) cuando el cliente lo apruebe.
+- Definir contrato backend especifico para `Massagens`.
+- Definir contrato backend especifico para `Tours e Viagens`.
+- Evaluar si la sesion seguira solo en memoria o necesitara persistencia controlada.
 
 ## Bloqueos frontend
-- Sin bloqueos abiertos; Hito 12 frontend completado.
+- Sin bloqueos tecnicos abiertos; pendiente definicion funcional de backend para los nuevos modulos comerciales.

@@ -100,7 +100,7 @@ void main() {
     expect(client.calls.last.path, 'reservations/12/cancel');
   });
 
-  test('HttpReservationAppService propaga mensaje de error de API', () async {
+  test('HttpReservationAppService traduz mensagem de erro da API', () async {
     final _FakeApiClient client = _FakeApiClient();
     client.enqueue(
       const ApiResponse(
@@ -126,7 +126,7 @@ void main() {
         isA<StateError>().having(
           (StateError error) => error.message.toString(),
           'message',
-          'Reservation overlaps with an existing booking.',
+          'Já existe uma reserva ativa para esse horário.',
         ),
       ),
     );
@@ -145,7 +145,7 @@ void main() {
         isA<StateError>().having(
           (StateError error) => error.message.toString(),
           'message',
-          'No fue posible conectar con el backend local. Verifique servidor y red interna.',
+          'Não foi possível conectar ao backend local. Verifique o servidor e a rede interna.',
         ),
       ),
     );

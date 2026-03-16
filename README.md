@@ -1,6 +1,18 @@
 # COSTANORTE Frontend
 
-Cliente Flutter Desktop para operacion interna de reservas de cancha.
+Cliente Flutter Desktop para operacion interna de servicios del hotel.
+
+## Alcance visible actual
+- Login de acceso interno.
+- `Agendamento de Massagens`
+- `Aluguel de Quadras de Tenis`
+- `Tours e Viagens`
+- `Configuracoes`
+
+Notas de alcance:
+- La UI visible al operador sale en portugues de Brasil (`pt-BR`).
+- `Quadras` concentra agenda diaria y nueva reserva dentro del mismo modulo.
+- `Massagens` y `Tours e Viagens` quedaron preparados en frontend y pendientes de contrato backend dedicado.
 
 ## Ejecucion local
 ```powershell
@@ -23,5 +35,7 @@ Compatibilidad temporal:
 
 ## Documentacion de soporte
 - `docs/INSTALACION_FRONTEND_HOTEL.md`
+- `docs/VALIDACION_FRONTEND_HITO12.md`
 - `docs/VALIDACION_FRONTEND_HITO10.md`
 - `docs/FRONT_PROGRESS.md`
+- `docs/FRONT_CHANGELOG.md`

@@ -36,7 +36,7 @@ void main() {
     expect(reservations.first.guestName, 'Pedro Lima');
   });
 
-  test('InMemoryReservationAppService rechaza solapamientos', () async {
+  test('InMemoryReservationAppService rejeita sobreposição', () async {
     final InMemoryReservationAppService service =
         InMemoryReservationAppService();
     final String today = _todayDate();
@@ -55,40 +55,37 @@ void main() {
         isA<StateError>().having(
           (StateError error) => error.message.toString(),
           'message',
-          'Reservation overlaps with an existing booking.',
+          'Já existe uma reserva ativa para esse horário.',
         ),
       ),
     );
   });
 
-  test(
-    'InMemoryReservationAppService rechaza horario fuera de ventana',
-    () async {
-      final InMemoryReservationAppService service =
-          InMemoryReservationAppService();
+  test('InMemoryReservationAppService rejeita horário fora da janela', () async {
+    final InMemoryReservationAppService service =
+        InMemoryReservationAppService();
 
-      await expectLater(
-        () => service.create(
-          CreateReservationModel(
-            guestName: 'Horario Fuera',
-            reservationDate: '2026-03-20',
-            startTime: '06:00:00',
-            endTime: '07:00:00',
-            notes: null,
-          ),
+    await expectLater(
+      () => service.create(
+        CreateReservationModel(
+          guestName: 'Horario Fuera',
+          reservationDate: '2026-03-20',
+          startTime: '06:00:00',
+          endTime: '07:00:00',
+          notes: null,
         ),
-        throwsA(
-          isA<StateError>().having(
-            (StateError error) => error.message.toString(),
-            'message',
-            'Reservation must be within operating hours 07:00 to 23:00.',
-          ),
+      ),
+      throwsA(
+        isA<StateError>().having(
+          (StateError error) => error.message.toString(),
+          'message',
+          'A reserva deve estar dentro do horário de funcionamento, das 07:00 às 23:00.',
         ),
-      );
-    },
-  );
+      ),
+    );
+  });
 
-  test('InMemoryReservationAppService rechaza duracion no permitida', () async {
+  test('InMemoryReservationAppService rejeita duração não permitida', () async {
     final InMemoryReservationAppService service =
         InMemoryReservationAppService();
 
@@ -106,7 +103,7 @@ void main() {
         isA<StateError>().having(
           (StateError error) => error.message.toString(),
           'message',
-          'Reservation duration must be 60, 90 or 120 minutes.',
+          'A duração da reserva deve ser de 60, 90 ou 120 minutos.',
         ),
       ),
     );
@@ -140,7 +137,7 @@ void main() {
   );
 
   test(
-    'InMemoryReservationAppService rechaza edicion con solapamiento',
+    'InMemoryReservationAppService rejeita edição com sobreposição',
     () async {
       final InMemoryReservationAppService service =
           InMemoryReservationAppService();
@@ -163,14 +160,14 @@ void main() {
           isA<StateError>().having(
             (StateError error) => error.message.toString(),
             'message',
-            'Reservation overlaps with an existing booking.',
+            'Já existe uma reserva ativa para esse horário.',
           ),
         ),
       );
     },
   );
 
-  test('InMemoryReservationAppService cancela una reserva', () async {
+  test('InMemoryReservationAppService cancela uma reserva', () async {
     final InMemoryReservationAppService service =
         InMemoryReservationAppService();
 
@@ -189,7 +186,7 @@ void main() {
   });
 
   test(
-    'InMemoryReservationAppService rechaza editar una reserva cancelada',
+    'InMemoryReservationAppService rejeita editar uma reserva cancelada',
     () async {
       final InMemoryReservationAppService service =
           InMemoryReservationAppService();
@@ -220,7 +217,7 @@ void main() {
           isA<StateError>().having(
             (StateError error) => error.message.toString(),
             'message',
-            'Cancelled reservations cannot be edited.',
+            'Reservas canceladas não podem ser editadas.',
           ),
         ),
       );
@@ -228,7 +225,7 @@ void main() {
   );
 
   test(
-    'InMemoryReservationAppService devuelve not found en cancelacion inexistente',
+    'InMemoryReservationAppService retorna not found em cancelamento inexistente',
     () async {
       final InMemoryReservationAppService service =
           InMemoryReservationAppService();
@@ -239,7 +236,7 @@ void main() {
           isA<StateError>().having(
             (StateError error) => error.message.toString(),
             'message',
-            'Reservation 999999 not found',
+            'Reserva 999999 não encontrada.',
           ),
         ),
       );

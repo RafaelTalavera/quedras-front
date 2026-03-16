@@ -26,6 +26,15 @@ flutter run -d windows --dart-define=COSTANORTE_API_BASE_URL=http://127.0.0.1:80
 - Rol esperado: `OPERATOR`
 - Nota: credencial valida para entorno local y pruebas; en despliegues reales debe redefinirse desde backend.
 
+## Modulos visibles esperados despues del login
+- `Agendamento de Massagens`
+- `Aluguel de Quadras de Tenis`
+- `Tours e Viagens`
+- `Configuracoes`
+
+Nota de idioma:
+- La UI visible al operador debe salir en portugues de Brasil (`pt-BR`).
+
 ## Pruebas y analisis recomendados
 ```powershell
 flutter test
@@ -50,3 +59,4 @@ Salida esperada:
 - Compatibilidad temporal: tambien se acepta `QUEDRAS_API_BASE_URL`.
 - La app no depende de internet para operar, solo de conectividad con backend local.
 - El login consume `POST /api/v1/auth/login` y las pantallas protegidas envian `Authorization: Bearer <jwt>`.
+- `Quadras` es el unico modulo ya conectado a backend real en esta fase; `Massagens` y `Tours e Viagens` permanecen en estado frontend controlado hasta definir contrato dedicado.

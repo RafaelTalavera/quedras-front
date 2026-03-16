@@ -30,7 +30,7 @@ final class InMemoryReservationAppService implements ReservationAppService {
           startTime: '08:00:00',
           endTime: '09:00:00',
           status: ReservationStatus.scheduled,
-          notes: 'Clase individual',
+          notes: 'Aula individual',
           createdAt: DateTime.now().toUtc(),
           updatedAt: DateTime.now().toUtc(),
         ),
@@ -41,7 +41,7 @@ final class InMemoryReservationAppService implements ReservationAppService {
           startTime: '11:00:00',
           endTime: '12:00:00',
           status: ReservationStatus.scheduled,
-          notes: 'Huesped habitacion 402',
+          notes: 'Hóspede do apartamento 402',
           createdAt: DateTime.now().toUtc(),
           updatedAt: DateTime.now().toUtc(),
         ),
@@ -107,7 +107,7 @@ final class InMemoryReservationAppService implements ReservationAppService {
 
     final int index = _indexById(reservationId);
     if (index < 0) {
-      throw StateError('Reservation $reservationId not found');
+      throw StateError('Reserva $reservationId não encontrada.');
     }
 
     final ReservationModel existing = _items[index];
@@ -148,12 +148,12 @@ final class InMemoryReservationAppService implements ReservationAppService {
 
     final int index = _indexById(reservationId);
     if (index < 0) {
-      throw StateError('Reservation $reservationId not found');
+      throw StateError('Reserva $reservationId não encontrada.');
     }
 
     final ReservationModel existing = _items[index];
     if (existing.status == ReservationStatus.completed) {
-      throw StateError('Completed reservations cannot be cancelled.');
+      throw StateError('Reservas concluídas não podem ser canceladas.');
     }
     if (existing.status == ReservationStatus.cancelled) {
       return existing;
@@ -182,17 +182,17 @@ final class InMemoryReservationAppService implements ReservationAppService {
 
   void _validateCanEdit(ReservationModel reservation) {
     if (reservation.status == ReservationStatus.cancelled) {
-      throw StateError('Cancelled reservations cannot be edited.');
+      throw StateError('Reservas canceladas não podem ser editadas.');
     }
     if (reservation.status == ReservationStatus.completed) {
-      throw StateError('Completed reservations cannot be edited.');
+      throw StateError('Reservas concluídas não podem ser editadas.');
     }
   }
 
   static void _validateGuestName(String guestName) {
     if (guestName.trim().length < 3) {
       throw StateError(
-        'El nombre del huesped debe tener al menos 3 caracteres.',
+        'O nome do responsável deve ter pelo menos 3 caracteres.',
       );
     }
   }
@@ -202,17 +202,21 @@ final class InMemoryReservationAppService implements ReservationAppService {
     required int endMinutes,
   }) {
     if (startMinutes >= endMinutes) {
-      throw StateError('La hora de inicio debe ser anterior a la hora de fin.');
+      throw StateError(
+        'O horário de início deve ser anterior ao horário de término.',
+      );
     }
     if (startMinutes < _openingMinutes || endMinutes > _closingMinutes) {
       throw StateError(
-        'Reservation must be within operating hours 07:00 to 23:00.',
+        'A reserva deve estar dentro do horário de funcionamento, das 07:00 às 23:00.',
       );
     }
 
     final int durationMinutes = endMinutes - startMinutes;
     if (!_allowedDurationsMinutes.contains(durationMinutes)) {
-      throw StateError('Reservation duration must be 60, 90 or 120 minutes.');
+      throw StateError(
+        'A duração da reserva deve ser de 60, 90 ou 120 minutos.',
+      );
     }
   }
 
@@ -238,7 +242,7 @@ final class InMemoryReservationAppService implements ReservationAppService {
       return existingStart < endMinutes && existingEnd > startMinutes;
     });
     if (overlaps) {
-      throw StateError('Reservation overlaps with an existing booking.');
+      throw StateError('Já existe uma reserva ativa para esse horário.');
     }
   }
 

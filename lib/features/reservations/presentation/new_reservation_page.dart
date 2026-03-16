@@ -50,7 +50,7 @@ class _NewReservationPageState extends State<NewReservationPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
-          'Nueva reserva',
+          'Nova reserva',
           style: textTheme.headlineMedium?.copyWith(
             fontWeight: FontWeight.w700,
             color: const Color(0xFF0B2942),
@@ -58,7 +58,7 @@ class _NewReservationPageState extends State<NewReservationPage> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Alta operativa con validaciones locales y envio a backend local.',
+          'Cadastre novas reservas de quadra com regras de horário e duração já aplicadas na interface.',
           style: textTheme.bodyLarge?.copyWith(color: const Color(0xFF4E6071)),
         ),
         const SizedBox(height: 20),
@@ -73,19 +73,19 @@ class _NewReservationPageState extends State<NewReservationPage> {
                   TextFormField(
                     controller: _guestController,
                     decoration: const InputDecoration(
-                      labelText: 'Huesped',
-                      hintText: 'Nombre y apellido',
+                      labelText: 'Responsável',
+                      hintText: 'Nome completo',
                     ),
                     textInputAction: TextInputAction.next,
                     validator: (String? value) {
                       if (value == null || value.trim().isEmpty) {
-                        return 'Ingrese el nombre del huesped.';
+                        return 'Informe o responsável pela reserva.';
                       }
                       if (value.trim().length < 3) {
-                        return 'El nombre debe tener al menos 3 caracteres.';
+                        return 'O nome deve ter pelo menos 3 caracteres.';
                       }
                       if (value.trim().length > 120) {
-                        return 'El nombre no puede superar 120 caracteres.';
+                        return 'O nome não pode ultrapassar 120 caracteres.';
                       }
                       return null;
                     },
@@ -99,18 +99,18 @@ class _NewReservationPageState extends State<NewReservationPage> {
                         onPressed: _saving ? null : _pickDate,
                         icon: const Icon(Icons.calendar_today_rounded),
                         label: Text(
-                          'Fecha: ${_formatDateDisplay(_selectedDate)}',
+                          'Data: ${_formatDateDisplay(_selectedDate)}',
                         ),
                       ),
                       OutlinedButton.icon(
                         onPressed: _saving ? null : _pickStartTime,
                         icon: const Icon(Icons.schedule_rounded),
-                        label: Text('Inicio: ${_formatTime(_startTime)}'),
+                        label: Text('Início: ${_formatTime(_startTime)}'),
                       ),
                       OutlinedButton.icon(
                         onPressed: _saving ? null : _pickEndTime,
                         icon: const Icon(Icons.timer_rounded),
-                        label: Text('Fin: ${_formatTime(_endTime)}'),
+                        label: Text('Fim: ${_formatTime(_endTime)}'),
                       ),
                     ],
                   ),
@@ -118,14 +118,14 @@ class _NewReservationPageState extends State<NewReservationPage> {
                   TextFormField(
                     controller: _notesController,
                     decoration: const InputDecoration(
-                      labelText: 'Notas (opcional)',
-                      hintText: 'Detalles del turno',
+                      labelText: 'Observações (opcional)',
+                      hintText: 'Detalhes da reserva',
                     ),
                     minLines: 2,
                     maxLines: 3,
                     validator: (String? value) {
                       if (value != null && value.trim().length > 500) {
-                        return 'Las notas no pueden superar 500 caracteres.';
+                        return 'As observações não podem ultrapassar 500 caracteres.';
                       }
                       return null;
                     },
@@ -143,14 +143,12 @@ class _NewReservationPageState extends State<NewReservationPage> {
                                 ),
                               )
                             : const Icon(Icons.save_alt_rounded),
-                        label: Text(
-                          _saving ? 'Guardando...' : 'Guardar reserva',
-                        ),
+                        label: Text(_saving ? 'Salvando...' : 'Salvar reserva'),
                       ),
                       const SizedBox(width: 10),
                       OutlinedButton(
                         onPressed: _saving ? null : _resetForm,
-                        child: const Text('Limpiar'),
+                        child: const Text('Limpar'),
                       ),
                     ],
                   ),
@@ -193,7 +191,7 @@ class _NewReservationPageState extends State<NewReservationPage> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: const <Widget>[
                 Text(
-                  'Contrato JSON aplicado',
+                  'Orientações rápidas',
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
@@ -202,17 +200,15 @@ class _NewReservationPageState extends State<NewReservationPage> {
                 ),
                 SizedBox(height: 8),
                 _FieldHint(
-                  label: 'Payload de alta',
-                  hint:
-                      'guestName, reservationDate(yyyy-MM-dd), startTime, endTime, notes',
+                  label: 'Horário permitido',
+                  hint: 'Reservas entre 07:00 e 23:00.',
                 ),
                 SizedBox(height: 12),
-                _FieldHint(label: 'Estado inicial', hint: 'SCHEDULED'),
+                _FieldHint(label: 'Duração', hint: '60, 90 ou 120 minutos.'),
                 SizedBox(height: 12),
                 _FieldHint(
-                  label: 'Reglas Hito 7',
-                  hint:
-                      'Horario 07:00-23:00 | Duraciones 60/90/120 min | Sin solapamientos',
+                  label: 'Disponibilidade',
+                  hint: 'A quadra não pode ter reservas sobrepostas.',
                 ),
               ],
             ),
@@ -229,7 +225,7 @@ class _NewReservationPageState extends State<NewReservationPage> {
       initialDate: _selectedDate,
       firstDate: now.subtract(const Duration(days: 365)),
       lastDate: now.add(const Duration(days: 365)),
-      helpText: 'Seleccionar fecha de reserva',
+      helpText: 'Selecionar data da reserva',
     );
     if (picked == null) {
       return;
@@ -243,7 +239,7 @@ class _NewReservationPageState extends State<NewReservationPage> {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: _startTime,
-      helpText: 'Hora de inicio',
+      helpText: 'Horário de início',
     );
     if (picked == null) {
       return;
@@ -257,7 +253,7 @@ class _NewReservationPageState extends State<NewReservationPage> {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: _endTime,
-      helpText: 'Hora de fin',
+      helpText: 'Horário de término',
     );
     if (picked == null) {
       return;
@@ -278,14 +274,15 @@ class _NewReservationPageState extends State<NewReservationPage> {
 
     if (startMinutes >= endMinutes) {
       setState(() {
-        _error = 'La hora de inicio debe ser menor a la hora de fin.';
+        _error = 'O horário de início deve ser anterior ao horário de término.';
         _success = null;
       });
       return;
     }
     if (startMinutes < _openingMinutes || endMinutes > _closingMinutes) {
       setState(() {
-        _error = 'Reservation must be within operating hours 07:00 to 23:00.';
+        _error =
+            'A reserva deve estar dentro do horário de funcionamento, das 07:00 às 23:00.';
         _success = null;
       });
       return;
@@ -293,7 +290,7 @@ class _NewReservationPageState extends State<NewReservationPage> {
     final int durationMinutes = endMinutes - startMinutes;
     if (!_allowedDurationsMinutes.contains(durationMinutes)) {
       setState(() {
-        _error = 'Reservation duration must be 60, 90 or 120 minutes.';
+        _error = 'A duração da reserva deve ser de 60, 90 ou 120 minutos.';
         _success = null;
       });
       return;
@@ -323,7 +320,7 @@ class _NewReservationPageState extends State<NewReservationPage> {
       setState(() {
         _saving = false;
         _success =
-            'Reserva creada correctamente para ${_guestController.text.trim()}.';
+            'Reserva criada com sucesso para ${_guestController.text.trim()}.';
         _error = null;
       });
       _guestController.clear();

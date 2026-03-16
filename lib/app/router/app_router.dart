@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 
-import '../../core/network/api_client.dart';
 import '../../features/auth/application/auth_app_service.dart';
 import '../../features/auth/application/session_controller.dart';
 import '../../features/auth/presentation/login_page.dart';
@@ -11,7 +10,6 @@ import 'app_routes.dart';
 final class AppRouter {
   static Route<dynamic> generateRoute({
     required RouteSettings settings,
-    required ApiClient apiClient,
     required AuthAppService authAppService,
     required SessionController sessionController,
     required ReservationAppService reservationAppService,
@@ -28,14 +26,13 @@ final class AppRouter {
     }
 
     final String resolvedRoute = routeName == AppRoutes.login
-        ? AppRoutes.dashboard
+        ? AppRoutes.tennisRental
         : routeName;
     final AppSection section = AppRoutes.sectionByRoute(resolvedRoute);
 
     return MaterialPageRoute<void>(
       builder: (_) => ShellPage(
         section: section,
-        apiClient: apiClient,
         sessionController: sessionController,
         reservationAppService: reservationAppService,
       ),

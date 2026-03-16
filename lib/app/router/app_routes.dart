@@ -1,31 +1,36 @@
-enum AppSection { dashboard, schedule, newReservation }
+enum AppSection { massageBooking, tennisRental, toursTravel, settings }
 
 final class AppRoutes {
   static const String login = '/login';
-  static const String dashboard = '/';
-  static const String schedule = '/agenda';
-  static const String newReservation = '/reservas/nueva';
+  static const String tennisRental = '/quadras';
+  static const String massageBooking = '/massagens';
+  static const String toursTravel = '/tours';
+  static const String settings = '/configuracoes';
 
   static AppSection sectionByRoute(String route) {
     switch (route) {
-      case schedule:
-        return AppSection.schedule;
-      case newReservation:
-        return AppSection.newReservation;
-      case dashboard:
+      case massageBooking:
+        return AppSection.massageBooking;
+      case toursTravel:
+        return AppSection.toursTravel;
+      case settings:
+        return AppSection.settings;
+      case tennisRental:
       default:
-        return AppSection.dashboard;
+        return AppSection.tennisRental;
     }
   }
 
   static String routeBySection(AppSection section) {
     switch (section) {
-      case AppSection.dashboard:
-        return dashboard;
-      case AppSection.schedule:
-        return schedule;
-      case AppSection.newReservation:
-        return newReservation;
+      case AppSection.massageBooking:
+        return massageBooking;
+      case AppSection.tennisRental:
+        return tennisRental;
+      case AppSection.toursTravel:
+        return toursTravel;
+      case AppSection.settings:
+        return settings;
     }
   }
 }

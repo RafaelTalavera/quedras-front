@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../../../core/localization/pt_br_error_translator.dart';
 import '../../../core/network/api_client.dart';
 import '../application/reservation_app_service.dart';
 import '../domain/create_reservation_model.dart';
@@ -34,7 +35,9 @@ final class HttpReservationAppService implements ReservationAppService {
 
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! List) {
-      throw StateError('Invalid reservation list format from local backend.');
+      throw StateError(
+        'Formato inválido da lista de reservas retornada pelo backend local.',
+      );
     }
 
     final List<ReservationModel> reservations = <ReservationModel>[];
@@ -98,16 +101,14 @@ final class HttpReservationAppService implements ReservationAppService {
       return await request();
     } on SocketException {
       throw StateError(
-        'No fue posible conectar con el backend local. Verifique servidor y red interna.',
+        'Não foi possível conectar ao backend local. Verifique o servidor e a rede interna.',
       );
     } on TimeoutException {
-      throw StateError('Timeout al conectar con el backend local.');
+      throw StateError('Tempo esgotado ao conectar ao backend local.');
     } on HttpException {
-      throw StateError('Error HTTP de transporte al consultar backend local.');
+      throw StateError('Erro HTTP de transporte ao consultar o backend local.');
     } on FormatException catch (error) {
-      throw StateError(
-        'Respuesta invalida del backend local: ${error.message}',
-      );
+      throw StateError('Resposta inválida do backend local: ${error.message}');
     }
   }
 
@@ -123,11 +124,11 @@ final class HttpReservationAppService implements ReservationAppService {
       if (message != null) {
         final String asString = message.toString().trim();
         if (asString.isNotEmpty) {
-          return asString;
+          return PtBrErrorTranslator.translate(asString);
         }
       }
     }
-    return 'Backend local devolvio HTTP ${response.statusCode}.';
+    return 'O backend local retornou HTTP ${response.statusCode}.';
   }
 
   static Object? _tryDecode(String rawBody) {
@@ -139,7 +140,7 @@ final class HttpReservationAppService implements ReservationAppService {
 
   static Map<String, dynamic> _asMap(Object? value) {
     if (value is! Map) {
-      throw const FormatException('Se esperaba un objeto JSON.');
+      throw const FormatException('Era esperado um objeto JSON.');
     }
     return value.map<String, dynamic>(
       (Object? key, Object? mapValue) =>

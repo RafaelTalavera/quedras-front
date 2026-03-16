@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import '../../../core/localization/pt_br_error_translator.dart';
 import '../../../core/network/api_client.dart';
 import '../application/auth_app_service.dart';
 import '../domain/auth_session.dart';
@@ -37,7 +38,7 @@ final class HttpAuthAppService implements AuthAppService {
 
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! Map) {
-      throw StateError('Formato invalido al autenticar contra backend local.');
+      throw StateError('Formato inválido ao autenticar no backend local.');
     }
 
     try {
@@ -49,7 +50,7 @@ final class HttpAuthAppService implements AuthAppService {
       );
     } on FormatException catch (error) {
       throw StateError(
-        'Formato invalido al autenticar contra backend local: ${error.message}',
+        'Formato inválido ao autenticar no backend local: ${error.message}',
       );
     }
   }
@@ -61,18 +62,16 @@ final class HttpAuthAppService implements AuthAppService {
       return await request();
     } on SocketException {
       throw StateError(
-        'No fue posible conectar con el backend local. Verifique servidor y red interna.',
+        'Não foi possível conectar ao backend local. Verifique o servidor e a rede interna.',
       );
     } on TimeoutException {
-      throw StateError('Timeout al conectar con el backend local.');
+      throw StateError('Tempo esgotado ao conectar ao backend local.');
     } on HttpException {
       throw StateError(
-        'Error HTTP de transporte al autenticar con backend local.',
+        'Erro HTTP de transporte ao autenticar no backend local.',
       );
     } on FormatException catch (error) {
-      throw StateError(
-        'Respuesta invalida del backend local: ${error.message}',
-      );
+      throw StateError('Resposta inválida do backend local: ${error.message}');
     }
   }
 
@@ -83,11 +82,11 @@ final class HttpAuthAppService implements AuthAppService {
       if (message != null) {
         final String asString = message.toString().trim();
         if (asString.isNotEmpty) {
-          return asString;
+          return PtBrErrorTranslator.translate(asString);
         }
       }
     }
-    return 'Backend local devolvio HTTP ${response.statusCode}.';
+    return 'O backend local retornou HTTP ${response.statusCode}.';
   }
 
   static Object? _tryDecode(String rawBody) {

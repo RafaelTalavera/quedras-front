@@ -24,24 +24,20 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Iniciar sesion'), findsOneWidget);
+    expect(find.text('Entrar'), findsOneWidget);
 
+    await tester.enterText(find.byType(TextFormField).at(0), 'operador.demo');
     await tester.enterText(find.byType(TextFormField).at(1), 'Costanorte2026!');
-    await tester.tap(find.text('Entrar al sistema'));
+    await tester.tap(find.text('Acessar sistema'));
     await tester.pumpAndSettle();
 
     expect(authAppService.lastUsername, 'operador.demo');
-    expect(find.text('Panel operativo del hotel'), findsOneWidget);
+    expect(find.text('Aluguel de Quadras de Tênis'), findsOneWidget);
 
-    await tester.tap(find.text('Agenda'));
+    await tester.tap(find.text('Sair'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Agenda de cancha'), findsOneWidget);
-
-    await tester.tap(find.text('Salir'));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Iniciar sesion'), findsOneWidget);
+    expect(find.text('Entrar'), findsOneWidget);
   });
 }
 

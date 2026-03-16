@@ -264,3 +264,33 @@
   - `docs/VALIDACION_FRONTEND_HITO12.md`
 - Motivo del cambio: Ejecutar `flutter test`, `flutter analyze` y `flutter build windows --release`, y documentar el usuario demo con el flujo operativo del Hito 12.
 - Impacto funcional: Frontend del Hito 12 queda validado, documentado y listo para uso local con backend JWT activo.
+
+## 2026-03-16 | Post Hito 12 | Reenfoque comercial del frontend y normalizacion pt-BR
+- Componente afectado: Frontend (shell principal + copy + modulos visibles + pruebas)
+- Archivos tocados:
+  - `lib/app/costanorte_app.dart`
+  - `lib/app/router/app_router.dart`
+  - `lib/app/router/app_routes.dart`
+  - `lib/core/localization/pt_br_error_translator.dart`
+  - `lib/features/auth/**`
+  - `lib/features/home/presentation/shell_page.dart`
+  - `lib/features/massages/**`
+  - `lib/features/settings/**`
+  - `lib/features/tennis/**`
+  - `lib/features/tours/**`
+  - `lib/features/reservations/**`
+  - `lib/features/schedule/presentation/schedule_page.dart`
+  - `test/**`
+- Motivo del cambio: Reducir la experiencia visible a tres modulos de negocio (`Massagens`, `Quadras`, `Tours e Viagens`) mas `Configuracoes`, mantener el layout actual y eliminar contenido tecnico expuesto al operador.
+- Impacto funcional: La app inicia en login, navega por modulos comerciales, concentra el flujo real de reservas dentro de `Quadras` y muestra mensajes visibles en portugues de Brasil.
+
+## 2026-03-16 | Post Hito 12 | Actualizacion documental y validacion tecnica
+- Componente afectado: Frontend (documentacion + trazabilidad)
+- Archivos tocados:
+  - `README.md`
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+  - `docs/INSTALACION_FRONTEND_HOTEL.md`
+  - `docs/VALIDACION_FRONTEND_HITO12.md`
+- Motivo del cambio: Registrar el nuevo alcance comercial del cliente y dejar evidencia de validacion con `flutter analyze` y `flutter test`.
+- Impacto funcional: Documentacion alineada a la UI vigente, al idioma pt-BR y al siguiente paso pendiente de integracion backend para masajes y tours.

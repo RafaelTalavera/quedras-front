@@ -3,7 +3,7 @@
 ## Alcance validado
 - Pantalla de login inicial integrada con backend JWT local.
 - Sesion en memoria mediante `SessionController`.
-- Guard de rutas: sin sesion se fuerza `/login`; con sesion se redirige a dashboard.
+- Guard de rutas: sin sesion se fuerza `/login`; con sesion se redirige al shell principal.
 - Logout manual desde shell y redireccion a login.
 - Cliente HTTP autenticado con `Authorization: Bearer <token>` y limpieza de sesion ante `401`.
 
@@ -41,8 +41,8 @@ flutter build windows --release
 ## Flujo operativo esperado
 1. Abrir la app desktop.
 2. Ingresar `operador.demo` y `Costanorte2026!`.
-3. Verificar acceso al dashboard.
-4. Navegar a agenda o nueva reserva y confirmar que el backend responde con sesion autenticada.
+3. Verificar acceso inicial al modulo `Aluguel de Quadras de Tenis`.
+4. Navegar dentro de `Quadras` y confirmar que el backend responde con sesion autenticada.
 5. Ejecutar logout y validar regreso inmediato al login.
 
 ## Observaciones

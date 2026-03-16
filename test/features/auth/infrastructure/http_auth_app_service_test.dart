@@ -41,32 +41,29 @@ void main() {
     );
   });
 
-  test(
-    'HttpAuthAppService propaga el mensaje de credenciales invalidas',
-    () async {
-      final _FakeApiClient client = _FakeApiClient()
-        ..enqueue(
-          const ApiResponse(
-            statusCode: 401,
-            body: '{"message":"Invalid username or password."}',
-          ),
-        );
-      final HttpAuthAppService service = HttpAuthAppService(apiClient: client);
-
-      await expectLater(
-        () => service.login(username: 'operador.demo', password: 'incorrecta'),
-        throwsA(
-          isA<StateError>().having(
-            (StateError error) => error.message.toString(),
-            'message',
-            'Invalid username or password.',
-          ),
+  test('HttpAuthAppService traduz mensagem de credenciais invalidas', () async {
+    final _FakeApiClient client = _FakeApiClient()
+      ..enqueue(
+        const ApiResponse(
+          statusCode: 401,
+          body: '{"message":"Invalid username or password."}',
         ),
       );
-    },
-  );
+    final HttpAuthAppService service = HttpAuthAppService(apiClient: client);
 
-  test('HttpAuthAppService rechaza payload invalido del backend', () async {
+    await expectLater(
+      () => service.login(username: 'operador.demo', password: 'incorrecta'),
+      throwsA(
+        isA<StateError>().having(
+          (StateError error) => error.message.toString(),
+          'message',
+          'Usuário ou senha inválidos.',
+        ),
+      ),
+    );
+  });
+
+  test('HttpAuthAppService rejeita payload invalido do backend', () async {
     final _FakeApiClient client = _FakeApiClient()
       ..enqueue(
         const ApiResponse(
@@ -84,7 +81,7 @@ void main() {
         isA<StateError>().having(
           (StateError error) => error.message.toString(),
           'message',
-          'Formato invalido al autenticar contra backend local: accessToken is required',
+          'Formato inválido ao autenticar no backend local: accessToken is required',
         ),
       ),
     );
@@ -102,7 +99,7 @@ void main() {
         isA<StateError>().having(
           (StateError error) => error.message.toString(),
           'message',
-          'No fue posible conectar con el backend local. Verifique servidor y red interna.',
+          'Não foi possível conectar ao backend local. Verifique o servidor e a rede interna.',
         ),
       ),
     );

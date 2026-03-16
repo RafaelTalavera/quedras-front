@@ -23,7 +23,7 @@ enum ReservationStatus {
       case 'CANCELLED':
         return ReservationStatus.cancelled;
       default:
-        throw FormatException('ReservationStatus no soportado: $value');
+        throw FormatException('Status de reserva não suportado: $value');
     }
   }
 }

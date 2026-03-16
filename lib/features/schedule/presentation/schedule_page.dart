@@ -36,7 +36,7 @@ class _SchedulePageState extends State<SchedulePage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
-          'Agenda de cancha',
+          'Agenda de quadras',
           style: textTheme.headlineMedium?.copyWith(
             fontWeight: FontWeight.w700,
             color: const Color(0xFF0B2942),
@@ -44,7 +44,7 @@ class _SchedulePageState extends State<SchedulePage> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Vista diaria con estado de turnos y recarga manual.',
+          'Acompanhe as reservas do dia, edite horários e mantenha a operação organizada.',
           style: textTheme.bodyLarge?.copyWith(color: const Color(0xFF4E6071)),
         ),
         const SizedBox(height: 20),
@@ -93,7 +93,7 @@ class _SchedulePageState extends State<SchedulePage> {
       initialDate: _selectedDate,
       firstDate: now.subtract(const Duration(days: 365)),
       lastDate: now.add(const Duration(days: 365)),
-      helpText: 'Seleccionar fecha de agenda',
+      helpText: 'Selecionar data da agenda',
     );
     if (picked == null) {
       return;
@@ -126,7 +126,7 @@ class _SchedulePageState extends State<SchedulePage> {
         return;
       }
       setState(() {
-        _error = 'No fue posible cargar la agenda: $error';
+        _error = 'Não foi possível carregar a agenda: $error';
         _loading = false;
       });
     }
@@ -170,7 +170,7 @@ class _SchedulePageState extends State<SchedulePage> {
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Reserva actualizada correctamente.')),
+        const SnackBar(content: Text('Reserva atualizada com sucesso.')),
       );
     } catch (error) {
       if (!mounted) {
@@ -201,16 +201,16 @@ class _SchedulePageState extends State<SchedulePage> {
             return AlertDialog(
               title: const Text('Cancelar reserva'),
               content: Text(
-                'Se cancelara la reserva de ${reservation.guestName}. Esta accion no elimina el registro.',
+                'A reserva de ${reservation.guestName} será cancelada. Esta ação não remove o histórico.',
               ),
               actions: <Widget>[
                 TextButton(
                   onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('Volver'),
+                  child: const Text('Voltar'),
                 ),
                 FilledButton(
                   onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: const Text('Cancelar reserva'),
+                  child: const Text('Confirmar cancelamento'),
                 ),
               ],
             );
@@ -326,7 +326,7 @@ class _FiltersHeader extends StatelessWidget {
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
-                'Fecha: $selectedDateLabel',
+                'Data: $selectedDateLabel',
                 style: const TextStyle(
                   fontWeight: FontWeight.w700,
                   color: Color(0xFF0F4C5C),
@@ -336,12 +336,12 @@ class _FiltersHeader extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: loading ? null : () => onPickDate(),
               icon: const Icon(Icons.calendar_month_rounded),
-              label: const Text('Cambiar fecha'),
+              label: const Text('Alterar data'),
             ),
             OutlinedButton.icon(
               onPressed: loading ? null : () => onRefresh(),
               icon: const Icon(Icons.refresh_rounded),
-              label: const Text('Actualizar agenda'),
+              label: const Text('Atualizar agenda'),
             ),
           ],
         ),
@@ -365,7 +365,7 @@ class _LoadingCard extends StatelessWidget {
               child: CircularProgressIndicator(strokeWidth: 2.2),
             ),
             SizedBox(width: 12),
-            Text('Cargando agenda...'),
+            Text('Carregando agenda...'),
           ],
         ),
       ),
@@ -393,7 +393,7 @@ class _ErrorCard extends StatelessWidget {
             OutlinedButton.icon(
               onPressed: () => onRetry(),
               icon: const Icon(Icons.replay_rounded),
-              label: const Text('Reintentar'),
+              label: const Text('Tentar novamente'),
             ),
           ],
         ),
@@ -416,7 +416,7 @@ class _EmptyCard extends StatelessWidget {
             const SizedBox(width: 10),
             Expanded(
               child: Text(
-                'No hay reservas registradas para esta fecha.',
+                'Não há reservas registradas para esta data.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
@@ -499,16 +499,16 @@ class _EditReservationDialogState extends State<_EditReservationDialog> {
               children: <Widget>[
                 TextFormField(
                   controller: _guestController,
-                  decoration: const InputDecoration(labelText: 'Huesped'),
+                  decoration: const InputDecoration(labelText: 'Responsável'),
                   validator: (String? value) {
                     if (value == null || value.trim().isEmpty) {
-                      return 'Ingrese el nombre del huesped.';
+                      return 'Informe o responsável pela reserva.';
                     }
                     if (value.trim().length < 3) {
-                      return 'El nombre debe tener al menos 3 caracteres.';
+                      return 'O nome deve ter pelo menos 3 caracteres.';
                     }
                     if (value.trim().length > 120) {
-                      return 'El nombre no puede superar 120 caracteres.';
+                      return 'O nome não pode ultrapassar 120 caracteres.';
                     }
                     return null;
                   },
@@ -522,18 +522,18 @@ class _EditReservationDialogState extends State<_EditReservationDialog> {
                       onPressed: _pickDate,
                       icon: const Icon(Icons.calendar_month_rounded),
                       label: Text(
-                        'Fecha: ${_SchedulePageState._formatDateDisplay(_selectedDate)}',
+                        'Data: ${_SchedulePageState._formatDateDisplay(_selectedDate)}',
                       ),
                     ),
                     OutlinedButton.icon(
                       onPressed: _pickStartTime,
                       icon: const Icon(Icons.schedule_rounded),
-                      label: Text('Inicio: ${_formatTime(_startTime)}'),
+                      label: Text('Início: ${_formatTime(_startTime)}'),
                     ),
                     OutlinedButton.icon(
                       onPressed: _pickEndTime,
                       icon: const Icon(Icons.timer_rounded),
-                      label: Text('Fin: ${_formatTime(_endTime)}'),
+                      label: Text('Fim: ${_formatTime(_endTime)}'),
                     ),
                   ],
                 ),
@@ -541,13 +541,13 @@ class _EditReservationDialogState extends State<_EditReservationDialog> {
                 TextFormField(
                   controller: _notesController,
                   decoration: const InputDecoration(
-                    labelText: 'Notas (opcional)',
+                    labelText: 'Observações (opcional)',
                   ),
                   minLines: 2,
                   maxLines: 3,
                   validator: (String? value) {
                     if (value != null && value.trim().length > 500) {
-                      return 'Las notas no pueden superar 500 caracteres.';
+                      return 'As observações não podem ultrapassar 500 caracteres.';
                     }
                     return null;
                   },
@@ -567,12 +567,12 @@ class _EditReservationDialogState extends State<_EditReservationDialog> {
       actions: <Widget>[
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cerrar'),
+          child: const Text('Fechar'),
         ),
         FilledButton.icon(
           onPressed: _submit,
           icon: const Icon(Icons.save_rounded),
-          label: const Text('Guardar cambios'),
+          label: const Text('Salvar alterações'),
         ),
       ],
     );
@@ -585,7 +585,7 @@ class _EditReservationDialogState extends State<_EditReservationDialog> {
       initialDate: _selectedDate,
       firstDate: now.subtract(const Duration(days: 365)),
       lastDate: now.add(const Duration(days: 365)),
-      helpText: 'Fecha de reserva',
+      helpText: 'Data da reserva',
     );
     if (picked == null) {
       return;
@@ -599,7 +599,7 @@ class _EditReservationDialogState extends State<_EditReservationDialog> {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: _startTime,
-      helpText: 'Hora de inicio',
+      helpText: 'Horário de início',
     );
     if (picked == null) {
       return;
@@ -613,7 +613,7 @@ class _EditReservationDialogState extends State<_EditReservationDialog> {
     final TimeOfDay? picked = await showTimePicker(
       context: context,
       initialTime: _endTime,
-      helpText: 'Hora de fin',
+      helpText: 'Horário de término',
     );
     if (picked == null) {
       return;
@@ -633,7 +633,7 @@ class _EditReservationDialogState extends State<_EditReservationDialog> {
     final int endMinutes = (_endTime.hour * 60) + _endTime.minute;
     if (startMinutes >= endMinutes) {
       setState(() {
-        _error = 'La hora de inicio debe ser anterior a la hora de fin.';
+        _error = 'O horário de início deve ser anterior ao horário de término.';
       });
       return;
     }
@@ -680,8 +680,8 @@ class _ReservationTile extends StatelessWidget {
     };
 
     final String statusLabel = switch (reservation.status) {
-      ReservationStatus.scheduled => 'Programada',
-      ReservationStatus.completed => 'Completada',
+      ReservationStatus.scheduled => 'Agendada',
+      ReservationStatus.completed => 'Concluída',
       ReservationStatus.cancelled => 'Cancelada',
     };
 
@@ -751,7 +751,7 @@ class _ReservationTile extends StatelessWidget {
                   FilledButton.tonalIcon(
                     onPressed: processing ? null : onCancel,
                     icon: const Icon(Icons.cancel_rounded),
-                    label: Text(processing ? 'Procesando...' : 'Cancelar'),
+                    label: Text(processing ? 'Processando...' : 'Cancelar'),
                   ),
                 ],
               ),

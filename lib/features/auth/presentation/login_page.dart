@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../../../app/router/app_routes.dart';
-import '../../../core/config/backend_config.dart';
 import '../application/auth_app_service.dart';
 import '../application/session_controller.dart';
 
@@ -21,9 +20,7 @@ class LoginPage extends StatefulWidget {
 
 class _LoginPageState extends State<LoginPage> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  final TextEditingController _usernameController = TextEditingController(
-    text: 'operador.demo',
-  );
+  final TextEditingController _usernameController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
 
   bool _submitting = false;
@@ -65,8 +62,8 @@ class _LoginPageState extends State<LoginPage> {
             end: Alignment.bottomRight,
             colors: <Color>[
               Color(0xFF0D3945),
-              Color(0xFF136F63),
-              Color(0xFFF0B44D),
+              Color(0xFF167D85),
+              Color(0xFFE2B56F),
             ],
           ),
         ),
@@ -104,14 +101,14 @@ class _LoginPageState extends State<LoginPage> {
               color: Colors.white.withValues(alpha: 0.16),
             ),
             child: const Icon(
-              Icons.shield_rounded,
+              Icons.waves_rounded,
               color: Colors.white,
               size: 30,
             ),
           ),
           const SizedBox(height: 18),
           const Text(
-            'Acceso interno COSTANORTE',
+            'Acesso interno Costa Norte',
             style: TextStyle(
               color: Colors.white,
               fontSize: 30,
@@ -121,7 +118,7 @@ class _LoginPageState extends State<LoginPage> {
           ),
           const SizedBox(height: 12),
           Text(
-            'El frontend ya opera con JWT firmado por el backend local. Inicie sesion para usar agenda y reservas con autorizacion real.',
+            'Uma experiência mais limpa, mais comercial e mais alinhada com a operação do hotel para massagem, quadras de tênis e tours.',
             style: TextStyle(
               color: Colors.white.withValues(alpha: 0.92),
               fontSize: 15,
@@ -130,20 +127,18 @@ class _LoginPageState extends State<LoginPage> {
           ),
           const SizedBox(height: 24),
           const _StoryBullet(
-            title: 'JWT stateless',
-            detail:
-                'Cada operacion de reservas viaja con Authorization Bearer.',
+            title: 'Agendamento de massagens',
+            detail: 'Fluxo preparado para organizar atendimentos de bem-estar.',
           ),
           const SizedBox(height: 14),
           const _StoryBullet(
-            title: 'Rol inicial',
-            detail:
-                'La fase actual trabaja con el rol OPERATOR validado por backend.',
+            title: 'Aluguel de quadras',
+            detail: 'Agenda diária e criação de reservas em uma única área.',
           ),
           const SizedBox(height: 14),
-          _StoryBullet(
-            title: 'Base URL activa',
-            detail: BackendConfig.apiBaseUrl,
+          const _StoryBullet(
+            title: 'Tours e viagens',
+            detail: 'Espaço dedicado à gestão de experiências e deslocamentos.',
           ),
           const SizedBox(height: 20),
           Container(
@@ -153,7 +148,7 @@ class _LoginPageState extends State<LoginPage> {
               color: Colors.black.withValues(alpha: 0.16),
             ),
             child: Text(
-              'Usuario demo operativo disponible para pruebas locales. La credencial se documenta en el Hito 12 y puede redefinirse por variables de entorno.',
+              'Toda a comunicação visível ao operador deve permanecer em português do Brasil.',
               style: TextStyle(
                 color: Colors.white.withValues(alpha: 0.92),
                 fontSize: 13,
@@ -180,7 +175,7 @@ class _LoginPageState extends State<LoginPage> {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             Text(
-              'Iniciar sesion',
+              'Entrar',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                 color: const Color(0xFF0B2942),
                 fontWeight: FontWeight.w800,
@@ -188,7 +183,7 @@ class _LoginPageState extends State<LoginPage> {
             ),
             const SizedBox(height: 8),
             const Text(
-              'Use las credenciales del operador autorizado para conectarse al backend local.',
+              'Use as credenciais autorizadas para acessar os serviços internos do hotel.',
               style: TextStyle(
                 color: Color(0xFF55687B),
                 fontSize: 14,
@@ -199,12 +194,12 @@ class _LoginPageState extends State<LoginPage> {
             TextFormField(
               controller: _usernameController,
               decoration: const InputDecoration(
-                labelText: 'Usuario',
+                labelText: 'Usuário',
                 prefixIcon: Icon(Icons.person_outline_rounded),
               ),
               validator: (String? value) {
                 if (value == null || value.trim().isEmpty) {
-                  return 'Ingrese el usuario.';
+                  return 'Informe o usuário.';
                 }
                 return null;
               },
@@ -214,12 +209,12 @@ class _LoginPageState extends State<LoginPage> {
               controller: _passwordController,
               obscureText: true,
               decoration: const InputDecoration(
-                labelText: 'Clave',
+                labelText: 'Senha',
                 prefixIcon: Icon(Icons.key_outlined),
               ),
               validator: (String? value) {
                 if (value == null || value.isEmpty) {
-                  return 'Ingrese la clave.';
+                  return 'Informe a senha.';
                 }
                 return null;
               },
@@ -254,9 +249,7 @@ class _LoginPageState extends State<LoginPage> {
                         child: CircularProgressIndicator(strokeWidth: 2.2),
                       )
                     : const Icon(Icons.login_rounded),
-                label: Text(
-                  _submitting ? 'Autenticando...' : 'Entrar al sistema',
-                ),
+                label: Text(_submitting ? 'Entrando...' : 'Acessar sistema'),
               ),
             ),
           ],
@@ -288,7 +281,7 @@ class _LoginPageState extends State<LoginPage> {
       widget.sessionController.startSession(session);
       Navigator.of(
         context,
-      ).pushNamedAndRemoveUntil(AppRoutes.dashboard, (_) => false);
+      ).pushNamedAndRemoveUntil(AppRoutes.tennisRental, (_) => false);
       return;
     } catch (error) {
       if (!mounted) {

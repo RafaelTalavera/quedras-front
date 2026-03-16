@@ -3,25 +3,23 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../../app/router/app_routes.dart';
-import '../../../core/network/api_client.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/auth_session.dart';
-import '../../dashboard/presentation/dashboard_page.dart';
+import '../../massages/presentation/massage_booking_page.dart';
 import '../../reservations/application/reservation_app_service.dart';
-import '../../reservations/presentation/new_reservation_page.dart';
-import '../../schedule/presentation/schedule_page.dart';
+import '../../settings/presentation/settings_page.dart';
+import '../../tennis/presentation/tennis_rental_page.dart';
+import '../../tours/presentation/tours_travel_page.dart';
 
 class ShellPage extends StatefulWidget {
   const ShellPage({
     required this.section,
-    required this.apiClient,
     required this.sessionController,
     required this.reservationAppService,
     super.key,
   });
 
   final AppSection section;
-  final ApiClient apiClient;
   final SessionController sessionController;
   final ReservationAppService reservationAppService;
 
@@ -71,9 +69,9 @@ class _ShellPageState extends State<ShellPage> {
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
             colors: <Color>[
-              Color(0xFFE9F5F1),
-              Color(0xFFF7F0D8),
-              Color(0xFFE8EEF6),
+              Color(0xFFF1E9DC),
+              Color(0xFFE3F0EC),
+              Color(0xFFF8F6EF),
             ],
           ),
         ),
@@ -82,12 +80,12 @@ class _ShellPageState extends State<ShellPage> {
             Positioned(
               top: -80,
               left: -60,
-              child: _GlowOrb(color: const Color(0x55167D85), diameter: 220),
+              child: _GlowOrb(color: const Color(0x55167D85), diameter: 260),
             ),
             Positioned(
-              bottom: -110,
-              right: -70,
-              child: _GlowOrb(color: const Color(0x44E09F3E), diameter: 280),
+              bottom: -120,
+              right: -80,
+              child: _GlowOrb(color: const Color(0x44E0B36A), diameter: 300),
             ),
             SafeArea(
               child: compactLayout
@@ -114,16 +112,16 @@ class _ShellPageState extends State<ShellPage> {
 
   Widget _buildContent() {
     switch (_selectedSection) {
-      case AppSection.dashboard:
-        return DashboardPage(apiClient: widget.apiClient);
-      case AppSection.schedule:
-        return SchedulePage(
+      case AppSection.massageBooking:
+        return const MassageBookingPage();
+      case AppSection.tennisRental:
+        return TennisRentalPage(
           reservationAppService: widget.reservationAppService,
         );
-      case AppSection.newReservation:
-        return NewReservationPage(
-          reservationAppService: widget.reservationAppService,
-        );
+      case AppSection.toursTravel:
+        return const ToursTravelPage();
+      case AppSection.settings:
+        return SettingsPage(session: widget.sessionController.session);
     }
   }
 
@@ -187,7 +185,7 @@ class _DesktopShell extends StatelessWidget {
               child: Container(
                 width: 280,
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.74),
+                  color: Colors.white.withValues(alpha: 0.76),
                   borderRadius: BorderRadius.circular(24),
                 ),
                 child: _NavigationPanel(
@@ -208,7 +206,7 @@ class _DesktopShell extends StatelessWidget {
                 child: Container(
                   padding: const EdgeInsets.all(26),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.84),
+                    color: Colors.white.withValues(alpha: 0.88),
                     borderRadius: BorderRadius.circular(24),
                   ),
                   child: AnimatedSwitcher(
@@ -267,7 +265,7 @@ class _CompactShell extends StatelessWidget {
                   width: double.infinity,
                   padding: const EdgeInsets.all(18),
                   decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.86),
+                    color: Colors.white.withValues(alpha: 0.88),
                     borderRadius: BorderRadius.circular(20),
                   ),
                   child: AnimatedSwitcher(
@@ -315,7 +313,6 @@ class _NavigationPanel extends StatelessWidget {
         Expanded(
           child: NavigationRail(
             selectedIndex: section.index,
-            labelType: NavigationRailLabelType.all,
             minExtendedWidth: 230,
             extended: true,
             onDestinationSelected: (int index) {
@@ -323,19 +320,24 @@ class _NavigationPanel extends StatelessWidget {
             },
             destinations: const <NavigationRailDestination>[
               NavigationRailDestination(
-                icon: Icon(Icons.space_dashboard_outlined),
-                selectedIcon: Icon(Icons.space_dashboard_rounded),
-                label: Text('Resumen'),
+                icon: Icon(Icons.spa_outlined),
+                selectedIcon: Icon(Icons.spa_rounded),
+                label: Text('Massagens'),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.calendar_month_outlined),
-                selectedIcon: Icon(Icons.calendar_month_rounded),
-                label: Text('Agenda diaria'),
+                icon: Icon(Icons.sports_tennis_outlined),
+                selectedIcon: Icon(Icons.sports_tennis_rounded),
+                label: Text('Quadras'),
               ),
               NavigationRailDestination(
-                icon: Icon(Icons.add_box_outlined),
-                selectedIcon: Icon(Icons.add_box_rounded),
-                label: Text('Nueva reserva'),
+                icon: Icon(Icons.explore_outlined),
+                selectedIcon: Icon(Icons.explore_rounded),
+                label: Text('Tours e viagens'),
+              ),
+              NavigationRailDestination(
+                icon: Icon(Icons.tune_outlined),
+                selectedIcon: Icon(Icons.tune_rounded),
+                label: Text('Configurações'),
               ),
             ],
           ),
@@ -347,7 +349,7 @@ class _NavigationPanel extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: onLogout,
               icon: const Icon(Icons.logout_rounded),
-              label: const Text('Salir'),
+              label: const Text('Sair'),
             ),
           ),
         ),
@@ -378,7 +380,7 @@ class _CompactTopBar extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.82),
+            color: Colors.white.withValues(alpha: 0.84),
             borderRadius: BorderRadius.circular(16),
           ),
           child: Column(
@@ -390,36 +392,36 @@ class _CompactTopBar extends StatelessWidget {
                   FilledButton.tonalIcon(
                     onPressed: onLogout,
                     icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Salir'),
+                    label: const Text('Sair'),
                   ),
                 ],
               ),
               const SizedBox(height: 10),
               _SessionCard(session: session, compact: true),
               const SizedBox(height: 10),
-              SegmentedButton<AppSection>(
-                showSelectedIcon: false,
-                segments: const <ButtonSegment<AppSection>>[
-                  ButtonSegment<AppSection>(
-                    value: AppSection.dashboard,
-                    label: Text('Resumen'),
-                    icon: Icon(Icons.dashboard_outlined),
-                  ),
-                  ButtonSegment<AppSection>(
-                    value: AppSection.schedule,
-                    label: Text('Agenda'),
-                    icon: Icon(Icons.event_note_outlined),
-                  ),
-                  ButtonSegment<AppSection>(
-                    value: AppSection.newReservation,
-                    label: Text('Reserva'),
-                    icon: Icon(Icons.playlist_add_rounded),
-                  ),
-                ],
-                selected: <AppSection>{section},
-                onSelectionChanged: (Set<AppSection> selectedSet) {
-                  onSectionSelected(selectedSet.first);
-                },
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: AppSection.values.map((AppSection item) {
+                  final bool selected = item == section;
+                  return ChoiceChip(
+                    label: Text(_labelForSection(item)),
+                    avatar: Icon(
+                      _iconForSection(item),
+                      size: 18,
+                      color: selected ? Colors.white : const Color(0xFF0F4C5C),
+                    ),
+                    selected: selected,
+                    onSelected: (_) => onSectionSelected(item),
+                    selectedColor: const Color(0xFF0F4C5C),
+                    labelStyle: TextStyle(
+                      color: selected ? Colors.white : const Color(0xFF0F4C5C),
+                      fontWeight: FontWeight.w700,
+                    ),
+                    side: const BorderSide(color: Color(0x1F0F4C5C)),
+                    backgroundColor: Colors.white,
+                  );
+                }).toList(),
               ),
             ],
           ),
@@ -454,7 +456,7 @@ class _SessionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Sesion activa',
+            'Sessão ativa',
             style: Theme.of(context).textTheme.labelLarge?.copyWith(
               color: const Color(0xFF4D6574),
               fontWeight: FontWeight.w700,
@@ -469,13 +471,10 @@ class _SessionCard extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 8),
-          Wrap(
+          const Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: <Widget>[
-              _SessionPill(label: activeSession.role),
-              const _SessionPill(label: 'JWT activo'),
-            ],
+            children: <Widget>[_SessionPill(label: 'Acesso ativo')],
           ),
         ],
       ),
@@ -536,19 +535,15 @@ class _BrandHeader extends StatelessWidget {
               end: Alignment.bottomRight,
             ),
           ),
-          child: const Icon(
-            Icons.sports_tennis_rounded,
-            color: Colors.white,
-            size: 22,
-          ),
+          child: const Icon(Icons.waves_rounded, color: Colors.white, size: 22),
         ),
         const SizedBox(width: 10),
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('COSTANORTE', style: headlineStyle),
+            Text('COSTA NORTE', style: headlineStyle),
             Text(
-              'Reservas internas del hotel',
+              'Serviços e experiências',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: const Color(0xFF536477),
                 fontWeight: FontWeight.w600,
@@ -581,5 +576,31 @@ class _GlowOrb extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+String _labelForSection(AppSection section) {
+  switch (section) {
+    case AppSection.massageBooking:
+      return 'Massagens';
+    case AppSection.tennisRental:
+      return 'Quadras';
+    case AppSection.toursTravel:
+      return 'Tours';
+    case AppSection.settings:
+      return 'Config.';
+  }
+}
+
+IconData _iconForSection(AppSection section) {
+  switch (section) {
+    case AppSection.massageBooking:
+      return Icons.spa_rounded;
+    case AppSection.tennisRental:
+      return Icons.sports_tennis_rounded;
+    case AppSection.toursTravel:
+      return Icons.explore_rounded;
+    case AppSection.settings:
+      return Icons.tune_rounded;
   }
 }

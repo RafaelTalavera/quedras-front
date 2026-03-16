@@ -67,7 +67,6 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
       initialRoute: AppRoutes.login,
       onGenerateRoute: (settings) => AppRouter.generateRoute(
         settings: settings,
-        apiClient: _authorizedApiClient,
         authAppService: _authAppService,
         sessionController: _sessionController,
         reservationAppService: _reservationAppService,
@@ -76,8 +75,9 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
   }
 
   ThemeData _buildTheme() {
-    const Color oceanBlue = Color(0xFF0F4C5C);
-    const Color sand = Color(0xFFF4EBD0);
+    const Color oceanBlue = Color(0xFF0E4457);
+    const Color lagoon = Color(0xFF167D85);
+    const Color sand = Color(0xFFE8D0A0);
 
     final ColorScheme colorScheme = ColorScheme.fromSeed(
       seedColor: oceanBlue,
@@ -88,8 +88,8 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
 
     return ThemeData(
       useMaterial3: true,
-      colorScheme: colorScheme.copyWith(secondary: sand),
-      scaffoldBackgroundColor: const Color(0xFFF6F7F9),
+      colorScheme: colorScheme.copyWith(secondary: sand, tertiary: lagoon),
+      scaffoldBackgroundColor: const Color(0xFFF5F1E8),
       fontFamily: 'Cambria',
       appBarTheme: const AppBarTheme(
         backgroundColor: Colors.transparent,
@@ -125,6 +125,47 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
           fontFamily: 'Cambria',
           fontWeight: FontWeight.w500,
         ),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: oceanBlue,
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: oceanBlue,
+          side: const BorderSide(color: Color(0x332A4A5D)),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: Colors.white,
+        labelStyle: const TextStyle(color: Color(0xFF536477)),
+        hintStyle: const TextStyle(color: Color(0xFF8A98A4)),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0x1F0F4C5C)),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: Color(0x1F0F4C5C)),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(16),
+          borderSide: const BorderSide(color: lagoon, width: 1.4),
+        ),
+      ),
+      snackBarTheme: const SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
       ),
     );
   }
