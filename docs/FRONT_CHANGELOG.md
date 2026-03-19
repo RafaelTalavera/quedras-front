@@ -294,3 +294,10 @@
   - `docs/VALIDACION_FRONTEND_HITO12.md`
 - Motivo del cambio: Registrar el nuevo alcance comercial del cliente y dejar evidencia de validacion con `flutter analyze` y `flutter test`.
 - Impacto funcional: Documentacion alineada a la UI vigente, al idioma pt-BR y al siguiente paso pendiente de integracion backend para masajes y tours.
+## 2026-03-19 | Post Hito 12 | Correccion responsive de Massagens y estandar anti-overflow
+- Componente afectado: Frontend (`Massagens` + documentacion UI)
+- Archivos tocados:
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `docs/RESPONSIVE_LAYOUT_STANDARD.md`
+- Motivo del cambio: Corregir overflow en el calendario mensual de massagens y dejar un estandar reusable para grids/cards responsive.
+- Impacto funcional: La agenda de massagens adapta columnas y altura de celda segun el ancho disponible, reduciendo riesgo de desbordes en ventanas angostas.
