@@ -1,5 +1,22 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-03-20 | Post Hito 12 | Persistencia real del CRUD de Massagens
+- Componente afectado: Frontend (`Massagens`)
+- Archivos tocados:
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `test/features/massages/presentation/massage_booking_page_test.dart`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Corregir el bug por el cual `Lancar atendimento` y el alta/activacion de prestadores solo actualizaban el estado local del widget y no llamaban al backend autenticado.
+- Impacto funcional: Los atendimientos y prestadores ahora usan el servicio HTTP real, envian payloads compatibles con backend y reflejan en UI el registro devuelto por API en lugar de datos inventados localmente.
+
+## 2026-03-20 | Post Hito 12 | Desacople de fecha en Lancar atendimento de Massagens
+- Componente afectado: Frontend (`Massagens`)
+- Archivos tocados:
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Permitir que la fecha del formulario `Lancar atendimento` se edite dentro de la misma ventana sin depender de la fecha seleccionada en la agenda principal.
+- Impacto funcional: El operador puede abrir el dialogo, cambiar la fecha del atendimento desde el propio formulario y guardar sin que la agenda mensual o el detalle del dia cambien automaticamente al nuevo dia.
+
 ## 2026-03-12 | Hito 1 | Inicializacion y orden del proyecto
 - Componente afectado: Frontend (gestion documental y control de avance)
 - Archivos tocados:

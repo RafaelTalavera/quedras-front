@@ -2,51 +2,78 @@ import 'package:flutter/material.dart';
 
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/brand_section_hero.dart';
+import '../application/massage_app_service.dart';
 import '../domain/massage_models.dart';
 
+const List<String> _monthLabels = <String>[
+  'Janeiro',
+  'Fevereiro',
+  'Marco',
+  'Abril',
+  'Maio',
+  'Junho',
+  'Julho',
+  'Agosto',
+  'Setembro',
+  'Outubro',
+  'Novembro',
+  'Dezembro',
+];
+
+const List<String> _weekDayLabels = <String>[
+  'Seg',
+  'Ter',
+  'Qua',
+  'Qui',
+  'Sex',
+  'Sab',
+  'Dom',
+];
+
+const List<String> _treatmentTypes = <String>[
+  'Relaxante',
+  'Drenagem corporal',
+  'Pedras quentes',
+  'Terapeutica',
+  'Banho',
+  'Experiencia dupla',
+];
+
 class MassageBookingPage extends StatefulWidget {
-  const MassageBookingPage({super.key});
+  const MassageBookingPage({required this.massageAppService, super.key});
+
+  final MassageAppService massageAppService;
 
   @override
   State<MassageBookingPage> createState() => _MassageBookingPageState();
 }
 
 class _MassageBookingPageState extends State<MassageBookingPage> {
-  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
-  final TextEditingController _clientController = TextEditingController();
-  final TextEditingController _guestController = TextEditingController();
-  final TextEditingController _amountController = TextEditingController(
-    text: '200',
-  );
+  final GlobalKey _summaryKey = GlobalKey();
 
-  late List<MassageProvider> _providers;
-  late List<MassageBooking> _bookings;
+  List<MassageProvider> _providers = <MassageProvider>[];
+  List<MassageBooking> _bookings = <MassageBooking>[];
   late int _selectedMonth;
   late DateTime _selectedDate;
+  late String _selectedTime;
+  bool _loading = true;
+  bool _savingBooking = false;
+  bool _savingProviders = false;
+  String? _errorMessage;
 
-  String _selectedTreatment = MassageCatalog.treatmentTypes.first;
-  String _selectedTime = '17:00';
-  String? _selectedProviderId;
+  String _selectedTreatment = _treatmentTypes.first;
+  int? _selectedProviderId;
+  String _draftAmount = '200';
   bool _paid = true;
 
   @override
   void initState() {
     super.initState();
-    _providers = MassageCatalog.seededProviders();
-    _bookings = MassageCatalog.seededBookings();
-    _selectedMonth = 2;
-    _selectedDate = DateTime(MassageCatalog.agendaYear, 3, 6);
-    _selectedProviderId = _activeProviders.isEmpty
-        ? null
-        : _activeProviders.first.id;
-  }
-
-  @override
-  void dispose() {
-    _clientController.dispose();
-    _guestController.dispose();
-    _amountController.dispose();
-    super.dispose();
+    _selectedDate = DateTime.now();
+    _selectedMonth = _selectedDate.month - 1;
+    _selectedProviderId = null;
+    _selectedTime = _recommendedTimeFor(_selectedDate);
+    _load();
   }
 
   List<MassageProvider> get _activeProviders =>
@@ -58,7 +85,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
 
   List<MassageBooking> get _monthBookings =>
       _bookings.where((MassageBooking booking) {
-        return booking.startAt.year == MassageCatalog.agendaYear &&
+        return booking.startAt.year == _selectedDate.year &&
             booking.startAt.month == _selectedMonth + 1;
       }).toList()..sort(
         (MassageBooking a, MassageBooking b) => a.startAt.compareTo(b.startAt),
@@ -73,8 +100,6 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
 
   @override
   Widget build(BuildContext context) {
-    final bool compact = MediaQuery.of(context).size.width < 1180;
-
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -82,8 +107,6 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
           BrandSectionHero(
             eyebrow: 'Bem-estar',
             title: 'Agendamento de massagens',
-            description:
-                'Agenda mensal inspirada na planilha do hotel, com cadastro proprio de prestadores para abastecer o combo do formulario.',
             icon: Icons.spa_rounded,
             photoAlignment: Alignment.centerLeft,
             action: Wrap(
@@ -91,39 +114,100 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
               runSpacing: 12,
               children: <Widget>[
                 FilledButton.icon(
-                  onPressed: _saveBooking,
+                  onPressed: _savingBooking ? null : _openBookingDialog,
                   icon: const Icon(Icons.add_circle_outline_rounded),
-                  label: const Text('Lancar atendimento'),
+                  label: Text(
+                    _savingBooking ? 'Salvando...' : 'Lancar atendimento',
+                  ),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _openProviderDialog,
+                  onPressed: _savingProviders ? null : _openProviderDialog,
                   icon: const Icon(Icons.groups_2_rounded),
-                  label: const Text('Prestadores'),
+                  label: Text(_savingProviders ? 'Salvando...' : 'Prestadores'),
                 ),
               ],
             ),
           ),
           const SizedBox(height: 18),
-          _buildSummaryStrip(context),
-          const SizedBox(height: 18),
-          compact
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    _buildAgendaPanel(context),
-                    const SizedBox(height: 18),
-                    _buildDetailPanel(context),
-                  ],
-                )
-              : Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Expanded(flex: 7, child: _buildAgendaPanel(context)),
-                    const SizedBox(width: 18),
-                    Expanded(flex: 4, child: _buildDetailPanel(context)),
-                  ],
-                ),
+          if (_errorMessage != null) ...<Widget>[
+            Text(_errorMessage!, style: TextStyle(color: Colors.red.shade700)),
+            const SizedBox(height: 18),
+          ],
+          if (_loading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.all(40),
+                child: CircularProgressIndicator(),
+              ),
+            )
+          else ...<Widget>[
+            _buildDetailPanel(context),
+            const SizedBox(height: 18),
+            _buildAgendaPanel(context),
+            const SizedBox(height: 18),
+            _buildSummarySection(context),
+          ],
         ],
+      ),
+    );
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _errorMessage = null;
+    });
+    try {
+      final List<MassageProvider> providers = await widget.massageAppService
+          .listProviders();
+      final List<MassageBooking> bookings = await widget.massageAppService
+          .listBookings();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _providers = providers;
+        _bookings = bookings;
+        _selectedProviderId =
+            _selectedProviderId ??
+            (_activeProviders.isEmpty ? null : _activeProviders.first.id);
+        _selectedTime = _recommendedTimeFor(_selectedDate);
+        _loading = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loading = false;
+        _errorMessage = error.toString().replaceFirst('Bad state: ', '');
+      });
+    }
+  }
+
+  Widget _buildSummarySection(BuildContext context) {
+    return Container(
+      key: _summaryKey,
+      child: Card(
+        child: Padding(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                'Resumo do mes',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Consolidado do volume, prestadores ativos e receita prevista do mes selecionado.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 18),
+              _buildSummaryStrip(context),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -142,7 +226,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
       runSpacing: 14,
       children: <Widget>[
         _MetricCard(
-          title: MassageCatalog.monthLabels[_selectedMonth],
+          title: _monthLabels[_selectedMonth],
           value: '${_monthBookings.length} atendimentos',
           caption: 'Volume agendado no mes selecionado',
           icon: Icons.calendar_view_month_rounded,
@@ -167,7 +251,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
 
   Widget _buildAgendaPanel(BuildContext context) {
     final List<DateTime?> cells = _monthCells(
-      MassageCatalog.agendaYear,
+      _selectedDate.year,
       _selectedMonth + 1,
     );
 
@@ -178,24 +262,13 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: <Widget>[
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        'Agenda mensal',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'A grade adapta colunas e altura das celulas conforme o tamanho da janela.',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      ),
-                    ],
-                  ),
+                Text(
+                  'Agenda mensal',
+                  style: Theme.of(context).textTheme.headlineSmall,
                 ),
-                const SizedBox(width: 12),
+                const Spacer(),
                 SizedBox(
                   width: 260,
                   child: DropdownButtonFormField<int>(
@@ -205,92 +278,80 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
                       prefixIcon: Icon(Icons.calendar_month_rounded),
                     ),
                     items: List<DropdownMenuItem<int>>.generate(
-                      MassageCatalog.monthLabels.length,
+                      _monthLabels.length,
                       (int index) => DropdownMenuItem<int>(
                         value: index,
-                        child: Text(MassageCatalog.monthLabels[index]),
+                        child: Text(_monthLabels[index]),
                       ),
                     ),
                     onChanged: (int? value) {
                       if (value == null) {
                         return;
                       }
+                      final DateTime nextDate = DateTime(
+                        _selectedDate.year,
+                        value + 1,
+                        1,
+                      );
                       setState(() {
                         _selectedMonth = value;
-                        _selectedDate = DateTime(
-                          MassageCatalog.agendaYear,
-                          value + 1,
-                          1,
-                        );
+                        _selectedDate = nextDate;
+                        _selectedTime = _recommendedTimeFor(nextDate);
                       });
                     },
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 18),
-            LayoutBuilder(
-              builder: (BuildContext context, BoxConstraints constraints) {
-                final int columns = _agendaColumnsForWidth(
-                  constraints.maxWidth,
-                );
-                final bool showWeekHeader = columns == 7;
-
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    if (showWeekHeader) ...<Widget>[
-                      Row(
-                        children: MassageCatalog.weekDayLabels
-                            .map(
-                              (String label) => Expanded(
-                                child: Center(
-                                  child: Text(
-                                    label,
-                                    style: Theme.of(context)
-                                        .textTheme
-                                        .labelLarge
-                                        ?.copyWith(
-                                          color: CostaNorteBrand.mutedInk,
-                                        ),
-                                  ),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: columns,
-                        crossAxisSpacing: 10,
-                        mainAxisSpacing: 10,
-                        mainAxisExtent: _agendaCellHeight(columns),
-                      ),
-                      itemCount: cells.length,
-                      itemBuilder: (BuildContext context, int index) {
-                        final DateTime? date = cells[index];
-                        if (date == null) {
-                          return const SizedBox.shrink();
-                        }
-                        return _AgendaDayCard(
-                          date: date,
-                          selected: _sameDay(date, _selectedDate),
-                          bookings: _bookingsFor(date),
-                          onTap: () {
-                            setState(() {
-                              _selectedDate = date;
-                            });
-                          },
-                        );
+            const SizedBox(height: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: _weekDayLabels
+                      .map(
+                        (String label) => Expanded(
+                          child: Center(
+                            child: Text(
+                              label,
+                              style: Theme.of(context).textTheme.labelLarge
+                                  ?.copyWith(color: CostaNorteBrand.mutedInk),
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
+                ),
+                const SizedBox(height: 10),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 7,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    mainAxisExtent: _agendaCellHeight(),
+                  ),
+                  itemCount: cells.length,
+                  itemBuilder: (BuildContext context, int index) {
+                    final DateTime? date = cells[index];
+                    if (date == null) {
+                      return const SizedBox.shrink();
+                    }
+                    return _AgendaDayCard(
+                      date: date,
+                      selected: _sameDay(date, _selectedDate),
+                      bookings: _bookingsFor(date),
+                      onTap: () {
+                        setState(() {
+                          _selectedDate = date;
+                          _selectedTime = _recommendedTimeFor(date);
+                        });
                       },
-                    ),
-                  ],
-                );
-              },
+                    );
+                  },
+                ),
+              ],
             ),
           ],
         ),
@@ -299,288 +360,88 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
   }
 
   Widget _buildDetailPanel(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'Dia selecionado',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  _selectedDateLabel(_selectedDate),
-                  style: Theme.of(context).textTheme.bodyLarge,
-                ),
-                const SizedBox(height: 18),
-                if (_dayBookings.isEmpty)
-                  Text(
-                    'Nao ha atendimentos para este dia.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  )
-                else
-                  ..._dayBookings.map(
-                    (MassageBooking booking) => Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: _BookingTile(
-                        booking: booking,
-                        provider: _providerName(booking.providerId),
-                      ),
-                    ),
-                  ),
-              ],
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Dia selecionado',
+              style: Theme.of(context).textTheme.headlineSmall,
             ),
-          ),
-        ),
-        const SizedBox(height: 18),
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: Form(
-              key: _formKey,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Novo atendimento',
-                    style: Theme.of(context).textTheme.headlineSmall,
+            const SizedBox(height: 6),
+            Text(
+              _selectedDateLabel(_selectedDate),
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 18),
+            if (_dayBookings.isEmpty)
+              Text(
+                'Nao ha atendimentos para este dia.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              )
+            else
+              ..._dayBookings.map(
+                (MassageBooking booking) => Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: _BookingTile(
+                    booking: booking,
+                    provider: _providerName(booking.providerId),
                   ),
-                  const SizedBox(height: 6),
-                  Text(
-                    'O prestador e selecionado a partir do cadastro da janela de prestadores.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 16),
-                  DropdownButtonFormField<String>(
-                    value: _selectedTime,
-                    decoration: const InputDecoration(
-                      labelText: 'Horario',
-                      prefixIcon: Icon(Icons.schedule_rounded),
-                    ),
-                    items: _timeSlots
-                        .map(
-                          (String value) => DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (String? value) {
-                      if (value != null) {
-                        setState(() {
-                          _selectedTime = value;
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _clientController,
-                    decoration: const InputDecoration(
-                      labelText: 'Cliente',
-                      prefixIcon: Icon(Icons.person_outline_rounded),
-                    ),
-                    validator: (String? value) =>
-                        value == null || value.trim().isEmpty
-                        ? 'Informe o cliente.'
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _guestController,
-                    decoration: const InputDecoration(
-                      labelText: 'Hospede ou externo',
-                      prefixIcon: Icon(Icons.hotel_rounded),
-                    ),
-                    validator: (String? value) =>
-                        value == null || value.trim().isEmpty
-                        ? 'Informe origem ou apartamento.'
-                        : null,
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    value: _selectedTreatment,
-                    decoration: const InputDecoration(
-                      labelText: 'Tipo de massagem',
-                      prefixIcon: Icon(Icons.spa_outlined),
-                    ),
-                    items: MassageCatalog.treatmentTypes
-                        .map(
-                          (String value) => DropdownMenuItem<String>(
-                            value: value,
-                            child: Text(value),
-                          ),
-                        )
-                        .toList(),
-                    onChanged: (String? value) {
-                      if (value != null) {
-                        setState(() {
-                          _selectedTreatment = value;
-                        });
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    isExpanded: true,
-                    value: _selectedProviderId,
-                    decoration: const InputDecoration(
-                      labelText: 'Prestador',
-                      prefixIcon: Icon(Icons.groups_2_outlined),
-                    ),
-                    items: _activeProviders
-                        .map(
-                          (MassageProvider provider) =>
-                              DropdownMenuItem<String>(
-                                value: provider.id,
-                                child: Text(
-                                  '${provider.name} - ${provider.specialty}',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                ),
-                              ),
-                        )
-                        .toList(),
-                    validator: (String? value) => value == null || value.isEmpty
-                        ? 'Cadastre ou selecione um prestador.'
-                        : null,
-                    onChanged: (String? value) {
-                      setState(() {
-                        _selectedProviderId = value;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: _amountController,
-                    decoration: const InputDecoration(
-                      labelText: 'Valor',
-                      prefixIcon: Icon(Icons.attach_money_rounded),
-                    ),
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    validator: (String? value) {
-                      final double? amount = _parseAmount(value);
-                      return amount == null || amount <= 0
-                          ? 'Informe um valor valido.'
-                          : null;
-                    },
-                  ),
-                  SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
-                    title: const Text('Pagamento recebido'),
-                    value: _paid,
-                    onChanged: (bool value) {
-                      setState(() {
-                        _paid = value;
-                      });
-                    },
-                  ),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: <Widget>[
-                      FilledButton.icon(
-                        onPressed: _saveBooking,
-                        icon: const Icon(Icons.save_outlined),
-                        label: const Text('Salvar atendimento'),
-                      ),
-                      OutlinedButton.icon(
-                        onPressed: _openProviderDialog,
-                        icon: const Icon(Icons.add_business_rounded),
-                        label: const Text('Cadastrar prestador'),
-                      ),
-                    ],
-                  ),
-                ],
+                ),
               ),
-            ),
-          ),
+          ],
         ),
-      ],
+      ),
     );
   }
 
-  void _saveBooking() {
-    if (!_formKey.currentState!.validate()) {
-      return;
-    }
-
-    final double? amount = _parseAmount(_amountController.text);
-    final String? providerId = _selectedProviderId;
-    if (amount == null || providerId == null) {
-      return;
-    }
-
-    final List<String> parts = _selectedTime.split(':');
-    final DateTime startAt = DateTime(
-      _selectedDate.year,
-      _selectedDate.month,
-      _selectedDate.day,
-      int.parse(parts[0]),
-      int.parse(parts[1]),
+  Future<void> _openBookingDialog() async {
+    final _BookingDraft? bookingDraft = await showDialog<_BookingDraft>(
+      context: context,
+      builder: (BuildContext context) {
+        return _BookingDialog(
+          initialDate: _selectedDate,
+          activeProviders: _activeProviders,
+          initialTime: _selectedTime,
+          initialTreatment: _selectedTreatment,
+          initialProviderId: _selectedProviderId,
+          initialAmount: _draftAmount,
+          initialPaid: _paid,
+        );
+      },
     );
 
-    final bool duplicated = _dayBookings.any(
-      (MassageBooking booking) =>
-          booking.providerId == providerId &&
-          booking.startAt.hour == startAt.hour &&
-          booking.startAt.minute == startAt.minute,
-    );
-    if (duplicated) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Esse prestador ja esta ocupado nesse horario.'),
-        ),
-      );
+    if (bookingDraft == null) {
       return;
     }
 
-    setState(() {
-      _bookings = <MassageBooking>[
-        ..._bookings,
-        MassageBooking(
-          id: 'custom-${DateTime.now().microsecondsSinceEpoch}',
-          startAt: startAt,
-          clientName: _clientController.text.trim(),
-          guestOrExternal: _guestController.text.trim(),
-          treatment: _selectedTreatment,
-          amount: amount,
-          providerId: providerId,
-          paid: _paid,
-        ),
-      ];
-    });
-
-    _clientController.clear();
-    _guestController.clear();
-    _amountController.text = '200';
-    setState(() {
-      _selectedTreatment = MassageCatalog.treatmentTypes.first;
-      _selectedProviderId = _activeProviders.isEmpty
-          ? null
-          : _activeProviders.first.id;
-      _paid = true;
-    });
+    await _createBooking(bookingDraft);
   }
 
   Future<void> _openProviderDialog() async {
+    setState(() {
+      _savingProviders = true;
+    });
     final List<MassageProvider>? updatedProviders =
         await showDialog<List<MassageProvider>>(
           context: context,
           builder: (BuildContext context) {
-            return _ProviderDialog(initialProviders: _providers);
+            return _ProviderDialog(
+              initialProviders: _providers,
+              massageAppService: widget.massageAppService,
+            );
           },
         );
 
     if (updatedProviders == null) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _savingProviders = false;
+      });
       return;
     }
 
@@ -594,7 +455,107 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
             ? null
             : _activeProviders.first.id;
       }
+      _savingProviders = false;
     });
+  }
+
+  Future<void> _createBooking(_BookingDraft bookingDraft) async {
+    final DateTime startAt = _bookingStartAt(
+      bookingDraft.date,
+      bookingDraft.time,
+    );
+    final bool duplicated = _bookingsFor(bookingDraft.date).any(
+      (MassageBooking booking) =>
+          booking.providerId == bookingDraft.providerId &&
+          booking.startAt.hour == startAt.hour &&
+          booking.startAt.minute == startAt.minute,
+    );
+    if (duplicated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Esse prestador ja esta ocupado nesse horario.'),
+        ),
+      );
+      return;
+    }
+
+    setState(() {
+      _savingBooking = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final MassageBooking created = await widget.massageAppService
+          .createBooking(
+            CreateMassageBookingModel(
+              bookingDate: _formatDateApi(bookingDraft.date),
+              startTime: _formatTimeApi(bookingDraft.time),
+              clientName: bookingDraft.clientName,
+              guestReference: bookingDraft.guestOrExternal,
+              treatment: bookingDraft.treatment,
+              amount: bookingDraft.amount,
+              providerId: bookingDraft.providerId,
+              paid: bookingDraft.paid,
+              paymentMethod: bookingDraft.paymentMethod,
+              paymentDate: bookingDraft.paymentDate == null
+                  ? null
+                  : _formatDateApi(bookingDraft.paymentDate!),
+              paymentNotes: bookingDraft.paymentNotes,
+            ),
+          );
+
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _bookings = <MassageBooking>[created, ..._bookings]
+          ..sort(
+            (MassageBooking a, MassageBooking b) =>
+                a.startAt.compareTo(b.startAt),
+          );
+        _selectedDate = DateTime(
+          bookingDraft.date.year,
+          bookingDraft.date.month,
+          bookingDraft.date.day,
+        );
+        _selectedMonth = bookingDraft.date.month - 1;
+        _selectedTreatment = bookingDraft.treatment;
+        _selectedProviderId = bookingDraft.providerId;
+        _draftAmount = bookingDraft.amount.toStringAsFixed(0);
+        _paid = bookingDraft.paid;
+        _selectedTime = _recommendedTimeFor(_selectedDate);
+        _savingBooking = false;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Atendimento salvo para ${bookingDraft.clientName}.'),
+        ),
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _savingBooking = false;
+        _errorMessage = error.toString().replaceFirst('Bad state: ', '');
+      });
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(_errorMessage!)));
+    }
+  }
+
+  DateTime _bookingStartAt(DateTime bookingDate, String time) {
+    final List<String> parts = time.split(':');
+    return DateTime(
+      bookingDate.year,
+      bookingDate.month,
+      bookingDate.day,
+      int.parse(parts[0]),
+      int.parse(parts[1]),
+    );
   }
 
   List<DateTime?> _monthCells(int year, int month) {
@@ -626,55 +587,35 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
         left.day == right.day;
   }
 
-  int _agendaColumnsForWidth(double width) {
-    if (width >= 1100) {
-      return 7;
+  String _recommendedTimeFor(DateTime date) {
+    final Set<String> occupiedSlots = _bookingsFor(
+      date,
+    ).map((MassageBooking booking) => _timeLabel(booking.startAt)).toSet();
+
+    for (final String slot in _timeSlots) {
+      if (!occupiedSlots.contains(slot)) {
+        return slot;
+      }
     }
-    if (width >= 860) {
-      return 5;
-    }
-    if (width >= 620) {
-      return 4;
-    }
-    if (width >= 380) {
-      return 2;
-    }
-    return 1;
+
+    return _timeSlots.first;
   }
 
-  double _agendaCellHeight(int columns) {
-    if (columns >= 7) {
-      return 150;
-    }
-    if (columns >= 4) {
-      return 138;
-    }
-    return 126;
+  double _agendaCellHeight() {
+    return 69;
   }
 
   String _selectedDateLabel(DateTime date) {
-    return '${_weekdayLabel(date)}, ${date.day} de ${MassageCatalog.monthLabels[date.month - 1]} de ${date.year}';
+    return _fullDateLabel(date);
   }
 
-  String _providerName(String providerId) {
+  String _providerName(int providerId) {
     for (final MassageProvider provider in _providers) {
       if (provider.id == providerId) {
         return provider.name;
       }
     }
     return 'Prestador';
-  }
-
-  double? _parseAmount(String? raw) {
-    if (raw == null) {
-      return null;
-    }
-    final String normalized = raw
-        .replaceAll('R\$', '')
-        .replaceAll('.', '')
-        .replaceAll(',', '.')
-        .trim();
-    return double.tryParse(normalized);
   }
 }
 
@@ -693,91 +634,80 @@ class _AgendaDayCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool hasBookings = bookings.isNotEmpty;
+
     return InkWell(
       borderRadius: BorderRadius.circular(22),
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(8),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(22),
           border: Border.all(
-            color: selected ? CostaNorteBrand.goldDeep : CostaNorteBrand.line,
+            color: selected
+                ? CostaNorteBrand.goldDeep
+                : hasBookings
+                ? CostaNorteBrand.royalBlueDeep
+                : CostaNorteBrand.line,
             width: selected ? 1.4 : 1,
           ),
-          color: selected ? const Color(0xFFFFF8E7) : Colors.white,
+          color: selected
+              ? const Color(0xFFFFF8E7)
+              : hasBookings
+              ? const Color(0xFFF2F7FF)
+              : Colors.white,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Row(
               children: <Widget>[
+                Icon(
+                  Icons.calendar_today_rounded,
+                  size: 14,
+                  color: CostaNorteBrand.mutedInk,
+                ),
+                const SizedBox(width: 6),
                 Expanded(
                   child: Text(
                     '${date.day}',
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: Theme.of(context).textTheme.titleLarge,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: hasBookings ? CostaNorteBrand.royalBlueDeep : null,
+                      fontWeight: hasBookings ? FontWeight.w700 : null,
+                    ),
                   ),
                 ),
-                if (bookings.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(999),
-                      color: CostaNorteBrand.foam,
-                    ),
-                    child: Text(
-                      '${bookings.length}',
-                      style: Theme.of(context).textTheme.labelMedium,
-                    ),
-                  ),
               ],
             ),
             const SizedBox(height: 4),
-            Text(
-              _weekdayLabel(date),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-            const SizedBox(height: 8),
-            Expanded(
-              child: bookings.isEmpty
-                  ? Align(
-                      alignment: Alignment.topLeft,
-                      child: Text(
-                        'Sem atendimentos',
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    )
-                  : Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 7,
-                      ),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(14),
-                        color: MassageCatalog.providerColor(
-                          bookings.first.providerId,
-                        ),
-                      ),
-                      child: Text(
-                        _agendaSummary(bookings),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: CostaNorteBrand.ink,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+            Row(
+              children: <Widget>[
+                Icon(
+                  Icons.spa_outlined,
+                  size: 14,
+                  color: hasBookings
+                      ? CostaNorteBrand.ink
+                      : CostaNorteBrand.mutedInk,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '${bookings.length}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: 11,
+                      color: hasBookings
+                          ? CostaNorteBrand.ink
+                          : CostaNorteBrand.mutedInk,
+                      fontWeight: FontWeight.w600,
                     ),
+                  ),
+                ),
+              ],
             ),
           ],
         ),
@@ -837,7 +767,7 @@ class _BookingTile extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
-        color: MassageCatalog.providerColor(booking.providerId),
+        color: _providerColor(booking.providerId),
         border: Border.all(color: CostaNorteBrand.line),
       ),
       child: Column(
@@ -867,7 +797,7 @@ class _BookingTile extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '${booking.guestOrExternal} - ${booking.treatment} - $provider - '
+            '${booking.guestReference} - ${booking.treatment} - $provider - '
             'R\$ ${booking.amount.toStringAsFixed(0)}',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
@@ -877,10 +807,435 @@ class _BookingTile extends StatelessWidget {
   }
 }
 
+class _BookingDraft {
+  const _BookingDraft({
+    required this.date,
+    required this.time,
+    required this.clientName,
+    required this.guestOrExternal,
+    required this.treatment,
+    required this.amount,
+    required this.providerId,
+    required this.paid,
+    required this.paymentMethod,
+    required this.paymentDate,
+    required this.paymentNotes,
+  });
+
+  final DateTime date;
+  final String time;
+  final String clientName;
+  final String guestOrExternal;
+  final String treatment;
+  final double amount;
+  final int providerId;
+  final bool paid;
+  final MassagePaymentMethod? paymentMethod;
+  final DateTime? paymentDate;
+  final String? paymentNotes;
+}
+
+class _BookingDialog extends StatefulWidget {
+  const _BookingDialog({
+    required this.initialDate,
+    required this.activeProviders,
+    required this.initialTime,
+    required this.initialTreatment,
+    required this.initialProviderId,
+    required this.initialAmount,
+    required this.initialPaid,
+  });
+
+  final DateTime initialDate;
+  final List<MassageProvider> activeProviders;
+  final String initialTime;
+  final String initialTreatment;
+  final int? initialProviderId;
+  final String initialAmount;
+  final bool initialPaid;
+
+  @override
+  State<_BookingDialog> createState() => _BookingDialogState();
+}
+
+class _BookingDialogState extends State<_BookingDialog> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  late final TextEditingController _clientController;
+  late final TextEditingController _guestController;
+  late final TextEditingController _amountController;
+  late final TextEditingController _paymentNotesController;
+
+  late DateTime _selectedDate;
+  late String _selectedTime;
+  late String _selectedTreatment;
+  int? _selectedProviderId;
+  late bool _paid;
+  MassagePaymentMethod? _paymentMethod;
+  DateTime? _paymentDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _clientController = TextEditingController();
+    _guestController = TextEditingController();
+    _amountController = TextEditingController(text: widget.initialAmount);
+    _paymentNotesController = TextEditingController();
+    _selectedDate = DateTime(
+      widget.initialDate.year,
+      widget.initialDate.month,
+      widget.initialDate.day,
+    );
+    _selectedTime = widget.initialTime;
+    _selectedTreatment = widget.initialTreatment;
+    _selectedProviderId =
+        widget.initialProviderId ??
+        (widget.activeProviders.isEmpty
+            ? null
+            : widget.activeProviders.first.id);
+    _paid = widget.initialPaid;
+    _paymentMethod = _paid ? MassagePaymentMethod.card : null;
+    _paymentDate = _paid ? _selectedDate : null;
+  }
+
+  @override
+  void dispose() {
+    _clientController.dispose();
+    _guestController.dispose();
+    _amountController.dispose();
+    _paymentNotesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Dialog(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 760),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(
+                  'Lancar atendimento',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  _fullDateLabel(_selectedDate),
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
+                const SizedBox(height: 18),
+                Expanded(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        OutlinedButton.icon(
+                          onPressed: _pickBookingDate,
+                          icon: const Icon(Icons.event_rounded),
+                          label: Text(
+                            'Data: ${_fullDateLabel(_selectedDate)}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          value: _selectedTime,
+                          decoration: const InputDecoration(
+                            labelText: 'Horario',
+                            prefixIcon: Icon(Icons.schedule_rounded),
+                          ),
+                          items: _timeSlots
+                              .map(
+                                (String value) => DropdownMenuItem<String>(
+                                  value: value,
+                                  child: Text(value),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (String? value) {
+                            if (value != null) {
+                              setState(() {
+                                _selectedTime = value;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _clientController,
+                          decoration: const InputDecoration(
+                            labelText: 'Cliente',
+                            prefixIcon: Icon(Icons.person_outline_rounded),
+                          ),
+                          validator: (String? value) =>
+                              value == null || value.trim().isEmpty
+                              ? 'Informe o cliente.'
+                              : null,
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _guestController,
+                          decoration: const InputDecoration(
+                            labelText: 'Hospede ou externo',
+                            prefixIcon: Icon(Icons.hotel_rounded),
+                          ),
+                          validator: (String? value) =>
+                              value == null || value.trim().isEmpty
+                              ? 'Informe origem ou apartamento.'
+                              : null,
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<String>(
+                          isExpanded: true,
+                          value: _selectedTreatment,
+                          decoration: const InputDecoration(
+                            labelText: 'Tipo de massagem',
+                            prefixIcon: Icon(Icons.spa_outlined),
+                          ),
+                          items: _treatmentTypes
+                              .map(
+                                (String value) => DropdownMenuItem<String>(
+                                  value: value,
+                                  child: Text(value),
+                                ),
+                              )
+                              .toList(),
+                          onChanged: (String? value) {
+                            if (value != null) {
+                              setState(() {
+                                _selectedTreatment = value;
+                              });
+                            }
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        DropdownButtonFormField<int>(
+                          isExpanded: true,
+                          value: _selectedProviderId,
+                          decoration: const InputDecoration(
+                            labelText: 'Prestador',
+                            prefixIcon: Icon(Icons.groups_2_outlined),
+                          ),
+                          items: widget.activeProviders
+                              .map(
+                                (
+                                  MassageProvider provider,
+                                ) => DropdownMenuItem<int>(
+                                  value: provider.id,
+                                  child: Text(
+                                    '${provider.name} - ${provider.specialty}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                              )
+                              .toList(),
+                          validator: (int? value) => value == null
+                              ? 'Cadastre ou selecione um prestador.'
+                              : null,
+                          onChanged: (int? value) {
+                            setState(() {
+                              _selectedProviderId = value;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _amountController,
+                          decoration: const InputDecoration(
+                            labelText: 'Valor',
+                            prefixIcon: Icon(Icons.attach_money_rounded),
+                          ),
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          validator: (String? value) {
+                            final double? amount = _parseMassageAmount(value);
+                            return amount == null || amount <= 0
+                                ? 'Informe um valor valido.'
+                                : null;
+                          },
+                        ),
+                        SwitchListTile.adaptive(
+                          contentPadding: EdgeInsets.zero,
+                          title: const Text('Pagamento recebido'),
+                          value: _paid,
+                          onChanged: (bool value) {
+                            setState(() {
+                              _paid = value;
+                              _paymentMethod = value
+                                  ? (_paymentMethod ??
+                                        MassagePaymentMethod.card)
+                                  : null;
+                              _paymentDate = value
+                                  ? (_paymentDate ?? _selectedDate)
+                                  : null;
+                            });
+                          },
+                        ),
+                        if (_paid) ...<Widget>[
+                          const SizedBox(height: 12),
+                          DropdownButtonFormField<MassagePaymentMethod>(
+                            value: _paymentMethod,
+                            decoration: const InputDecoration(
+                              labelText: 'Meio de pagamento',
+                              prefixIcon: Icon(Icons.credit_card_rounded),
+                            ),
+                            items: MassagePaymentMethod.values
+                                .map(
+                                  (MassagePaymentMethod value) =>
+                                      DropdownMenuItem<MassagePaymentMethod>(
+                                        value: value,
+                                        child: Text(value.label),
+                                      ),
+                                )
+                                .toList(),
+                            validator: (MassagePaymentMethod? value) {
+                              if (_paid && value == null) {
+                                return 'Informe o meio de pagamento.';
+                              }
+                              return null;
+                            },
+                            onChanged: (MassagePaymentMethod? value) {
+                              setState(() {
+                                _paymentMethod = value;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 12),
+                          OutlinedButton.icon(
+                            onPressed: _pickPaymentDate,
+                            icon: const Icon(Icons.event_available_rounded),
+                            label: Text(
+                              _paymentDate == null
+                                  ? 'Selecionar data do pagamento'
+                                  : 'Pagamento: ${_fullDateLabel(_paymentDate!)}',
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          TextFormField(
+                            controller: _paymentNotesController,
+                            decoration: const InputDecoration(
+                              labelText: 'Observacoes do pagamento',
+                              prefixIcon: Icon(Icons.notes_rounded),
+                            ),
+                            maxLines: 2,
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Cancelar'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _submit,
+                        child: const Text('Salvar atendimento'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+
+    final double? amount = _parseMassageAmount(_amountController.text);
+    final int? providerId = _selectedProviderId;
+    if (amount == null || providerId == null) {
+      return;
+    }
+    if (_paid && (_paymentMethod == null || _paymentDate == null)) {
+      return;
+    }
+
+    Navigator.of(context).pop<_BookingDraft>(
+      _BookingDraft(
+        date: _selectedDate,
+        time: _selectedTime,
+        clientName: _clientController.text.trim(),
+        guestOrExternal: _guestController.text.trim(),
+        treatment: _selectedTreatment,
+        amount: amount,
+        providerId: providerId,
+        paid: _paid,
+        paymentMethod: _paymentMethod,
+        paymentDate: _paymentDate,
+        paymentNotes: _paymentNotesController.text.trim().isEmpty
+            ? null
+            : _paymentNotesController.text.trim(),
+      ),
+    );
+  }
+
+  Future<void> _pickBookingDate() async {
+    final DateTime now = DateTime.now();
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(now.year - 1),
+      lastDate: DateTime(now.year + 2, 12, 31),
+    );
+    if (picked == null) {
+      return;
+    }
+
+    setState(() {
+      _selectedDate = DateTime(picked.year, picked.month, picked.day);
+      if (_paid && _paymentDate == null) {
+        _paymentDate = _selectedDate;
+      }
+    });
+  }
+
+  Future<void> _pickPaymentDate() async {
+    final DateTime initialDate = _paymentDate ?? _selectedDate;
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(initialDate.year - 1),
+      lastDate: DateTime(initialDate.year + 2, 12, 31),
+    );
+    if (picked == null) {
+      return;
+    }
+
+    setState(() {
+      _paymentDate = DateTime(picked.year, picked.month, picked.day);
+    });
+  }
+}
+
 class _ProviderDialog extends StatefulWidget {
-  const _ProviderDialog({required this.initialProviders});
+  const _ProviderDialog({
+    required this.initialProviders,
+    required this.massageAppService,
+  });
 
   final List<MassageProvider> initialProviders;
+  final MassageAppService massageAppService;
 
   @override
   State<_ProviderDialog> createState() => _ProviderDialogState();
@@ -892,6 +1247,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   final TextEditingController _contactController = TextEditingController();
 
   late List<MassageProvider> _providers;
+  bool _saving = false;
 
   @override
   void initState() {
@@ -986,13 +1342,10 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                                 ),
                                 Switch(
                                   value: provider.active,
-                                  onChanged: (bool value) {
-                                    setState(() {
-                                      _providers[index] = provider.copyWith(
-                                        active: value,
-                                      );
-                                    });
-                                  },
+                                  onChanged: _saving
+                                      ? null
+                                      : (bool value) =>
+                                            _toggleProvider(index, value),
                                 ),
                               ],
                             ),
@@ -1040,9 +1393,11 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                             ),
                             const SizedBox(height: 16),
                             FilledButton.icon(
-                              onPressed: _addProvider,
+                              onPressed: _saving ? null : _addProvider,
                               icon: const Icon(Icons.playlist_add_rounded),
-                              label: const Text('Adicionar'),
+                              label: Text(
+                                _saving ? 'Salvando...' : 'Adicionar',
+                              ),
                             ),
                             const Spacer(),
                             Row(
@@ -1057,11 +1412,15 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: FilledButton(
-                                    onPressed: () {
-                                      Navigator.of(
-                                        context,
-                                      ).pop<List<MassageProvider>>(_providers);
-                                    },
+                                    onPressed: _saving
+                                        ? null
+                                        : () {
+                                            Navigator.of(
+                                              context,
+                                            ).pop<List<MassageProvider>>(
+                                              _providers,
+                                            );
+                                          },
                                     child: const Text('Aplicar'),
                                   ),
                                 ),
@@ -1081,7 +1440,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     );
   }
 
-  void _addProvider() {
+  Future<void> _addProvider() async {
     final String name = _nameController.text.trim();
     final String specialty = _specialtyController.text.trim();
     final String contact = _contactController.text.trim();
@@ -1094,9 +1453,10 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       return;
     }
 
-    final String id = name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-');
     final bool exists = _providers.any(
-      (MassageProvider provider) => provider.id == id,
+      (MassageProvider provider) =>
+          provider.name.trim().toLowerCase() == name.toLowerCase() &&
+          provider.contact.trim().toLowerCase() == contact.toLowerCase(),
     );
     if (exists) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -1106,24 +1466,87 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     }
 
     setState(() {
-      _providers =
-          <MassageProvider>[
-            ..._providers,
-            MassageProvider(
-              id: id,
+      _saving = true;
+    });
+
+    try {
+      final MassageProvider created = await widget.massageAppService
+          .createProvider(
+            CreateMassageProviderModel(
               name: name,
               specialty: specialty,
               contact: contact,
             ),
-          ]..sort(
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _providers = <MassageProvider>[..._providers, created]
+          ..sort(
             (MassageProvider a, MassageProvider b) =>
                 a.name.toLowerCase().compareTo(b.name.toLowerCase()),
           );
+        _saving = false;
+      });
+
+      _nameController.clear();
+      _specialtyController.clear();
+      _contactController.clear();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _saving = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Bad state: ', '')),
+        ),
+      );
+    }
+  }
+
+  Future<void> _toggleProvider(int index, bool active) async {
+    final MassageProvider provider = _providers[index];
+    setState(() {
+      _saving = true;
+      _providers[index] = provider.copyWith(active: active);
     });
 
-    _nameController.clear();
-    _specialtyController.clear();
-    _contactController.clear();
+    try {
+      final MassageProvider updated = await widget.massageAppService
+          .updateProvider(
+            provider.id,
+            UpdateMassageProviderModel(
+              name: provider.name,
+              specialty: provider.specialty,
+              contact: provider.contact,
+              active: active,
+            ),
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _providers[index] = updated;
+        _saving = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _providers[index] = provider;
+        _saving = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(error.toString().replaceFirst('Bad state: ', '')),
+        ),
+      );
+    }
   }
 }
 
@@ -1139,18 +1562,50 @@ String _weekdayLabel(DateTime date) {
   ][date.weekday - 1];
 }
 
+String _fullDateLabel(DateTime date) {
+  return '${_weekdayLabel(date)}, ${date.day} de ${_monthLabels[date.month - 1]} de ${date.year}';
+}
+
 String _timeLabel(DateTime date) {
   final String hour = date.hour.toString().padLeft(2, '0');
   final String minute = date.minute.toString().padLeft(2, '0');
   return '$hour:$minute';
 }
 
-String _agendaSummary(List<MassageBooking> bookings) {
-  final MassageBooking first = bookings.first;
-  if (bookings.length == 1) {
-    return '${_timeLabel(first.startAt)} - ${first.clientName}';
+String _formatDateApi(DateTime date) {
+  final String year = date.year.toString().padLeft(4, '0');
+  final String month = date.month.toString().padLeft(2, '0');
+  final String day = date.day.toString().padLeft(2, '0');
+  return '$year-$month-$day';
+}
+
+String _formatTimeApi(String time) {
+  return time.length == 5 ? '$time:00' : time;
+}
+
+Color _providerColor(int providerId) {
+  switch (providerId % 4) {
+    case 0:
+      return const Color(0xFFE8F0FF);
+    case 1:
+      return const Color(0xFFFFF0D5);
+    case 2:
+      return const Color(0xFFFBE7EC);
+    default:
+      return const Color(0xFFE8F7EE);
   }
-  return '${_timeLabel(first.startAt)} - ${first.clientName} +${bookings.length - 1}';
+}
+
+double? _parseMassageAmount(String? raw) {
+  if (raw == null) {
+    return null;
+  }
+  final String normalized = raw
+      .replaceAll('R\$', '')
+      .replaceAll('.', '')
+      .replaceAll(',', '.')
+      .trim();
+  return double.tryParse(normalized);
 }
 
 const List<String> _timeSlots = <String>[
