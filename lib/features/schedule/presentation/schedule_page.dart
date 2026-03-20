@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/feedback/app_alerts.dart';
+import '../../../core/theme/costa_norte_brand.dart';
+import '../../../core/widgets/app_dialog_dimensions.dart';
+import '../../../core/widgets/app_dialog_shell.dart';
 import '../../reservations/application/reservation_app_service.dart';
 import '../../reservations/domain/reservation_model.dart';
 import '../../reservations/domain/reservation_status.dart';
@@ -39,13 +43,13 @@ class _SchedulePageState extends State<SchedulePage> {
           'Agenda de quadras',
           style: textTheme.headlineMedium?.copyWith(
             fontWeight: FontWeight.w700,
-            color: const Color(0xFF0B2942),
+            color: CostaNorteBrand.ink,
           ),
         ),
         const SizedBox(height: 8),
         Text(
           'Acompanhe as reservas do dia, edite horários e mantenha a operação organizada.',
-          style: textTheme.bodyLarge?.copyWith(color: const Color(0xFF4E6071)),
+          style: textTheme.bodyLarge,
         ),
         const SizedBox(height: 20),
         _FiltersHeader(
@@ -169,8 +173,10 @@ class _SchedulePageState extends State<SchedulePage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Reserva atualizada com sucesso.')),
+      await AppAlerts.success(
+        context,
+        title: 'Reserva atualizada',
+        message: 'A reserva foi atualizada com sucesso.',
       );
     } catch (error) {
       if (!mounted) {
@@ -198,21 +204,43 @@ class _SchedulePageState extends State<SchedulePage> {
         await showDialog<bool>(
           context: context,
           builder: (BuildContext dialogContext) {
-            return AlertDialog(
-              title: const Text('Cancelar reserva'),
-              content: Text(
-                'A reserva de ${reservation.guestName} será cancelada. Esta ação não remove o histórico.',
+            return AppDialogShell(
+              maxWidth: AppDialogDimensions.alertWidth,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Cancelar reserva',
+                    style: Theme.of(dialogContext).textTheme.headlineSmall,
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    'A reserva de ${reservation.guestName} será cancelada. Esta ação não remove o histórico.',
+                    style: Theme.of(dialogContext).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 20),
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(false),
+                          child: const Text('Voltar'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () =>
+                              Navigator.of(dialogContext).pop(true),
+                          child: const Text('Confirmar cancelamento'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              actions: <Widget>[
-                TextButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(false),
-                  child: const Text('Voltar'),
-                ),
-                FilledButton(
-                  onPressed: () => Navigator.of(dialogContext).pop(true),
-                  child: const Text('Confirmar cancelamento'),
-                ),
-              ],
             );
           },
         ) ??
@@ -233,9 +261,11 @@ class _SchedulePageState extends State<SchedulePage> {
       if (!mounted) {
         return;
       }
-      ScaffoldMessenger.of(
+      await AppAlerts.success(
         context,
-      ).showSnackBar(const SnackBar(content: Text('Reserva cancelada.')));
+        title: 'Reserva cancelada',
+        message: 'A reserva foi cancelada com sucesso.',
+      );
     } catch (error) {
       if (!mounted) {
         return;
@@ -322,14 +352,14 @@ class _FiltersHeader extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: const Color(0xFFEDF6F9),
+                color: CostaNorteBrand.foam,
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Text(
                 'Data: $selectedDateLabel',
                 style: const TextStyle(
                   fontWeight: FontWeight.w700,
-                  color: Color(0xFF0F4C5C),
+                  color: CostaNorteBrand.royalBlueDeep,
                 ),
               ),
             ),
@@ -388,7 +418,7 @@ class _ErrorCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(message, style: const TextStyle(color: Color(0xFF8A1C1C))),
+            Text(message, style: const TextStyle(color: CostaNorteBrand.error)),
             const SizedBox(height: 12),
             OutlinedButton.icon(
               onPressed: () => onRetry(),
@@ -412,7 +442,10 @@ class _EmptyCard extends StatelessWidget {
         padding: const EdgeInsets.all(18),
         child: Row(
           children: <Widget>[
-            const Icon(Icons.event_available_rounded, color: Color(0xFF167D85)),
+            const Icon(
+              Icons.event_available_rounded,
+              color: CostaNorteBrand.royalBlue,
+            ),
             const SizedBox(width: 10),
             Expanded(
               child: Text(
@@ -486,95 +519,105 @@ class _EditReservationDialogState extends State<_EditReservationDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Editar reserva'),
-      content: SizedBox(
-        width: 520,
-        child: SingleChildScrollView(
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                TextFormField(
-                  controller: _guestController,
-                  decoration: const InputDecoration(labelText: 'Responsável'),
-                  validator: (String? value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Informe o responsável pela reserva.';
-                    }
-                    if (value.trim().length < 3) {
-                      return 'O nome deve ter pelo menos 3 caracteres.';
-                    }
-                    if (value.trim().length > 120) {
-                      return 'O nome não pode ultrapassar 120 caracteres.';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 10,
-                  runSpacing: 8,
-                  children: <Widget>[
-                    OutlinedButton.icon(
-                      onPressed: _pickDate,
-                      icon: const Icon(Icons.calendar_month_rounded),
-                      label: Text(
-                        'Data: ${_SchedulePageState._formatDateDisplay(_selectedDate)}',
-                      ),
+    return AppDialogShell(
+      maxWidth: AppDialogDimensions.compactFormWidth,
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                'Editar reserva',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 18),
+              TextFormField(
+                controller: _guestController,
+                decoration: const InputDecoration(labelText: 'Responsável'),
+                validator: (String? value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Informe o responsável pela reserva.';
+                  }
+                  if (value.trim().length < 3) {
+                    return 'O nome deve ter pelo menos 3 caracteres.';
+                  }
+                  if (value.trim().length > 120) {
+                    return 'O nome não pode ultrapassar 120 caracteres.';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              Wrap(
+                spacing: 10,
+                runSpacing: 8,
+                children: <Widget>[
+                  OutlinedButton.icon(
+                    onPressed: _pickDate,
+                    icon: const Icon(Icons.calendar_month_rounded),
+                    label: Text(
+                      'Data: ${_SchedulePageState._formatDateDisplay(_selectedDate)}',
                     ),
-                    OutlinedButton.icon(
-                      onPressed: _pickStartTime,
-                      icon: const Icon(Icons.schedule_rounded),
-                      label: Text('Início: ${_formatTime(_startTime)}'),
-                    ),
-                    OutlinedButton.icon(
-                      onPressed: _pickEndTime,
-                      icon: const Icon(Icons.timer_rounded),
-                      label: Text('Fim: ${_formatTime(_endTime)}'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _notesController,
-                  decoration: const InputDecoration(
-                    labelText: 'Observações (opcional)',
                   ),
-                  minLines: 2,
-                  maxLines: 3,
-                  validator: (String? value) {
-                    if (value != null && value.trim().length > 500) {
-                      return 'As observações não podem ultrapassar 500 caracteres.';
-                    }
-                    return null;
-                  },
-                ),
-                if (_error != null) ...<Widget>[
-                  const SizedBox(height: 10),
-                  Text(
-                    _error!,
-                    style: const TextStyle(color: Color(0xFF8A1C1C)),
+                  OutlinedButton.icon(
+                    onPressed: _pickStartTime,
+                    icon: const Icon(Icons.schedule_rounded),
+                    label: Text('Início: ${_formatTime(_startTime)}'),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _pickEndTime,
+                    icon: const Icon(Icons.timer_rounded),
+                    label: Text('Fim: ${_formatTime(_endTime)}'),
                   ),
                 ],
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _notesController,
+                decoration: const InputDecoration(
+                  labelText: 'Observações (opcional)',
+                ),
+                minLines: 2,
+                maxLines: 3,
+                validator: (String? value) {
+                  if (value != null && value.trim().length > 500) {
+                    return 'As observações não podem ultrapassar 500 caracteres.';
+                  }
+                  return null;
+                },
+              ),
+              if (_error != null) ...<Widget>[
+                const SizedBox(height: 10),
+                Text(
+                  _error!,
+                  style: const TextStyle(color: CostaNorteBrand.error),
+                ),
               ],
-            ),
+              const SizedBox(height: 20),
+              Row(
+                children: <Widget>[
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Fechar'),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: _submit,
+                      icon: const Icon(Icons.save_rounded),
+                      label: const Text('Salvar alterações'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ),
         ),
       ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Fechar'),
-        ),
-        FilledButton.icon(
-          onPressed: _submit,
-          icon: const Icon(Icons.save_rounded),
-          label: const Text('Salvar alterações'),
-        ),
-      ],
     );
   }
 
@@ -674,9 +717,9 @@ class _ReservationTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Color accentColor = switch (reservation.status) {
-      ReservationStatus.scheduled => const Color(0xFF167D85),
-      ReservationStatus.completed => const Color(0xFF2B8A3E),
-      ReservationStatus.cancelled => const Color(0xFFB3261E),
+      ReservationStatus.scheduled => CostaNorteBrand.royalBlue,
+      ReservationStatus.completed => CostaNorteBrand.success,
+      ReservationStatus.cancelled => CostaNorteBrand.error,
     };
 
     final String statusLabel = switch (reservation.status) {
@@ -715,7 +758,7 @@ class _ReservationTile extends StatelessWidget {
                   '${_formatTime(reservation.startTime)} - ${_formatTime(reservation.endTime)}',
                   style: const TextStyle(
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF0F4C5C),
+                    color: CostaNorteBrand.royalBlueDeep,
                   ),
                 ),
               ],
@@ -726,7 +769,7 @@ class _ReservationTile extends StatelessWidget {
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1F2D3D),
+                color: CostaNorteBrand.ink,
               ),
             ),
             if (reservation.notes != null &&
@@ -734,7 +777,7 @@ class _ReservationTile extends StatelessWidget {
               const SizedBox(height: 6),
               Text(
                 reservation.notes!,
-                style: const TextStyle(color: Color(0xFF526073)),
+                style: const TextStyle(color: CostaNorteBrand.mutedInk),
               ),
             ],
             if (onEdit != null || onCancel != null) ...<Widget>[

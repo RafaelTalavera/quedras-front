@@ -1,5 +1,28 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-03-20 | Post Hito 12 | Estandar reusable de dialogos y avisos
+- Componente afectado: Frontend (`feedback`, `core/widgets`, documentacion UI)
+- Archivos tocados:
+  - `docs/DIALOG_ALERT_STANDARD.md`
+  - `lib/core/widgets/app_dialog_shell.dart`
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Formalizar el estandar de avisos/dialogos para el usuario y consolidarlo en un shell reusable para dialogs propios.
+- Impacto funcional: El proyecto queda con un criterio documentado y componentes base reutilizables para mantener dialogs compactos, consistentes y faciles de extender.
+
+## 2026-03-20 | Post Hito 12 | Libreria de alertas tipo SweetAlert2
+- Componente afectado: Frontend (`feedback`, `Massagens`, `Reservas`, `Agenda`)
+- Archivos tocados:
+  - `pubspec.yaml`
+  - `pubspec.lock`
+  - `lib/core/feedback/app_alerts.dart`
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `lib/features/reservations/presentation/new_reservation_page.dart`
+  - `lib/features/schedule/presentation/schedule_page.dart`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Unificar avisos de exito, error, warning e informacion con una experiencia visual mas cercana a SweetAlert2 y desacoplarla del paquete concreto mediante un wrapper propio.
+- Impacto funcional: Las operaciones de guardado y actualizacion ahora muestran alertas modales consistentes para el usuario, reutilizables desde cualquier modulo del front.
+
 ## 2026-03-20 | Post Hito 12 | Persistencia real del CRUD de Massagens
 - Componente afectado: Frontend (`Massagens`)
 - Archivos tocados:

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/feedback/app_alerts.dart';
+import '../../../core/theme/costa_norte_brand.dart';
 import '../application/reservation_app_service.dart';
 import '../domain/create_reservation_model.dart';
 
@@ -53,13 +55,13 @@ class _NewReservationPageState extends State<NewReservationPage> {
           'Nova reserva',
           style: textTheme.headlineMedium?.copyWith(
             fontWeight: FontWeight.w700,
-            color: const Color(0xFF0B2942),
+            color: CostaNorteBrand.ink,
           ),
         ),
         const SizedBox(height: 8),
         Text(
           'Cadastre novas reservas de quadra com regras de horário e duração já aplicadas na interface.',
-          style: textTheme.bodyLarge?.copyWith(color: const Color(0xFF4E6071)),
+          style: textTheme.bodyLarge,
         ),
         const SizedBox(height: 20),
         Card(
@@ -165,7 +167,7 @@ class _NewReservationPageState extends State<NewReservationPage> {
               padding: const EdgeInsets.all(14),
               child: Text(
                 _error!,
-                style: const TextStyle(color: Color(0xFF8A1C1C)),
+                style: const TextStyle(color: CostaNorteBrand.error),
               ),
             ),
           ),
@@ -178,7 +180,7 @@ class _NewReservationPageState extends State<NewReservationPage> {
               padding: const EdgeInsets.all(14),
               child: Text(
                 _success!,
-                style: const TextStyle(color: Color(0xFF1E6B31)),
+                style: const TextStyle(color: CostaNorteBrand.success),
               ),
             ),
           ),
@@ -195,7 +197,7 @@ class _NewReservationPageState extends State<NewReservationPage> {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: Color(0xFF2A3B4C),
+                    color: CostaNorteBrand.ink,
                   ),
                 ),
                 SizedBox(height: 8),
@@ -323,6 +325,11 @@ class _NewReservationPageState extends State<NewReservationPage> {
             'Reserva criada com sucesso para ${_guestController.text.trim()}.';
         _error = null;
       });
+      await AppAlerts.success(
+        context,
+        title: 'Reserva criada',
+        message: _success!,
+      );
       _guestController.clear();
       _notesController.clear();
     } catch (error) {
@@ -335,6 +342,11 @@ class _NewReservationPageState extends State<NewReservationPage> {
         _success = null;
         _error = errorMessage;
       });
+      await AppAlerts.error(
+        context,
+        title: 'Falha ao criar reserva',
+        message: errorMessage,
+      );
     }
   }
 
@@ -399,13 +411,13 @@ class _FieldHint extends StatelessWidget {
           style: const TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w700,
-            color: Color(0xFF425466),
+            color: CostaNorteBrand.mutedInk,
           ),
         ),
         const SizedBox(height: 4),
         Text(
           hint,
-          style: const TextStyle(fontSize: 13, color: Color(0xFF68778B)),
+          style: const TextStyle(fontSize: 13, color: CostaNorteBrand.mutedInk),
         ),
       ],
     );

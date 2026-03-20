@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/feedback/app_alerts.dart';
 import '../../../core/theme/costa_norte_brand.dart';
+import '../../../core/widgets/app_dialog_dimensions.dart';
+import '../../../core/widgets/app_dialog_shell.dart';
 import '../../../core/widgets/brand_section_hero.dart';
 import '../application/massage_app_service.dart';
 import '../domain/massage_models.dart';
@@ -471,10 +474,10 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
           booking.startAt.minute == startAt.minute,
     );
     if (duplicated) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Esse prestador ja esta ocupado nesse horario.'),
-        ),
+      await AppAlerts.warning(
+        context,
+        title: 'Horario ocupado',
+        message: 'Esse prestador ja esta ocupado nesse horario.',
       );
       return;
     }
@@ -528,10 +531,10 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
         _savingBooking = false;
       });
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Atendimento salvo para ${bookingDraft.clientName}.'),
-        ),
+      await AppAlerts.success(
+        context,
+        title: 'Atendimento salvo',
+        message: 'Atendimento salvo para ${bookingDraft.clientName}.',
       );
     } catch (error) {
       if (!mounted) {
@@ -541,9 +544,11 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
         _savingBooking = false;
         _errorMessage = error.toString().replaceFirst('Bad state: ', '');
       });
-      ScaffoldMessenger.of(
+      await AppAlerts.error(
         context,
-      ).showSnackBar(SnackBar(content: Text(_errorMessage!)));
+        title: 'Falha ao salvar atendimento',
+        message: _errorMessage!,
+      );
     }
   }
 
@@ -908,250 +913,243 @@ class _BookingDialogState extends State<_BookingDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 620, maxHeight: 760),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(
-                  'Lancar atendimento',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  _fullDateLabel(_selectedDate),
-                  style: Theme.of(context).textTheme.bodyMedium,
-                ),
-                const SizedBox(height: 18),
-                Expanded(
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        OutlinedButton.icon(
-                          onPressed: _pickBookingDate,
-                          icon: const Icon(Icons.event_rounded),
-                          label: Text(
-                            'Data: ${_fullDateLabel(_selectedDate)}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          value: _selectedTime,
-                          decoration: const InputDecoration(
-                            labelText: 'Horario',
-                            prefixIcon: Icon(Icons.schedule_rounded),
-                          ),
-                          items: _timeSlots
-                              .map(
-                                (String value) => DropdownMenuItem<String>(
-                                  value: value,
-                                  child: Text(value),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (String? value) {
-                            if (value != null) {
-                              setState(() {
-                                _selectedTime = value;
-                              });
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _clientController,
-                          decoration: const InputDecoration(
-                            labelText: 'Cliente',
-                            prefixIcon: Icon(Icons.person_outline_rounded),
-                          ),
-                          validator: (String? value) =>
-                              value == null || value.trim().isEmpty
-                              ? 'Informe o cliente.'
-                              : null,
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _guestController,
-                          decoration: const InputDecoration(
-                            labelText: 'Hospede ou externo',
-                            prefixIcon: Icon(Icons.hotel_rounded),
-                          ),
-                          validator: (String? value) =>
-                              value == null || value.trim().isEmpty
-                              ? 'Informe origem ou apartamento.'
-                              : null,
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<String>(
-                          isExpanded: true,
-                          value: _selectedTreatment,
-                          decoration: const InputDecoration(
-                            labelText: 'Tipo de massagem',
-                            prefixIcon: Icon(Icons.spa_outlined),
-                          ),
-                          items: _treatmentTypes
-                              .map(
-                                (String value) => DropdownMenuItem<String>(
-                                  value: value,
-                                  child: Text(value),
-                                ),
-                              )
-                              .toList(),
-                          onChanged: (String? value) {
-                            if (value != null) {
-                              setState(() {
-                                _selectedTreatment = value;
-                              });
-                            }
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        DropdownButtonFormField<int>(
-                          isExpanded: true,
-                          value: _selectedProviderId,
-                          decoration: const InputDecoration(
-                            labelText: 'Prestador',
-                            prefixIcon: Icon(Icons.groups_2_outlined),
-                          ),
-                          items: widget.activeProviders
-                              .map(
-                                (
-                                  MassageProvider provider,
-                                ) => DropdownMenuItem<int>(
-                                  value: provider.id,
-                                  child: Text(
-                                    '${provider.name} - ${provider.specialty}',
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                          validator: (int? value) => value == null
-                              ? 'Cadastre ou selecione um prestador.'
-                              : null,
-                          onChanged: (int? value) {
-                            setState(() {
-                              _selectedProviderId = value;
-                            });
-                          },
-                        ),
-                        const SizedBox(height: 12),
-                        TextFormField(
-                          controller: _amountController,
-                          decoration: const InputDecoration(
-                            labelText: 'Valor',
-                            prefixIcon: Icon(Icons.attach_money_rounded),
-                          ),
-                          keyboardType: const TextInputType.numberWithOptions(
-                            decimal: true,
-                          ),
-                          validator: (String? value) {
-                            final double? amount = _parseMassageAmount(value);
-                            return amount == null || amount <= 0
-                                ? 'Informe um valor valido.'
-                                : null;
-                          },
-                        ),
-                        SwitchListTile.adaptive(
-                          contentPadding: EdgeInsets.zero,
-                          title: const Text('Pagamento recebido'),
-                          value: _paid,
-                          onChanged: (bool value) {
-                            setState(() {
-                              _paid = value;
-                              _paymentMethod = value
-                                  ? (_paymentMethod ??
-                                        MassagePaymentMethod.card)
-                                  : null;
-                              _paymentDate = value
-                                  ? (_paymentDate ?? _selectedDate)
-                                  : null;
-                            });
-                          },
-                        ),
-                        if (_paid) ...<Widget>[
-                          const SizedBox(height: 12),
-                          DropdownButtonFormField<MassagePaymentMethod>(
-                            value: _paymentMethod,
-                            decoration: const InputDecoration(
-                              labelText: 'Meio de pagamento',
-                              prefixIcon: Icon(Icons.credit_card_rounded),
-                            ),
-                            items: MassagePaymentMethod.values
-                                .map(
-                                  (MassagePaymentMethod value) =>
-                                      DropdownMenuItem<MassagePaymentMethod>(
-                                        value: value,
-                                        child: Text(value.label),
-                                      ),
-                                )
-                                .toList(),
-                            validator: (MassagePaymentMethod? value) {
-                              if (_paid && value == null) {
-                                return 'Informe o meio de pagamento.';
-                              }
-                              return null;
-                            },
-                            onChanged: (MassagePaymentMethod? value) {
-                              setState(() {
-                                _paymentMethod = value;
-                              });
-                            },
-                          ),
-                          const SizedBox(height: 12),
-                          OutlinedButton.icon(
-                            onPressed: _pickPaymentDate,
-                            icon: const Icon(Icons.event_available_rounded),
-                            label: Text(
-                              _paymentDate == null
-                                  ? 'Selecionar data do pagamento'
-                                  : 'Pagamento: ${_fullDateLabel(_paymentDate!)}',
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(height: 12),
-                          TextFormField(
-                            controller: _paymentNotesController,
-                            decoration: const InputDecoration(
-                              labelText: 'Observacoes do pagamento',
-                              prefixIcon: Icon(Icons.notes_rounded),
-                            ),
-                            maxLines: 2,
-                          ),
-                        ],
-                      ],
+    return AppDialogShell(
+      maxWidth: AppDialogDimensions.standardFormWidth,
+      maxHeight: 760,
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Lancar atendimento',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              _fullDateLabel(_selectedDate),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 18),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    OutlinedButton.icon(
+                      onPressed: _pickBookingDate,
+                      icon: const Icon(Icons.event_rounded),
+                      label: Text(
+                        'Data: ${_fullDateLabel(_selectedDate)}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: _selectedTime,
+                      decoration: const InputDecoration(
+                        labelText: 'Horario',
+                        prefixIcon: Icon(Icons.schedule_rounded),
+                      ),
+                      items: _timeSlots
+                          .map(
+                            (String value) => DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (String? value) {
+                        if (value != null) {
+                          setState(() {
+                            _selectedTime = value;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _clientController,
+                      decoration: const InputDecoration(
+                        labelText: 'Cliente',
+                        prefixIcon: Icon(Icons.person_outline_rounded),
+                      ),
+                      validator: (String? value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Informe o cliente.'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _guestController,
+                      decoration: const InputDecoration(
+                        labelText: 'Hospede ou externo',
+                        prefixIcon: Icon(Icons.hotel_rounded),
+                      ),
+                      validator: (String? value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Informe origem ou apartamento.'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      value: _selectedTreatment,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo de massagem',
+                        prefixIcon: Icon(Icons.spa_outlined),
+                      ),
+                      items: _treatmentTypes
+                          .map(
+                            (String value) => DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (String? value) {
+                        if (value != null) {
+                          setState(() {
+                            _selectedTreatment = value;
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      isExpanded: true,
+                      value: _selectedProviderId,
+                      decoration: const InputDecoration(
+                        labelText: 'Prestador',
+                        prefixIcon: Icon(Icons.groups_2_outlined),
+                      ),
+                      items: widget.activeProviders
+                          .map(
+                            (MassageProvider provider) => DropdownMenuItem<int>(
+                              value: provider.id,
+                              child: Text(
+                                '${provider.name} - ${provider.specialty}',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          )
+                          .toList(),
+                      validator: (int? value) => value == null
+                          ? 'Cadastre ou selecione um prestador.'
+                          : null,
+                      onChanged: (int? value) {
+                        setState(() {
+                          _selectedProviderId = value;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _amountController,
+                      decoration: const InputDecoration(
+                        labelText: 'Valor',
+                        prefixIcon: Icon(Icons.attach_money_rounded),
+                      ),
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      validator: (String? value) {
+                        final double? amount = _parseMassageAmount(value);
+                        return amount == null || amount <= 0
+                            ? 'Informe um valor valido.'
+                            : null;
+                      },
+                    ),
+                    SwitchListTile.adaptive(
+                      contentPadding: EdgeInsets.zero,
+                      title: const Text('Pagamento recebido'),
+                      value: _paid,
+                      onChanged: (bool value) {
+                        setState(() {
+                          _paid = value;
+                          _paymentMethod = value
+                              ? (_paymentMethod ?? MassagePaymentMethod.card)
+                              : null;
+                          _paymentDate = value
+                              ? (_paymentDate ?? _selectedDate)
+                              : null;
+                        });
+                      },
+                    ),
+                    if (_paid) ...<Widget>[
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<MassagePaymentMethod>(
+                        value: _paymentMethod,
+                        decoration: const InputDecoration(
+                          labelText: 'Meio de pagamento',
+                          prefixIcon: Icon(Icons.credit_card_rounded),
+                        ),
+                        items: MassagePaymentMethod.values
+                            .map(
+                              (MassagePaymentMethod value) =>
+                                  DropdownMenuItem<MassagePaymentMethod>(
+                                    value: value,
+                                    child: Text(value.label),
+                                  ),
+                            )
+                            .toList(),
+                        validator: (MassagePaymentMethod? value) {
+                          if (_paid && value == null) {
+                            return 'Informe o meio de pagamento.';
+                          }
+                          return null;
+                        },
+                        onChanged: (MassagePaymentMethod? value) {
+                          setState(() {
+                            _paymentMethod = value;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        onPressed: _pickPaymentDate,
+                        icon: const Icon(Icons.event_available_rounded),
+                        label: Text(
+                          _paymentDate == null
+                              ? 'Selecionar data do pagamento'
+                              : 'Pagamento: ${_fullDateLabel(_paymentDate!)}',
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        controller: _paymentNotesController,
+                        decoration: const InputDecoration(
+                          labelText: 'Observacoes do pagamento',
+                          prefixIcon: Icon(Icons.notes_rounded),
+                        ),
+                        maxLines: 2,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancelar'),
                   ),
                 ),
-                const SizedBox(height: 18),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => Navigator.of(context).pop(),
-                        child: const Text('Cancelar'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: _submit,
-                        child: const Text('Salvar atendimento'),
-                      ),
-                    ),
-                  ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _submit,
+                    child: const Text('Salvar atendimento'),
+                  ),
                 ),
               ],
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -1275,167 +1273,157 @@ class _ProviderDialogState extends State<_ProviderDialog> {
 
   @override
   Widget build(BuildContext context) {
-    return Dialog(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 820, maxHeight: 700),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                'Prestadores de massagens',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Cadastre fornecedores aqui para disponibiliza-los no combo da agenda.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 18),
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Expanded(
-                      flex: 6,
-                      child: ListView.separated(
-                        itemCount: _providers.length,
-                        separatorBuilder: (_, _) => const SizedBox(height: 12),
-                        itemBuilder: (BuildContext context, int index) {
-                          final MassageProvider provider = _providers[index];
-                          return Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(18),
-                              border: Border.all(color: CostaNorteBrand.line),
-                            ),
-                            child: Row(
-                              children: <Widget>[
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: <Widget>[
-                                      Text(
-                                        provider.name,
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.titleLarge,
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        provider.specialty,
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodyMedium,
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        provider.contact,
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.bodySmall,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                Switch(
-                                  value: provider.active,
-                                  onChanged: _saving
-                                      ? null
-                                      : (bool value) =>
-                                            _toggleProvider(index, value),
-                                ),
-                              ],
-                            ),
-                          );
-                        },
-                      ),
-                    ),
-                    const SizedBox(width: 18),
-                    Expanded(
-                      flex: 5,
-                      child: Container(
-                        padding: const EdgeInsets.all(18),
+    return AppDialogShell(
+      maxWidth: AppDialogDimensions.wideFormWidth,
+      maxHeight: 700,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Prestadores de massagens',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Cadastre fornecedores aqui para disponibiliza-los no combo da agenda.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 18),
+          Expanded(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(
+                  flex: 6,
+                  child: ListView.separated(
+                    itemCount: _providers.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 12),
+                    itemBuilder: (BuildContext context, int index) {
+                      final MassageProvider provider = _providers[index];
+                      return Container(
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(20),
-                          color: CostaNorteBrand.mist,
+                          borderRadius: BorderRadius.circular(18),
                           border: Border.all(color: CostaNorteBrand.line),
                         ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        child: Row(
                           children: <Widget>[
-                            Text(
-                              'Novo prestador',
-                              style: Theme.of(context).textTheme.titleLarge,
-                            ),
-                            const SizedBox(height: 12),
-                            TextField(
-                              controller: _nameController,
-                              decoration: const InputDecoration(
-                                labelText: 'Nome',
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            TextField(
-                              controller: _specialtyController,
-                              decoration: const InputDecoration(
-                                labelText: 'Especialidade',
-                              ),
-                            ),
-                            const SizedBox(height: 12),
-                            TextField(
-                              controller: _contactController,
-                              decoration: const InputDecoration(
-                                labelText: 'Contato',
-                              ),
-                            ),
-                            const SizedBox(height: 16),
-                            FilledButton.icon(
-                              onPressed: _saving ? null : _addProvider,
-                              icon: const Icon(Icons.playlist_add_rounded),
-                              label: Text(
-                                _saving ? 'Salvando...' : 'Adicionar',
-                              ),
-                            ),
-                            const Spacer(),
-                            Row(
-                              children: <Widget>[
-                                Expanded(
-                                  child: OutlinedButton(
-                                    onPressed: () =>
-                                        Navigator.of(context).pop(),
-                                    child: const Text('Cancelar'),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: <Widget>[
+                                  Text(
+                                    provider.name,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleLarge,
                                   ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: FilledButton(
-                                    onPressed: _saving
-                                        ? null
-                                        : () {
-                                            Navigator.of(
-                                              context,
-                                            ).pop<List<MassageProvider>>(
-                                              _providers,
-                                            );
-                                          },
-                                    child: const Text('Aplicar'),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    provider.specialty,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
                                   ),
-                                ),
-                              ],
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    provider.contact,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Switch(
+                              value: provider.active,
+                              onChanged: _saving
+                                  ? null
+                                  : (bool value) =>
+                                        _toggleProvider(index, value),
                             ),
                           ],
                         ),
-                      ),
-                    ),
-                  ],
+                      );
+                    },
+                  ),
                 ),
-              ),
-            ],
+                const SizedBox(width: 18),
+                Expanded(
+                  flex: 5,
+                  child: Container(
+                    padding: const EdgeInsets.all(18),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      color: CostaNorteBrand.mist,
+                      border: Border.all(color: CostaNorteBrand.line),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'Novo prestador',
+                          style: Theme.of(context).textTheme.titleLarge,
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _nameController,
+                          decoration: const InputDecoration(labelText: 'Nome'),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _specialtyController,
+                          decoration: const InputDecoration(
+                            labelText: 'Especialidade',
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        TextField(
+                          controller: _contactController,
+                          decoration: const InputDecoration(
+                            labelText: 'Contato',
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        FilledButton.icon(
+                          onPressed: _saving ? null : _addProvider,
+                          icon: const Icon(Icons.playlist_add_rounded),
+                          label: Text(_saving ? 'Salvando...' : 'Adicionar'),
+                        ),
+                        const Spacer(),
+                        Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: OutlinedButton(
+                                onPressed: () => Navigator.of(context).pop(),
+                                child: const Text('Cancelar'),
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: FilledButton(
+                                onPressed: _saving
+                                    ? null
+                                    : () {
+                                        Navigator.of(
+                                          context,
+                                        ).pop<List<MassageProvider>>(
+                                          _providers,
+                                        );
+                                      },
+                                child: const Text('Aplicar'),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
+        ],
       ),
     );
   }
@@ -1445,10 +1433,10 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     final String specialty = _specialtyController.text.trim();
     final String contact = _contactController.text.trim();
     if (name.isEmpty || specialty.isEmpty || contact.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Complete nome, especialidade e contato.'),
-        ),
+      await AppAlerts.warning(
+        context,
+        title: 'Campos obrigatorios',
+        message: 'Complete nome, especialidade e contato.',
       );
       return;
     }
@@ -1459,8 +1447,10 @@ class _ProviderDialogState extends State<_ProviderDialog> {
           provider.contact.trim().toLowerCase() == contact.toLowerCase(),
     );
     if (exists) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Esse prestador ja esta cadastrado.')),
+      await AppAlerts.info(
+        context,
+        title: 'Prestador ja cadastrado',
+        message: 'Ja existe um prestador com esse nome e contato.',
       );
       return;
     }
@@ -1493,6 +1483,11 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       _nameController.clear();
       _specialtyController.clear();
       _contactController.clear();
+      await AppAlerts.success(
+        context,
+        title: 'Prestador salvo',
+        message: 'Prestador criado e disponivel para novos atendimentos.',
+      );
     } catch (error) {
       if (!mounted) {
         return;
@@ -1500,10 +1495,10 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       setState(() {
         _saving = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.toString().replaceFirst('Bad state: ', '')),
-        ),
+      await AppAlerts.error(
+        context,
+        title: 'Falha ao salvar prestador',
+        message: error.toString().replaceFirst('Bad state: ', ''),
       );
     }
   }
@@ -1533,6 +1528,11 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         _providers[index] = updated;
         _saving = false;
       });
+      await AppAlerts.success(
+        context,
+        title: 'Prestador atualizado',
+        message: '${updated.name} foi atualizado com sucesso.',
+      );
     } catch (error) {
       if (!mounted) {
         return;
@@ -1541,10 +1541,10 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         _providers[index] = provider;
         _saving = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(error.toString().replaceFirst('Bad state: ', '')),
-        ),
+      await AppAlerts.error(
+        context,
+        title: 'Falha ao atualizar prestador',
+        message: error.toString().replaceFirst('Bad state: ', ''),
       );
     }
   }
