@@ -1,4 +1,43 @@
-import 'package:flutter/material.dart';
+enum MassagePaymentMethod {
+  card('CARD', 'Cartao'),
+  cash('CASH', 'Dinheiro'),
+  pix('PIX', 'Pix');
+
+  const MassagePaymentMethod(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+
+  static MassagePaymentMethod? tryParse(String? rawValue) {
+    if (rawValue == null || rawValue.trim().isEmpty) {
+      return null;
+    }
+    for (final MassagePaymentMethod value in MassagePaymentMethod.values) {
+      if (value.apiValue == rawValue) {
+        return value;
+      }
+    }
+    return null;
+  }
+}
+
+enum MassageBookingStatus {
+  scheduled('SCHEDULED'),
+  cancelled('CANCELLED');
+
+  const MassageBookingStatus(this.apiValue);
+
+  final String apiValue;
+
+  static MassageBookingStatus tryParse(String? rawValue) {
+    for (final MassageBookingStatus value in MassageBookingStatus.values) {
+      if (value.apiValue == rawValue) {
+        return value;
+      }
+    }
+    return MassageBookingStatus.scheduled;
+  }
+}
 
 class MassageProvider {
   const MassageProvider({
@@ -6,17 +45,27 @@ class MassageProvider {
     required this.name,
     required this.specialty,
     required this.contact,
-    this.active = true,
+    required this.active,
   });
 
-  final String id;
+  final int id;
   final String name;
   final String specialty;
   final String contact;
   final bool active;
 
+  factory MassageProvider.fromJson(Map<String, dynamic> json) {
+    return MassageProvider(
+      id: (json['id'] as num).toInt(),
+      name: json['name'] as String? ?? '',
+      specialty: json['specialty'] as String? ?? '',
+      contact: json['contact'] as String? ?? '',
+      active: json['active'] as bool? ?? false,
+    );
+  }
+
   MassageProvider copyWith({
-    String? id,
+    int? id,
     String? name,
     String? specialty,
     String? contact,
@@ -35,265 +84,342 @@ class MassageProvider {
 class MassageBooking {
   const MassageBooking({
     required this.id,
-    required this.startAt,
+    required this.bookingDate,
+    required this.startTime,
     required this.clientName,
-    required this.guestOrExternal,
+    required this.guestReference,
+    required this.treatment,
+    required this.amount,
+    required this.providerId,
+    required this.providerName,
+    required this.providerActive,
+    required this.paid,
+    required this.paymentMethod,
+    required this.paymentDate,
+    required this.paymentNotes,
+    required this.status,
+    required this.cancellationNotes,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.cancelledAt,
+    required this.createdBy,
+    required this.updatedBy,
+    required this.cancelledBy,
+  });
+
+  final int id;
+  final DateTime bookingDate;
+  final String startTime;
+  final String clientName;
+  final String guestReference;
+  final String treatment;
+  final double amount;
+  final int providerId;
+  final String providerName;
+  final bool providerActive;
+  final bool paid;
+  final MassagePaymentMethod? paymentMethod;
+  final DateTime? paymentDate;
+  final String? paymentNotes;
+  final MassageBookingStatus status;
+  final String? cancellationNotes;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final DateTime? cancelledAt;
+  final String? createdBy;
+  final String? updatedBy;
+  final String? cancelledBy;
+
+  factory MassageBooking.fromJson(Map<String, dynamic> json) {
+    return MassageBooking(
+      id: (json['id'] as num).toInt(),
+      bookingDate: DateTime.parse(json['bookingDate'] as String),
+      startTime: _normalizeTime(json['startTime'] as String? ?? '00:00:00'),
+      clientName: json['clientName'] as String? ?? '',
+      guestReference: json['guestReference'] as String? ?? '',
+      treatment: json['treatment'] as String? ?? '',
+      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      providerId: (json['providerId'] as num).toInt(),
+      providerName: json['providerName'] as String? ?? 'Prestador',
+      providerActive: json['providerActive'] as bool? ?? false,
+      paid: json['paid'] as bool? ?? false,
+      paymentMethod: MassagePaymentMethod.tryParse(
+        json['paymentMethod'] as String?,
+      ),
+      paymentDate: _tryParseDate(json['paymentDate'] as String?),
+      paymentNotes: _normalizeNullable(json['paymentNotes'] as String?),
+      status: MassageBookingStatus.tryParse(json['status'] as String?),
+      cancellationNotes: _normalizeNullable(
+        (json['cancellationNotes'] ?? json['cancellationReason']) as String?,
+      ),
+      createdAt: _tryParseDateTime(json['createdAt'] as String?),
+      updatedAt: _tryParseDateTime(json['updatedAt'] as String?),
+      cancelledAt: _tryParseDateTime(json['cancelledAt'] as String?),
+      createdBy: _normalizeNullable(json['createdBy'] as String?),
+      updatedBy: _normalizeNullable(json['updatedBy'] as String?),
+      cancelledBy: _normalizeNullable(json['cancelledBy'] as String?),
+    );
+  }
+
+  DateTime get startAt {
+    final List<String> parts = startTime.split(':');
+    return DateTime(
+      bookingDate.year,
+      bookingDate.month,
+      bookingDate.day,
+      int.parse(parts[0]),
+      int.parse(parts[1]),
+    );
+  }
+
+  MassageBooking copyWith({
+    DateTime? bookingDate,
+    String? startTime,
+    String? clientName,
+    String? guestReference,
+    String? treatment,
+    double? amount,
+    int? providerId,
+    String? providerName,
+    bool? providerActive,
+    bool? paid,
+    MassagePaymentMethod? paymentMethod,
+    DateTime? paymentDate,
+    String? paymentNotes,
+    MassageBookingStatus? status,
+    String? cancellationNotes,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    DateTime? cancelledAt,
+    String? createdBy,
+    String? updatedBy,
+    String? cancelledBy,
+  }) {
+    return MassageBooking(
+      id: id,
+      bookingDate: bookingDate ?? this.bookingDate,
+      startTime: startTime ?? this.startTime,
+      clientName: clientName ?? this.clientName,
+      guestReference: guestReference ?? this.guestReference,
+      treatment: treatment ?? this.treatment,
+      amount: amount ?? this.amount,
+      providerId: providerId ?? this.providerId,
+      providerName: providerName ?? this.providerName,
+      providerActive: providerActive ?? this.providerActive,
+      paid: paid ?? this.paid,
+      paymentMethod: paymentMethod ?? this.paymentMethod,
+      paymentDate: paymentDate ?? this.paymentDate,
+      paymentNotes: paymentNotes ?? this.paymentNotes,
+      status: status ?? this.status,
+      cancellationNotes: cancellationNotes ?? this.cancellationNotes,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      cancelledAt: cancelledAt ?? this.cancelledAt,
+      createdBy: createdBy ?? this.createdBy,
+      updatedBy: updatedBy ?? this.updatedBy,
+      cancelledBy: cancelledBy ?? this.cancelledBy,
+    );
+  }
+
+  static String _normalizeTime(String rawValue) {
+    if (rawValue.length >= 8) {
+      return rawValue.substring(0, 8);
+    }
+    if (rawValue.length == 5) {
+      return '$rawValue:00';
+    }
+    return rawValue;
+  }
+
+  static DateTime? _tryParseDate(String? rawValue) {
+    if (rawValue == null || rawValue.trim().isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(rawValue);
+  }
+
+  static DateTime? _tryParseDateTime(String? rawValue) {
+    if (rawValue == null || rawValue.trim().isEmpty) {
+      return null;
+    }
+    return DateTime.tryParse(rawValue);
+  }
+
+  static String? _normalizeNullable(String? value) {
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+    return value.trim();
+  }
+}
+
+class CreateMassageBookingModel {
+  const CreateMassageBookingModel({
+    required this.bookingDate,
+    required this.startTime,
+    required this.clientName,
+    required this.guestReference,
     required this.treatment,
     required this.amount,
     required this.providerId,
     required this.paid,
+    required this.paymentMethod,
+    required this.paymentDate,
+    required this.paymentNotes,
   });
 
-  final String id;
-  final DateTime startAt;
+  final String bookingDate;
+  final String startTime;
   final String clientName;
-  final String guestOrExternal;
+  final String guestReference;
   final String treatment;
   final double amount;
-  final String providerId;
+  final int providerId;
   final bool paid;
+  final MassagePaymentMethod? paymentMethod;
+  final String? paymentDate;
+  final String? paymentNotes;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'bookingDate': bookingDate,
+      'startTime': startTime,
+      'clientName': clientName,
+      'guestReference': guestReference,
+      'treatment': treatment,
+      'amount': amount,
+      'providerId': providerId,
+      'paid': paid,
+      'paymentMethod': paymentMethod?.apiValue,
+      'paymentDate': paymentDate,
+      'paymentNotes': _trimOrNull(paymentNotes),
+    };
+  }
 }
 
-final class MassageCatalog {
-  static const int agendaYear = 2026;
+class UpdateMassagePaymentModel {
+  const UpdateMassagePaymentModel({
+    required this.paymentMethod,
+    required this.paymentDate,
+    required this.paymentNotes,
+  });
 
-  static const List<String> monthLabels = <String>[
-    'Janeiro',
-    'Fevereiro',
-    'Marco',
-    'Abril',
-    'Maio',
-    'Junho',
-    'Julho',
-    'Agosto',
-    'Setembro',
-    'Outubro',
-    'Novembro',
-    'Dezembro',
-  ];
+  final MassagePaymentMethod paymentMethod;
+  final String paymentDate;
+  final String? paymentNotes;
 
-  static const List<String> weekDayLabels = <String>[
-    'Seg',
-    'Ter',
-    'Qua',
-    'Qui',
-    'Sex',
-    'Sab',
-    'Dom',
-  ];
-
-  static const List<String> treatmentTypes = <String>[
-    'Relaxante',
-    'Drenagem corporal',
-    'Pedras quentes',
-    'Terapeutica',
-    'Banho',
-    'Experiencia dupla',
-  ];
-
-  static List<MassageProvider> seededProviders() {
-    return const <MassageProvider>[
-      MassageProvider(
-        id: 'david',
-        name: 'David',
-        specialty: 'Relaxante e casal',
-        contact: '98804-3392',
-      ),
-      MassageProvider(
-        id: 'danuska',
-        name: 'Danuska',
-        specialty: 'Drenagem e relaxante',
-        contact: 'Agenda interna',
-      ),
-      MassageProvider(
-        id: 'isabelita',
-        name: 'Isabelita',
-        specialty: 'Pedras quentes e terapeutica',
-        contact: 'Agenda interna',
-      ),
-      MassageProvider(
-        id: 'juliana',
-        name: 'Juliana',
-        specialty: 'Relaxante premium',
-        contact: 'Agenda interna',
-      ),
-    ];
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'paymentMethod': paymentMethod.apiValue,
+      'paymentDate': paymentDate,
+      'paymentNotes': _trimOrNull(paymentNotes),
+    };
   }
+}
 
-  static List<MassageBooking> seededBookings() {
-    return <MassageBooking>[
-      _booking(
-        id: 'jan-02-cacilda',
-        month: 1,
-        day: 2,
-        hour: 17,
-        client: 'Cacilda',
-        guestOrExternal: 'Apto 405',
-        treatment: 'Relaxante',
-        amount: 200,
-        providerId: 'david',
-      ),
-      _booking(
-        id: 'jan-04-sonia',
-        month: 1,
-        day: 4,
-        hour: 18,
-        client: 'Sonia',
-        guestOrExternal: 'Apto 407',
-        treatment: 'Drenagem corporal',
-        amount: 200,
-        providerId: 'danuska',
-      ),
-      _booking(
-        id: 'jan-06-andriele',
-        month: 1,
-        day: 6,
-        hour: 17,
-        client: 'Andriele',
-        guestOrExternal: 'Externo',
-        treatment: 'Relaxante',
-        amount: 200,
-        providerId: 'danuska',
-      ),
-      _booking(
-        id: 'feb-07-rosa',
-        month: 2,
-        day: 7,
-        hour: 18,
-        client: 'Rosa',
-        guestOrExternal: 'Apto 211',
-        treatment: 'Relaxante',
-        amount: 200,
-        providerId: 'david',
-      ),
-      _booking(
-        id: 'feb-10-fabian',
-        month: 2,
-        day: 10,
-        hour: 17,
-        client: 'Fabian',
-        guestOrExternal: 'Externo',
-        treatment: 'Relaxante',
-        amount: 200,
-        providerId: 'david',
-      ),
-      _booking(
-        id: 'mar-05-marilene',
-        month: 3,
-        day: 5,
-        hour: 20,
-        client: 'Marilene chale 04',
-        guestOrExternal: 'Chale 04',
-        treatment: 'Relaxante',
-        amount: 200,
-        providerId: 'juliana',
-      ),
-      _booking(
-        id: 'mar-06-rodrigo',
-        month: 3,
-        day: 6,
-        hour: 10,
-        client: 'Rodrigo',
-        guestOrExternal: 'Externo',
-        treatment: 'Relaxante',
-        amount: 200,
-        providerId: 'isabelita',
-      ),
-      _booking(
-        id: 'mar-06-carlos',
-        month: 3,
-        day: 6,
-        hour: 17,
-        client: 'Carlos',
-        guestOrExternal: 'Apto 9',
-        treatment: 'Relaxante',
-        amount: 200,
-        providerId: 'juliana',
-        paid: false,
-      ),
-      _booking(
-        id: 'mar-06-ignacio',
-        month: 3,
-        day: 6,
-        hour: 11,
-        client: 'Ignacio',
-        guestOrExternal: 'Apto 11',
-        treatment: 'Terapeutica',
-        amount: 200,
-        providerId: 'david',
-      ),
-      _booking(
-        id: 'mar-06-alessandra',
-        month: 3,
-        day: 6,
-        hour: 19,
-        client: 'Alessandra',
-        guestOrExternal: 'Apto 405',
-        treatment: 'Relaxante',
-        amount: 200,
-        providerId: 'isabelita',
-      ),
-      _booking(
-        id: 'mar-07-susana',
-        month: 3,
-        day: 7,
-        hour: 12,
-        client: 'Susana',
-        guestOrExternal: 'Externo',
-        treatment: 'Relaxante',
-        amount: 200,
-        providerId: 'isabelita',
-      ),
-      _booking(
-        id: 'mar-08-silvana',
-        month: 3,
-        day: 8,
-        hour: 18,
-        client: 'Silvana',
-        guestOrExternal: 'Apto 303',
-        treatment: 'Pedras quentes',
-        amount: 200,
-        providerId: 'isabelita',
-      ),
-    ];
-  }
+class UpdateMassageBookingModel {
+  const UpdateMassageBookingModel({
+    required this.bookingDate,
+    required this.startTime,
+    required this.clientName,
+    required this.guestReference,
+    required this.treatment,
+    required this.amount,
+    required this.providerId,
+    required this.paid,
+    required this.paymentMethod,
+    required this.paymentDate,
+    required this.paymentNotes,
+  });
 
-  static Color providerColor(String providerId) {
-    switch (providerId) {
-      case 'david':
-        return const Color(0xFFE8F0FF);
-      case 'danuska':
-        return const Color(0xFFFFF0D5);
-      case 'isabelita':
-        return const Color(0xFFFBE7EC);
-      case 'juliana':
-        return const Color(0xFFE8F7EE);
-      default:
-        return Colors.white;
-    }
-  }
+  final String bookingDate;
+  final String startTime;
+  final String clientName;
+  final String guestReference;
+  final String treatment;
+  final double amount;
+  final int providerId;
+  final bool paid;
+  final MassagePaymentMethod? paymentMethod;
+  final String? paymentDate;
+  final String? paymentNotes;
 
-  static MassageBooking _booking({
-    required String id,
-    required int month,
-    required int day,
-    required int hour,
-    required String client,
-    required String guestOrExternal,
-    required String treatment,
-    required double amount,
-    required String providerId,
-    bool paid = true,
-  }) {
-    return MassageBooking(
-      id: id,
-      startAt: DateTime(agendaYear, month, day, hour),
-      clientName: client,
-      guestOrExternal: guestOrExternal,
-      treatment: treatment,
-      amount: amount,
-      providerId: providerId,
-      paid: paid,
-    );
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'bookingDate': bookingDate,
+      'startTime': startTime,
+      'clientName': clientName,
+      'guestReference': guestReference,
+      'treatment': treatment,
+      'amount': amount,
+      'providerId': providerId,
+      'paid': paid,
+      'paymentMethod': paymentMethod?.apiValue,
+      'paymentDate': paymentDate,
+      'paymentNotes': _trimOrNull(paymentNotes),
+    };
   }
+}
+
+class CancelMassageBookingModel {
+  const CancelMassageBookingModel({required this.cancellationNotes});
+
+  final String cancellationNotes;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'cancellationNotes': _trimOrNull(cancellationNotes),
+    };
+  }
+}
+
+class CreateMassageProviderModel {
+  const CreateMassageProviderModel({
+    required this.name,
+    required this.specialty,
+    required this.contact,
+  });
+
+  final String name;
+  final String specialty;
+  final String contact;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'name': name,
+      'specialty': specialty,
+      'contact': contact,
+    };
+  }
+}
+
+class UpdateMassageProviderModel {
+  const UpdateMassageProviderModel({
+    required this.name,
+    required this.specialty,
+    required this.contact,
+    required this.active,
+  });
+
+  final String name;
+  final String specialty;
+  final String contact;
+  final bool active;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'name': name,
+      'specialty': specialty,
+      'contact': contact,
+      'active': active,
+    };
+  }
+}
+
+String? _trimOrNull(String? value) {
+  if (value == null) {
+    return null;
+  }
+  final String normalized = value.trim();
+  return normalized.isEmpty ? null : normalized;
 }

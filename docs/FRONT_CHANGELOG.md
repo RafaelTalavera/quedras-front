@@ -1,5 +1,29 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-03-20 | Post Hito 12 | Regla transversal de no eliminacion y auditoria operativa
+- Componente afectado: Frontend (documentacion de sistema + Massagens)
+- Archivos tocados:
+  - `docs/SYSTEM_OPERATION_RULES.md`
+  - `docs/BACKEND_MASSAGES_ADJUSTMENT_PLAN.md`
+  - `README.md`
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Dejar explicita la regla general de negocio por la cual los registros operativos no se eliminan, sino que se cancelan o inactivan con justificacion y trazabilidad de usuario.
+- Impacto funcional: El repositorio queda documentado para exigir cancelacion con observacion y auditoria por usuario como criterio transversal de implementacion.
+
+## 2026-03-20 | Post Hito 12 | Edicion y cancelacion de atendimientos de Massagens en frontend
+- Componente afectado: Frontend (`Massagens`)
+- Archivos tocados:
+  - `lib/features/massages/application/massage_app_service.dart`
+  - `lib/features/massages/domain/massage_models.dart`
+  - `lib/features/massages/infrastructure/http_massage_app_service.dart`
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `lib/core/localization/pt_br_error_translator.dart`
+  - `test/features/massages/presentation/massage_booking_page_test.dart`
+  - `test/features/massages/infrastructure/http_massage_app_service_test.dart`
+- Motivo del cambio: Preparar el frontend para mantener atendimientos sin borrar registros, habilitando edicion, cancelacion con observacion y visualizacion de estado.
+- Impacto funcional: El operador puede cancelar o editar atendimientos desde el resumen diario y desde el calendario, mientras el frontend queda listo para consumir auditoria y estado reales del backend.
+
 ## 2026-03-20 | Post Hito 12 | Estandar reusable de dialogos y avisos
 - Componente afectado: Frontend (`feedback`, `core/widgets`, documentacion UI)
 - Archivos tocados:

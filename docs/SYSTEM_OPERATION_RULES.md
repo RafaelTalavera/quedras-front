@@ -1,0 +1,23 @@
+# SYSTEM OPERATION RULES - COSTANORTE
+
+## Regra geral de persistencia operacional
+- Registros operacionais nao devem ser eliminados fisicamente pela aplicacao.
+- Quando um item deixar de valer operacionalmente, o sistema deve cancelar ou inativar o registro.
+- Cancelamentos exigem observacao que justifique a acao.
+- O historico precisa continuar consultavel para auditoria e rastreabilidade.
+
+## Regra geral de auditoria
+- Toda criacao deve registrar quem executou a operacao e quando ela ocorreu.
+- Toda edicao deve registrar o ultimo usuario responsavel e a data/hora da alteracao.
+- Toda cancelacao deve registrar usuario, data/hora e observacao de cancelamento.
+- A identificacao do usuario deve ser derivada da autenticacao JWT enviada pelo frontend ao backend.
+
+## Aplicacao imediata no modulo de massagens
+- Atendimentos nao devem ser removidos da base.
+- O cancelamento do atendimento deve ser feito por endpoint dedicado e com observacao obrigatoria.
+- Criacao, edicao e cancelamento do atendimento devem ficar auditados no backend.
+
+## Verificacao recomendada no backend
+- Confirmar que os endpoints autenticados persistem `createdBy`, `updatedBy`, `cancelledBy`, `createdAt`, `updatedAt` e `cancelledAt` quando aplicavel.
+- Confirmar que nao existe endpoint `DELETE` para entidades operacionais de agenda.
+- Confirmar que logs de auditoria e colunas de rastreio usam o usuario extraido do JWT, nao valores enviados livremente pelo cliente.

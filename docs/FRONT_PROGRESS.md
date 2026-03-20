@@ -4,9 +4,9 @@
 - Proyecto: COSTANORTE Frontend
 - Estado: En progreso (reenfoque comercial post Hito 12)
 - Ultimo hito trabajado: Post Hito 12 - Reenfoque comercial, modulos visibles y salida pt-BR
-- Ultima actualizacion: 2026-03-16
+- Ultima actualizacion: 2026-03-20
 - Fuente de verdad global: `C:/Users/Public/Documents/Proyectos/quadras/docs/TABLERO_PROGRESO.md`
-- Proximo paso frontend: Conectar `Massagens` y `Tours e Viagens` a contratos backend reales y cerrar una validacion release cuando haya contenido final aprobado.
+- Proximo paso frontend: Cerrar contrato backend de `Massagens` con auditoria completa, cancelacion con observacion y validar `Tours e Viagens` para release.
 
 ## Hitos frontend
 | Hito | Nombre | Estado frontend | Tests | Documentacion | Commit | Observaciones |
@@ -32,8 +32,9 @@
 - Validaciones ejecutadas en esta fase: `flutter analyze`, `flutter test`.
 
 ## Pendientes inmediatos frontend
-- Definir contrato backend especifico para `Massagens`.
+- Cerrar y validar contrato backend especifico para `Massagens` con `status`, edicion, cancelacion y auditoria por usuario.
 - Definir contrato backend especifico para `Tours e Viagens`.
+- Verificar en backend que JWT quede persistido como autor real en `createdBy/updatedBy/cancelledBy`.
 - Evaluar si la sesion seguira solo en memoria o necesitara persistencia controlada.
 
 ## Bloqueos frontend
