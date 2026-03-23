@@ -1,5 +1,16 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-03-23 | Post Hito 12 | Informar pago rapido en Massagens
+- Componente afectado: Frontend (`Massagens`)
+- Archivos tocados:
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `test/features/massages/presentation/massage_booking_page_test.dart`
+  - `test/features/massages/infrastructure/http_massage_app_service_test.dart`
+  - `docs/BACKEND_MASSAGES_ADJUSTMENT_PLAN.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Exponer en UI el endpoint ya existente de actualizacion rapida de pago y corregir el falso estado vacio del selector cuando el dia tenia atendimientos no elegibles.
+- Impacto funcional: El operador puede informar pago desde la barra superior y desde las acciones del booking. El selector ahora lista todos los atendimientos del dia, distingue los que estan pagos o cancelados y solo habilita la accion para los elegibles.
+
 ## 2026-03-20 | Post Hito 12 | Regla transversal de no eliminacion y auditoria operativa
 - Componente afectado: Frontend (documentacion de sistema + Massagens)
 - Archivos tocados:

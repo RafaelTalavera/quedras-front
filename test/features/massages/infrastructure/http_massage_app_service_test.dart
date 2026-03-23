@@ -139,6 +139,10 @@ void main() {
     expect(client.calls[1].path, 'massages/bookings/10');
     expect(client.calls[2].path, 'massages/bookings/10/cancel');
     expect(client.calls.last.path, 'massages/bookings/10/payment');
+    expect(
+      client.calls.last.body,
+      '{"paymentMethod":"PIX","paymentDate":"2026-03-20","paymentNotes":"Pago depois"}',
+    );
   });
 
   test('HttpMassageAppService traduce errores y red local', () async {

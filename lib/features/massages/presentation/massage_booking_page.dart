@@ -132,6 +132,13 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
                   label: const Text('Cancelar atendimento'),
                 ),
                 OutlinedButton.icon(
+                  onPressed: _savingBooking || _dayBookings.isEmpty
+                      ? null
+                      : _openPaymentPicker,
+                  icon: const Icon(Icons.payments_rounded),
+                  label: const Text('Informar pago'),
+                ),
+                OutlinedButton.icon(
                   onPressed: _savingProviders ? null : _openProviderDialog,
                   icon: const Icon(Icons.groups_2_rounded),
                   label: Text(_savingProviders ? 'Salvando...' : 'Prestadores'),
@@ -514,6 +521,34 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
     await _openCancelBookingDialog(booking);
   }
 
+  Future<void> _openPaymentPicker() async {
+    final List<MassageBooking> bookings = _dayBookings;
+    final MassageBooking? booking = await showDialog<MassageBooking>(
+      context: context,
+      builder: (BuildContext context) {
+        return _BookingSelectionDialog(
+          title: 'Informar pago',
+          description:
+              'Selecione o atendimento do dia para registrar data, meio e observacao do pagamento.',
+          bookings: bookings,
+          emptyMessage: 'Nao ha atendimentos no dia selecionado.',
+          onSelectLabel: 'Informar pago',
+          canSelect: _canRegisterPayment,
+          helperMessage: bookings.isNotEmpty && !bookings.any(_canRegisterPayment)
+              ? 'Todos os atendimentos do dia ja estao pagos ou cancelados.'
+              : null,
+          blockedReason: _paymentBlockedReason,
+        );
+      },
+    );
+
+    if (booking == null) {
+      return;
+    }
+
+    await _openPaymentBookingDialog(booking);
+  }
+
   Future<void> _openProviderDialog() async {
     setState(() {
       _savingProviders = true;
@@ -731,8 +766,13 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
     switch (action) {
       case _BookingAction.edit:
         await _openEditBookingDialog(booking);
+        return;
+      case _BookingAction.payment:
+        await _openPaymentBookingDialog(booking);
+        return;
       case _BookingAction.cancel:
         await _openCancelBookingDialog(booking);
+        return;
       case null:
         return;
     }
@@ -750,7 +790,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
         return _BookingSelectionDialog(
           title: 'Atendimentos do dia',
           description:
-              'Escolha um atendimento para editar o registro ou cancelar a atencao.',
+              'Escolha um atendimento para editar o registro, informar pagamento ou cancelar a atencao.',
           bookings: bookings,
           emptyMessage: 'Nao ha atendimentos para o dia selecionado.',
           onSelectLabel: 'Abrir acoes',
@@ -823,6 +863,80 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
       await AppAlerts.error(
         context,
         title: 'Falha ao cancelar atendimento',
+        message: _errorMessage!,
+      );
+    }
+  }
+
+  Future<void> _openPaymentBookingDialog(MassageBooking booking) async {
+    if (booking.status == MassageBookingStatus.cancelled) {
+      await AppAlerts.info(
+        context,
+        title: 'Atendimento cancelado',
+        message: 'Atendimentos cancelados nao podem receber pagamento.',
+      );
+      return;
+    }
+    if (booking.paid) {
+      await AppAlerts.info(
+        context,
+        title: 'Pagamento ja informado',
+        message: 'Esse atendimento ja esta marcado como pago.',
+      );
+      return;
+    }
+
+    final _PaymentDraft? paymentDraft = await showDialog<_PaymentDraft>(
+      context: context,
+      builder: (BuildContext context) {
+        return _PaymentBookingDialog(booking: booking);
+      },
+    );
+    if (paymentDraft == null) {
+      return;
+    }
+
+    setState(() {
+      _savingBooking = true;
+      _processingBookingId = booking.id;
+      _errorMessage = null;
+    });
+
+    try {
+      final MassageBooking updated = await widget.massageAppService.updatePayment(
+        booking.id,
+        UpdateMassagePaymentModel(
+          paymentMethod: paymentDraft.paymentMethod,
+          paymentDate: _formatDateApi(paymentDraft.paymentDate),
+          paymentNotes: paymentDraft.paymentNotes,
+        ),
+      );
+      if (!mounted) {
+        return;
+      }
+      _mergeBooking(updated);
+      setState(() {
+        _savingBooking = false;
+        _processingBookingId = null;
+        _selectedTime = _recommendedTimeFor(_selectedDate);
+      });
+      await AppAlerts.success(
+        context,
+        title: 'Pagamento informado',
+        message: 'O pagamento de ${booking.clientName} foi registrado.',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _savingBooking = false;
+        _processingBookingId = null;
+        _errorMessage = error.toString().replaceFirst('Bad state: ', '');
+      });
+      await AppAlerts.error(
+        context,
+        title: 'Falha ao informar pagamento',
         message: _errorMessage!,
       );
     }
@@ -931,6 +1045,20 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
     }
     return 'Prestador';
   }
+
+  bool _canRegisterPayment(MassageBooking booking) {
+    return booking.status == MassageBookingStatus.scheduled && !booking.paid;
+  }
+
+  String _paymentBlockedReason(MassageBooking booking) {
+    if (booking.status == MassageBookingStatus.cancelled) {
+      return 'Atendimento cancelado';
+    }
+    if (booking.paid) {
+      return 'Pagamento ja informado';
+    }
+    return 'Pagamento disponivel';
+  }
 }
 
 class _AgendaDayCard extends StatelessWidget {
@@ -1031,6 +1159,7 @@ class _AgendaDayCard extends StatelessWidget {
       ),
     );
   }
+
 }
 
 class _MetricCard extends StatelessWidget {
@@ -1129,6 +1258,13 @@ class _BookingTile extends StatelessWidget {
             '${booking.guestReference} - ${booking.treatment} - $provider - '
             'R\$ ${booking.amount.toStringAsFixed(0)}',
             style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            _statusDescription(booking),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: _statusColor(booking)),
           ),
           if (booking.cancellationNotes != null) ...<Widget>[
             const SizedBox(height: 8),
@@ -1579,7 +1715,7 @@ class _BookingDialogState extends State<_BookingDialog> {
   }
 }
 
-enum _BookingAction { edit, cancel }
+enum _BookingAction { edit, payment, cancel }
 
 class _BookingActionDialog extends StatelessWidget {
   const _BookingActionDialog({required this.booking});
@@ -1610,18 +1746,33 @@ class _BookingActionDialog extends StatelessWidget {
               style: Theme.of(context).textTheme.bodyMedium,
             )
           else
-            Row(
+            Column(
               children: <Widget>[
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: () =>
-                        Navigator.of(context).pop(_BookingAction.edit),
-                    icon: const Icon(Icons.edit_calendar_rounded),
-                    label: const Text('Editar registro'),
-                  ),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: () =>
+                            Navigator.of(context).pop(_BookingAction.edit),
+                        icon: const Icon(Icons.edit_calendar_rounded),
+                        label: const Text('Editar registro'),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: booking.paid
+                            ? null
+                            : () => Navigator.of(context).pop(_BookingAction.payment),
+                        icon: const Icon(Icons.payments_rounded),
+                        label: const Text('Informar pago'),
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(width: 12),
-                Expanded(
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
                   child: FilledButton.icon(
                     onPressed: () =>
                         Navigator.of(context).pop(_BookingAction.cancel),
@@ -1651,6 +1802,9 @@ class _BookingSelectionDialog extends StatelessWidget {
     required this.bookings,
     required this.emptyMessage,
     required this.onSelectLabel,
+    this.canSelect,
+    this.helperMessage,
+    this.blockedReason,
   });
 
   final String title;
@@ -1658,6 +1812,9 @@ class _BookingSelectionDialog extends StatelessWidget {
   final List<MassageBooking> bookings;
   final String emptyMessage;
   final String onSelectLabel;
+  final bool Function(MassageBooking booking)? canSelect;
+  final String? helperMessage;
+  final String Function(MassageBooking booking)? blockedReason;
 
   @override
   Widget build(BuildContext context) {
@@ -1670,6 +1827,15 @@ class _BookingSelectionDialog extends StatelessWidget {
           Text(title, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 6),
           Text(description, style: Theme.of(context).textTheme.bodyMedium),
+          if (helperMessage != null) ...<Widget>[
+            const SizedBox(height: 8),
+            Text(
+              helperMessage!,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: CostaNorteBrand.mutedInk,
+              ),
+            ),
+          ],
           const SizedBox(height: 18),
           Expanded(
             child: bookings.isEmpty
@@ -1679,6 +1845,7 @@ class _BookingSelectionDialog extends StatelessWidget {
                     separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (BuildContext context, int index) {
                       final MassageBooking booking = bookings[index];
+                      final bool isSelectable = canSelect?.call(booking) ?? true;
                       return Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -1714,15 +1881,27 @@ class _BookingSelectionDialog extends StatelessWidget {
                                       color: _statusColor(booking),
                                     ),
                                   ),
+                                  if (!isSelectable && blockedReason != null) ...<Widget>[
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      blockedReason!(booking),
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall?.copyWith(
+                                        color: CostaNorteBrand.mutedInk,
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
                             const SizedBox(width: 12),
                             FilledButton(
-                              onPressed: () =>
-                                  Navigator.of(context).pop<MassageBooking>(
-                                    booking,
-                                  ),
+                              onPressed: isSelectable
+                                  ? () => Navigator.of(context).pop<MassageBooking>(
+                                        booking,
+                                      )
+                                  : null,
                               child: Text(onSelectLabel),
                             ),
                           ],
@@ -1752,6 +1931,164 @@ class _CancelBookingDialog extends StatefulWidget {
 
   @override
   State<_CancelBookingDialog> createState() => _CancelBookingDialogState();
+}
+
+class _PaymentDraft {
+  const _PaymentDraft({
+    required this.paymentMethod,
+    required this.paymentDate,
+    required this.paymentNotes,
+  });
+
+  final MassagePaymentMethod paymentMethod;
+  final DateTime paymentDate;
+  final String? paymentNotes;
+}
+
+class _PaymentBookingDialog extends StatefulWidget {
+  const _PaymentBookingDialog({required this.booking});
+
+  final MassageBooking booking;
+
+  @override
+  State<_PaymentBookingDialog> createState() => _PaymentBookingDialogState();
+}
+
+class _PaymentBookingDialogState extends State<_PaymentBookingDialog> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  late final TextEditingController _notesController;
+  late MassagePaymentMethod _paymentMethod;
+  late DateTime _paymentDate;
+
+  @override
+  void initState() {
+    super.initState();
+    _notesController = TextEditingController(text: widget.booking.paymentNotes ?? '');
+    _paymentMethod = widget.booking.paymentMethod ?? MassagePaymentMethod.card;
+    final DateTime baseDate = widget.booking.paymentDate ?? widget.booking.bookingDate;
+    _paymentDate = DateTime(baseDate.year, baseDate.month, baseDate.day);
+  }
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppDialogShell(
+      maxWidth: AppDialogDimensions.standardFormWidth,
+      child: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Informar pago',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '${widget.booking.clientName} as ${_timeLabel(widget.booking.startAt)}. Valor: R\$ ${widget.booking.amount.toStringAsFixed(0)}.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<MassagePaymentMethod>(
+              value: _paymentMethod,
+              decoration: const InputDecoration(
+                labelText: 'Meio de pagamento',
+                prefixIcon: Icon(Icons.account_balance_wallet_rounded),
+              ),
+              items: MassagePaymentMethod.values
+                  .map(
+                    (MassagePaymentMethod method) =>
+                        DropdownMenuItem<MassagePaymentMethod>(
+                          value: method,
+                          child: Text(method.label),
+                        ),
+                  )
+                  .toList(),
+              onChanged: (MassagePaymentMethod? value) {
+                if (value == null) {
+                  return;
+                }
+                setState(() {
+                  _paymentMethod = value;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            OutlinedButton.icon(
+              onPressed: _pickPaymentDate,
+              icon: const Icon(Icons.event_rounded),
+              label: Text('Data do pagamento: ${_fullDateLabel(_paymentDate)}'),
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _notesController,
+              minLines: 2,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Observacao do pagamento',
+                prefixIcon: Icon(Icons.notes_rounded),
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Voltar'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _submit,
+                    child: const Text('Confirmar pagamento'),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickPaymentDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _paymentDate,
+      firstDate: DateTime(_paymentDate.year - 1),
+      lastDate: DateTime(_paymentDate.year + 2, 12, 31),
+    );
+    if (picked == null) {
+      return;
+    }
+
+    setState(() {
+      _paymentDate = DateTime(picked.year, picked.month, picked.day);
+    });
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    Navigator.of(context).pop(
+      _PaymentDraft(
+        paymentMethod: _paymentMethod,
+        paymentDate: _paymentDate,
+        paymentNotes: _notesController.text.trim().isEmpty
+            ? null
+            : _notesController.text.trim(),
+      ),
+    );
+  }
 }
 
 class _CancelBookingDialogState extends State<_CancelBookingDialog> {
@@ -2207,7 +2544,14 @@ String _statusDescription(MassageBooking booking) {
         ? 'Atendimento cancelado'
         : 'Cancelado: ${booking.cancellationNotes}';
   }
-  return booking.paid ? 'Atendimento pago' : 'Pagamento pendente';
+  if (!booking.paid) {
+    return 'Pagamento pendente';
+  }
+  final String methodLabel = booking.paymentMethod?.label ?? 'Meio nao informado';
+  final String dateLabel = booking.paymentDate == null
+      ? 'data nao informada'
+      : _formatShortDateLabel(booking.paymentDate!);
+  return 'Pago em $dateLabel via $methodLabel';
 }
 
 Color _statusColor(MassageBooking booking) {
@@ -2228,6 +2572,12 @@ Color _providerColor(int providerId) {
     default:
       return const Color(0xFFE8F7EE);
   }
+}
+
+String _formatShortDateLabel(DateTime date) {
+  final String day = date.day.toString().padLeft(2, '0');
+  final String month = date.month.toString().padLeft(2, '0');
+  return '$day/$month/${date.year}';
 }
 
 double? _parseMassageAmount(String? raw) {

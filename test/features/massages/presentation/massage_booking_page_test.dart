@@ -79,6 +79,113 @@ void main() {
       expect(find.textContaining('Cliente nao compareceu'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'MassageBookingPage permite informar pago desde la accion rapida superior',
+    (WidgetTester tester) async {
+      final _FakeMassageAppService service = _FakeMassageAppService.withBookings(
+        <MassageBooking>[
+          _bookingFixture(id: 10, clientName: 'Maria', paid: false),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: MassageBookingPage(massageAppService: service)),
+        ),
+      );
+      await tester.pumpAndSettle();
+      final DateTime bookingDate = service.currentBookings.single.bookingDate;
+
+      expect(
+        tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Informar pago')).onPressed,
+        isNotNull,
+      );
+
+      await tester.tap(find.text('Informar pago').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Informar pago').last);
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Pix'));
+      await tester.pumpAndSettle();
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Observacao do pagamento'),
+        'Pago na recepcao',
+      );
+      await tester.tap(find.text('Confirmar pagamento'));
+      await tester.pumpAndSettle();
+
+      expect(service.paymentUpdatedBookingId, 10);
+      expect(service.paymentUpdate?.paymentMethod, MassagePaymentMethod.pix);
+      expect(service.paymentUpdate?.paymentDate, _formatDate(bookingDate));
+      expect(service.paymentUpdate?.paymentNotes, 'Pago na recepcao');
+      expect(find.text('Pago'), findsOneWidget);
+      expect(
+        find.textContaining('Pago em ${_formatShortDate(bookingDate)} via Pix'),
+        findsOneWidget,
+      );
+    },
+  );
+
+  testWidgets(
+    'MassageBookingPage muestra informar pago en acciones del booking',
+    (WidgetTester tester) async {
+      final _FakeMassageAppService service = _FakeMassageAppService.withBookings(
+        <MassageBooking>[
+          _bookingFixture(id: 10, clientName: 'Maria', paid: false),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: MassageBookingPage(massageAppService: service)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Maria'));
+      await tester.pump(const Duration(milliseconds: 50));
+      await tester.tap(find.text('Maria'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Editar registro'), findsOneWidget);
+      expect(find.text('Informar pago'), findsOneWidget);
+      expect(find.text('Cancelar atencao'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'MassageBookingPage lista atendimientos no elegibles en informar pago con motivo visible',
+    (WidgetTester tester) async {
+      final _FakeMassageAppService service = _FakeMassageAppService.withBookings(
+        <MassageBooking>[
+          _bookingFixture(id: 10, clientName: 'Maria', paid: true),
+        ],
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: MassageBookingPage(massageAppService: service)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Informar pago'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Maria'), findsOneWidget);
+      expect(
+        find.text('Todos os atendimentos do dia ja estao pagos ou cancelados.'),
+        findsOneWidget,
+      );
+      expect(find.text('Pagamento ja informado'), findsOneWidget);
+      expect(
+        tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Informar pago')).onPressed,
+        isNull,
+      );
+    },
+  );
 }
 
 final class _FakeMassageAppService implements MassageAppService {
@@ -97,6 +204,10 @@ final class _FakeMassageAppService implements MassageAppService {
   final List<MassageBooking> _bookings;
   int? cancelledBookingId;
   String? cancelNotes;
+  int? paymentUpdatedBookingId;
+  UpdateMassagePaymentModel? paymentUpdate;
+
+  List<MassageBooking> get currentBookings => List<MassageBooking>.unmodifiable(_bookings);
 
   @override
   Future<MassageBooking> createBooking(CreateMassageBookingModel input) async {
@@ -173,8 +284,20 @@ final class _FakeMassageAppService implements MassageAppService {
   Future<MassageBooking> updatePayment(
     int bookingId,
     UpdateMassagePaymentModel input,
-  ) {
-    throw UnimplementedError();
+  ) async {
+    paymentUpdatedBookingId = bookingId;
+    paymentUpdate = input;
+    final int index = _bookings.indexWhere((MassageBooking item) => item.id == bookingId);
+    final MassageBooking updated = _bookings[index].copyWith(
+      paid: true,
+      paymentMethod: input.paymentMethod,
+      paymentDate: DateTime.parse(input.paymentDate),
+      paymentNotes: input.paymentNotes,
+      updatedAt: DateTime.parse('${input.paymentDate}T13:30:00Z'),
+      updatedBy: 'operador.demo',
+    );
+    _bookings[index] = updated;
+    return updated;
   }
 
   @override
@@ -247,9 +370,11 @@ MassageBooking _bookingFixture({
   required String clientName,
   required bool paid,
 }) {
+  final DateTime today = DateTime.now();
+  final DateTime bookingDate = DateTime(today.year, today.month, today.day);
   return MassageBooking(
     id: id,
-    bookingDate: DateTime.parse('2026-03-20'),
+    bookingDate: bookingDate,
     startTime: '17:00:00',
     clientName: clientName,
     guestReference: 'Apto 202',
@@ -260,15 +385,28 @@ MassageBooking _bookingFixture({
     providerActive: true,
     paid: paid,
     paymentMethod: paid ? MassagePaymentMethod.card : null,
-    paymentDate: paid ? DateTime.parse('2026-03-20') : null,
+    paymentDate: paid ? bookingDate : null,
     paymentNotes: null,
     status: MassageBookingStatus.scheduled,
     cancellationNotes: null,
-    createdAt: DateTime.parse('2026-03-20T12:00:00Z'),
-    updatedAt: DateTime.parse('2026-03-20T12:00:00Z'),
+    createdAt: DateTime.parse('${_formatDate(bookingDate)}T12:00:00Z'),
+    updatedAt: DateTime.parse('${_formatDate(bookingDate)}T12:00:00Z'),
     cancelledAt: null,
     createdBy: 'operador.demo',
     updatedBy: 'operador.demo',
     cancelledBy: null,
   );
+}
+
+String _formatDate(DateTime date) {
+  final String year = date.year.toString().padLeft(4, '0');
+  final String month = date.month.toString().padLeft(2, '0');
+  final String day = date.day.toString().padLeft(2, '0');
+  return '$year-$month-$day';
+}
+
+String _formatShortDate(DateTime date) {
+  final String day = date.day.toString().padLeft(2, '0');
+  final String month = date.month.toString().padLeft(2, '0');
+  return '$day/$month/${date.year}';
 }
