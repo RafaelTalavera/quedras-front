@@ -376,3 +376,16 @@
   - `docs/RESPONSIVE_LAYOUT_STANDARD.md`
 - Motivo del cambio: Corregir overflow en el calendario mensual de massagens y dejar un estandar reusable para grids/cards responsive.
 - Impacto funcional: La agenda de massagens adapta columnas y altura de celda segun el ancho disponible, reduciendo riesgo de desbordes en ventanas angostas.
+
+## 2026-03-24 | Post Hito 12 | Prestadores con masajistas y edicion jerarquica
+- Componente afectado: Frontend (`Massagens` dominio + servicio + UI + tests + documentacion)
+- Archivos tocados:
+  - `lib/features/massages/domain/massage_models.dart`
+  - `lib/features/massages/application/massage_app_service.dart`
+  - `lib/features/massages/infrastructure/http_massage_app_service.dart`
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `test/features/massages/infrastructure/http_massage_app_service_test.dart`
+  - `test/features/massages/presentation/massage_booking_page_test.dart`
+  - `docs/MASSAGES_PROVIDERS_STATUS.md`
+- Motivo del cambio: Separar proveedor comercial de masajista operativo, permitir multiples masajistas por prestador y habilitar administracion del prestador seleccionado.
+- Impacto funcional: El operador ahora selecciona `prestador -> masajista` al cargar atenciones, puede activar/desactivar masajistas, agregar masajistas dentro de un prestador y editar datos del prestador sin salir del dialogo.

@@ -67,6 +67,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
 
   String _selectedTreatment = _treatmentTypes.first;
   int? _selectedProviderId;
+  int? _selectedTherapistId;
   String _draftAmount = '200';
   bool _paid = true;
 
@@ -76,7 +77,8 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
     _selectedDate = DateTime.now();
     _selectedMonth = _selectedDate.month - 1;
     _selectedProviderId = null;
-    _selectedTime = _recommendedTimeFor(_selectedDate);
+    _selectedTherapistId = null;
+    _selectedTime = _recommendedTimeFor(_selectedDate, null);
     _load();
   }
 
@@ -86,6 +88,31 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
           (MassageProvider a, MassageProvider b) =>
               a.name.toLowerCase().compareTo(b.name.toLowerCase()),
         );
+
+  List<MassageTherapist> _activeTherapistsForProvider(
+    int? providerId, {
+    int? includeTherapistId,
+  }) {
+    if (providerId == null) {
+      return const <MassageTherapist>[];
+    }
+    final MassageProvider? provider = _providerById(providerId);
+    if (provider == null) {
+      return const <MassageTherapist>[];
+    }
+    final List<MassageTherapist> therapists =
+        provider.therapists
+            .where(
+              (MassageTherapist therapist) =>
+                  therapist.active || therapist.id == includeTherapistId,
+            )
+            .toList()
+          ..sort(
+            (MassageTherapist a, MassageTherapist b) =>
+                a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
+    return therapists;
+  }
 
   List<MassageBooking> get _monthBookings =>
       _bookings.where((MassageBooking booking) {
@@ -186,10 +213,11 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
       setState(() {
         _providers = providers;
         _bookings = bookings;
-        _selectedProviderId =
-            _selectedProviderId ??
-            (_activeProviders.isEmpty ? null : _activeProviders.first.id);
-        _selectedTime = _recommendedTimeFor(_selectedDate);
+        _syncSelectedProviderAndTherapist();
+        _selectedTime = _recommendedTimeFor(
+          _selectedDate,
+          _selectedTherapistId,
+        );
         _loading = false;
       });
     } catch (error) {
@@ -245,6 +273,12 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
       (double total, MassageBooking booking) => total + booking.amount,
     );
     final int cancelledBookings = _monthBookings.length - activeBookings.length;
+    final int activeTherapists = _activeProviders.fold<int>(
+      0,
+      (int total, MassageProvider provider) =>
+          total +
+          provider.therapists.where((MassageTherapist t) => t.active).length,
+    );
 
     return Wrap(
       spacing: 14,
@@ -260,8 +294,9 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
         ),
         _MetricCard(
           title: '${_activeProviders.length} prestadores',
-          value: 'Combo abastecido por cadastro',
-          caption: 'Somente prestadores ativos aparecem na selecao',
+          value: '$activeTherapists masajistas ativos',
+          caption:
+              'Somente prestadores e masajistas ativos aparecem na selecao',
           icon: Icons.groups_2_rounded,
         ),
         _MetricCard(
@@ -323,7 +358,10 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
                       setState(() {
                         _selectedMonth = value;
                         _selectedDate = nextDate;
-                        _selectedTime = _recommendedTimeFor(nextDate);
+                        _selectedTime = _recommendedTimeFor(
+                          nextDate,
+                          _selectedTherapistId,
+                        );
                       });
                     },
                   ),
@@ -372,7 +410,10 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
                       onTap: () {
                         setState(() {
                           _selectedDate = date;
-                          _selectedTime = _recommendedTimeFor(date);
+                          _selectedTime = _recommendedTimeFor(
+                            date,
+                            _selectedTherapistId,
+                          );
                         });
                       },
                       onDoubleTap: () => _openCalendarDayActions(date),
@@ -419,6 +460,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
                     child: _BookingTile(
                       booking: booking,
                       provider: _providerName(booking.providerId),
+                      therapist: _therapistName(booking),
                       processing: _processingBookingId == booking.id,
                     ),
                   ),
@@ -438,12 +480,13 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
           title: 'Lancar atendimento',
           submitLabel: 'Salvar atendimento',
           initialDate: _selectedDate,
-          activeProviders: _activeProviders,
+          providers: _providers,
           initialTime: _selectedTime,
           initialClientName: '',
           initialGuestReference: '',
           initialTreatment: _selectedTreatment,
           initialProviderId: _selectedProviderId,
+          initialTherapistId: _selectedTherapistId,
           initialAmount: _draftAmount,
           initialPaid: _paid,
           initialPaymentMethod: _paid ? MassagePaymentMethod.card : null,
@@ -477,12 +520,13 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
           title: 'Editar atendimento',
           submitLabel: 'Salvar alteracoes',
           initialDate: booking.bookingDate,
-          activeProviders: _activeProviders,
+          providers: _providers,
           initialTime: _timeLabel(booking.startAt),
           initialClientName: booking.clientName,
           initialGuestReference: booking.guestReference,
           initialTreatment: booking.treatment,
           initialProviderId: booking.providerId,
+          initialTherapistId: booking.therapistId,
           initialAmount: booking.amount.toStringAsFixed(0),
           initialPaid: booking.paid,
           initialPaymentMethod: booking.paymentMethod,
@@ -534,7 +578,8 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
           emptyMessage: 'Nao ha atendimentos no dia selecionado.',
           onSelectLabel: 'Informar pago',
           canSelect: _canRegisterPayment,
-          helperMessage: bookings.isNotEmpty && !bookings.any(_canRegisterPayment)
+          helperMessage:
+              bookings.isNotEmpty && !bookings.any(_canRegisterPayment)
               ? 'Todos os atendimentos do dia ja estao pagos ou cancelados.'
               : null,
           blockedReason: _paymentBlockedReason,
@@ -576,14 +621,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
 
     setState(() {
       _providers = updatedProviders;
-      if (_selectedProviderId != null &&
-          !_activeProviders.any(
-            (MassageProvider provider) => provider.id == _selectedProviderId,
-          )) {
-        _selectedProviderId = _activeProviders.isEmpty
-            ? null
-            : _activeProviders.first.id;
-      }
+      _syncSelectedProviderAndTherapist();
       _savingProviders = false;
     });
   }
@@ -597,7 +635,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
       await AppAlerts.warning(
         context,
         title: 'Horario ocupado',
-        message: 'Esse prestador ja esta ocupado nesse horario.',
+        message: 'Esse masajista ja esta ocupado nesse horario.',
       );
       return;
     }
@@ -618,6 +656,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
               treatment: bookingDraft.treatment,
               amount: bookingDraft.amount,
               providerId: bookingDraft.providerId,
+              therapistId: bookingDraft.therapistId,
               paid: bookingDraft.paid,
               paymentMethod: bookingDraft.paymentMethod,
               paymentDate: bookingDraft.paymentDate == null
@@ -641,9 +680,13 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
         _selectedMonth = bookingDraft.date.month - 1;
         _selectedTreatment = bookingDraft.treatment;
         _selectedProviderId = bookingDraft.providerId;
+        _selectedTherapistId = bookingDraft.therapistId;
         _draftAmount = bookingDraft.amount.toStringAsFixed(0);
         _paid = bookingDraft.paid;
-        _selectedTime = _recommendedTimeFor(_selectedDate);
+        _selectedTime = _recommendedTimeFor(
+          _selectedDate,
+          _selectedTherapistId,
+        );
         _savingBooking = false;
       });
 
@@ -680,7 +723,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
       await AppAlerts.warning(
         context,
         title: 'Horario ocupado',
-        message: 'Esse prestador ja esta ocupado nesse horario.',
+        message: 'Esse masajista ja esta ocupado nesse horario.',
       );
       return;
     }
@@ -703,6 +746,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
               treatment: bookingDraft.treatment,
               amount: bookingDraft.amount,
               providerId: bookingDraft.providerId,
+              therapistId: bookingDraft.therapistId,
               paid: bookingDraft.paid,
               paymentMethod: bookingDraft.paymentMethod,
               paymentDate: bookingDraft.paymentDate == null
@@ -726,9 +770,13 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
         _selectedMonth = bookingDraft.date.month - 1;
         _selectedTreatment = bookingDraft.treatment;
         _selectedProviderId = bookingDraft.providerId;
+        _selectedTherapistId = bookingDraft.therapistId;
         _draftAmount = bookingDraft.amount.toStringAsFixed(0);
         _paid = bookingDraft.paid;
-        _selectedTime = _recommendedTimeFor(_selectedDate);
+        _selectedTime = _recommendedTimeFor(
+          _selectedDate,
+          _selectedTherapistId,
+        );
         _savingBooking = false;
         _processingBookingId = null;
       });
@@ -844,7 +892,10 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
       setState(() {
         _savingBooking = false;
         _processingBookingId = null;
-        _selectedTime = _recommendedTimeFor(_selectedDate);
+        _selectedTime = _recommendedTimeFor(
+          _selectedDate,
+          _selectedTherapistId,
+        );
       });
       await AppAlerts.success(
         context,
@@ -903,14 +954,15 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
     });
 
     try {
-      final MassageBooking updated = await widget.massageAppService.updatePayment(
-        booking.id,
-        UpdateMassagePaymentModel(
-          paymentMethod: paymentDraft.paymentMethod,
-          paymentDate: _formatDateApi(paymentDraft.paymentDate),
-          paymentNotes: paymentDraft.paymentNotes,
-        ),
-      );
+      final MassageBooking updated = await widget.massageAppService
+          .updatePayment(
+            booking.id,
+            UpdateMassagePaymentModel(
+              paymentMethod: paymentDraft.paymentMethod,
+              paymentDate: _formatDateApi(paymentDraft.paymentDate),
+              paymentNotes: paymentDraft.paymentNotes,
+            ),
+          );
       if (!mounted) {
         return;
       }
@@ -918,7 +970,10 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
       setState(() {
         _savingBooking = false;
         _processingBookingId = null;
-        _selectedTime = _recommendedTimeFor(_selectedDate);
+        _selectedTime = _recommendedTimeFor(
+          _selectedDate,
+          _selectedTherapistId,
+        );
       });
       await AppAlerts.success(
         context,
@@ -946,12 +1001,15 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
     required _BookingDraft bookingDraft,
     required int? ignoredBookingId,
   }) {
-    final DateTime startAt = _bookingStartAt(bookingDraft.date, bookingDraft.time);
+    final DateTime startAt = _bookingStartAt(
+      bookingDraft.date,
+      bookingDraft.time,
+    );
     return _bookingsFor(bookingDraft.date).any(
       (MassageBooking booking) =>
           booking.status == MassageBookingStatus.scheduled &&
           booking.id != ignoredBookingId &&
-          booking.providerId == bookingDraft.providerId &&
+          booking.therapistId == bookingDraft.therapistId &&
           booking.startAt.hour == startAt.hour &&
           booking.startAt.minute == startAt.minute,
     );
@@ -1013,12 +1071,18 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
         left.day == right.day;
   }
 
-  String _recommendedTimeFor(DateTime date) {
-    final Set<String> occupiedSlots = _bookingsFor(
-      date,
-    ).where(
-      (MassageBooking booking) => booking.status == MassageBookingStatus.scheduled,
-    ).map((MassageBooking booking) => _timeLabel(booking.startAt)).toSet();
+  String _recommendedTimeFor(DateTime date, int? therapistId) {
+    if (therapistId == null) {
+      return _timeSlots.first;
+    }
+    final Set<String> occupiedSlots = _bookingsFor(date)
+        .where(
+          (MassageBooking booking) =>
+              booking.status == MassageBookingStatus.scheduled &&
+              booking.therapistId == therapistId,
+        )
+        .map((MassageBooking booking) => _timeLabel(booking.startAt))
+        .toSet();
 
     for (final String slot in _timeSlots) {
       if (!occupiedSlots.contains(slot)) {
@@ -1044,6 +1108,70 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
       }
     }
     return 'Prestador';
+  }
+
+  String _therapistName(MassageBooking booking) {
+    if (booking.therapistName.trim().isNotEmpty) {
+      return booking.therapistName;
+    }
+    final MassageProvider? provider = _providerById(booking.providerId);
+    if (provider == null) {
+      return 'Masajista';
+    }
+    for (final MassageTherapist therapist in provider.therapists) {
+      if (therapist.id == booking.therapistId) {
+        return therapist.name;
+      }
+    }
+    return 'Masajista';
+  }
+
+  MassageProvider? _providerById(int providerId) {
+    for (final MassageProvider provider in _providers) {
+      if (provider.id == providerId) {
+        return provider;
+      }
+    }
+    return null;
+  }
+
+  void _syncSelectedProviderAndTherapist() {
+    final List<MassageProvider> activeProviders = _activeProviders;
+    if (activeProviders.isEmpty) {
+      _selectedProviderId = null;
+      _selectedTherapistId = null;
+      return;
+    }
+    final List<MassageProvider> providersWithActiveTherapists = activeProviders
+        .where(
+          (MassageProvider provider) => provider.therapists.any(
+            (MassageTherapist therapist) => therapist.active,
+          ),
+        )
+        .toList();
+    final List<MassageProvider> preferredProviders =
+        providersWithActiveTherapists.isEmpty
+        ? activeProviders
+        : providersWithActiveTherapists;
+    final bool providerStillAvailable = preferredProviders.any(
+      (MassageProvider provider) => provider.id == _selectedProviderId,
+    );
+    _selectedProviderId = providerStillAvailable
+        ? _selectedProviderId
+        : preferredProviders.first.id;
+    final List<MassageTherapist> therapists = _activeTherapistsForProvider(
+      _selectedProviderId,
+    );
+    if (therapists.isEmpty) {
+      _selectedTherapistId = null;
+      return;
+    }
+    final bool therapistStillAvailable = therapists.any(
+      (MassageTherapist therapist) => therapist.id == _selectedTherapistId,
+    );
+    _selectedTherapistId = therapistStillAvailable
+        ? _selectedTherapistId
+        : therapists.first.id;
   }
 
   bool _canRegisterPayment(MassageBooking booking) {
@@ -1159,7 +1287,6 @@ class _AgendaDayCard extends StatelessWidget {
       ),
     );
   }
-
 }
 
 class _MetricCard extends StatelessWidget {
@@ -1204,11 +1331,13 @@ class _BookingTile extends StatelessWidget {
   const _BookingTile({
     required this.booking,
     required this.provider,
+    required this.therapist,
     required this.processing,
   });
 
   final MassageBooking booking;
   final String provider;
+  final String therapist;
   final bool processing;
 
   @override
@@ -1242,9 +1371,9 @@ class _BookingTile extends StatelessWidget {
                 ),
               Text(
                 _statusLabel(booking),
-                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: _statusColor(booking),
-                ),
+                style: Theme.of(
+                  context,
+                ).textTheme.labelLarge?.copyWith(color: _statusColor(booking)),
               ),
             ],
           ),
@@ -1255,7 +1384,7 @@ class _BookingTile extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            '${booking.guestReference} - ${booking.treatment} - $provider - '
+            '${booking.guestReference} - ${booking.treatment} - $provider / $therapist - '
             'R\$ ${booking.amount.toStringAsFixed(0)}',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
@@ -1270,9 +1399,9 @@ class _BookingTile extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               'Cancelamento: ${booking.cancellationNotes}',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: CostaNorteBrand.error,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: CostaNorteBrand.error),
             ),
           ],
         ],
@@ -1290,6 +1419,7 @@ class _BookingDraft {
     required this.treatment,
     required this.amount,
     required this.providerId,
+    required this.therapistId,
     required this.paid,
     required this.paymentMethod,
     required this.paymentDate,
@@ -1303,6 +1433,7 @@ class _BookingDraft {
   final String treatment;
   final double amount;
   final int providerId;
+  final int therapistId;
   final bool paid;
   final MassagePaymentMethod? paymentMethod;
   final DateTime? paymentDate;
@@ -1314,12 +1445,13 @@ class _BookingDialog extends StatefulWidget {
     required this.title,
     required this.submitLabel,
     required this.initialDate,
-    required this.activeProviders,
+    required this.providers,
     required this.initialTime,
     required this.initialClientName,
     required this.initialGuestReference,
     required this.initialTreatment,
     required this.initialProviderId,
+    required this.initialTherapistId,
     required this.initialAmount,
     required this.initialPaid,
     required this.initialPaymentMethod,
@@ -1330,12 +1462,13 @@ class _BookingDialog extends StatefulWidget {
   final String title;
   final String submitLabel;
   final DateTime initialDate;
-  final List<MassageProvider> activeProviders;
+  final List<MassageProvider> providers;
   final String initialTime;
   final String initialClientName;
   final String initialGuestReference;
   final String initialTreatment;
   final int? initialProviderId;
+  final int? initialTherapistId;
   final String initialAmount;
   final bool initialPaid;
   final MassagePaymentMethod? initialPaymentMethod;
@@ -1357,6 +1490,7 @@ class _BookingDialogState extends State<_BookingDialog> {
   late String _selectedTime;
   late String _selectedTreatment;
   int? _selectedProviderId;
+  int? _selectedTherapistId;
   late bool _paid;
   MassagePaymentMethod? _paymentMethod;
   DateTime? _paymentDate;
@@ -1379,13 +1513,8 @@ class _BookingDialogState extends State<_BookingDialog> {
     );
     _selectedTime = widget.initialTime;
     _selectedTreatment = widget.initialTreatment;
-    final bool hasInitialProvider = widget.activeProviders.any(
-      (MassageProvider provider) => provider.id == widget.initialProviderId,
-    );
-    _selectedProviderId =
-        hasInitialProvider
-        ? widget.initialProviderId
-        : (widget.activeProviders.isEmpty ? null : widget.activeProviders.first.id);
+    _selectedProviderId = _initialProviderId();
+    _selectedTherapistId = _initialTherapistId();
     _paid = widget.initialPaid;
     _paymentMethod = _paid ? widget.initialPaymentMethod : null;
     _paymentDate = _paid ? (widget.initialPaymentDate ?? _selectedDate) : null;
@@ -1402,6 +1531,8 @@ class _BookingDialogState extends State<_BookingDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final List<MassageProvider> selectableProviders = _selectableProviders;
+    final List<MassageTherapist> selectableTherapists = _selectableTherapists;
     return AppDialogShell(
       maxWidth: AppDialogDimensions.standardFormWidth,
       maxHeight: 760,
@@ -1512,7 +1643,7 @@ class _BookingDialogState extends State<_BookingDialog> {
                         labelText: 'Prestador',
                         prefixIcon: Icon(Icons.groups_2_outlined),
                       ),
-                      items: widget.activeProviders
+                      items: selectableProviders
                           .map(
                             (MassageProvider provider) => DropdownMenuItem<int>(
                               value: provider.id,
@@ -1530,6 +1661,42 @@ class _BookingDialogState extends State<_BookingDialog> {
                       onChanged: (int? value) {
                         setState(() {
                           _selectedProviderId = value;
+                          final List<MassageTherapist> therapists =
+                              _therapistsForSelectedProvider(
+                                includeTherapistId: widget.initialTherapistId,
+                              );
+                          _selectedTherapistId = therapists.isEmpty
+                              ? null
+                              : therapists.first.id;
+                        });
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      isExpanded: true,
+                      value: _selectedTherapistId,
+                      decoration: const InputDecoration(
+                        labelText: 'Masajista',
+                        prefixIcon: Icon(Icons.person_pin_circle_outlined),
+                      ),
+                      items: selectableTherapists
+                          .map(
+                            (MassageTherapist therapist) =>
+                                DropdownMenuItem<int>(
+                                  value: therapist.id,
+                                  child: Text(
+                                    therapist.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                          )
+                          .toList(),
+                      validator: (int? value) =>
+                          value == null ? 'Selecione um masajista.' : null,
+                      onChanged: (int? value) {
+                        setState(() {
+                          _selectedTherapistId = value;
                         });
                       },
                     ),
@@ -1651,7 +1818,8 @@ class _BookingDialogState extends State<_BookingDialog> {
 
     final double? amount = _parseMassageAmount(_amountController.text);
     final int? providerId = _selectedProviderId;
-    if (amount == null || providerId == null) {
+    final int? therapistId = _selectedTherapistId;
+    if (amount == null || providerId == null || therapistId == null) {
       return;
     }
     if (_paid && (_paymentMethod == null || _paymentDate == null)) {
@@ -1667,6 +1835,7 @@ class _BookingDialogState extends State<_BookingDialog> {
         treatment: _selectedTreatment,
         amount: amount,
         providerId: providerId,
+        therapistId: therapistId,
         paid: _paid,
         paymentMethod: _paymentMethod,
         paymentDate: _paymentDate,
@@ -1712,6 +1881,85 @@ class _BookingDialogState extends State<_BookingDialog> {
     setState(() {
       _paymentDate = DateTime(picked.year, picked.month, picked.day);
     });
+  }
+
+  List<MassageProvider> get _selectableProviders {
+    final List<MassageProvider> providers =
+        widget.providers
+            .where(
+              (MassageProvider provider) =>
+                  provider.active || provider.id == widget.initialProviderId,
+            )
+            .toList()
+          ..sort(
+            (MassageProvider a, MassageProvider b) =>
+                a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
+    return providers;
+  }
+
+  List<MassageTherapist> get _selectableTherapists =>
+      _therapistsForSelectedProvider(
+        includeTherapistId: widget.initialTherapistId,
+      );
+
+  int? _initialProviderId() {
+    final List<MassageProvider> providers = _selectableProviders;
+    if (providers.isEmpty) {
+      return null;
+    }
+    final bool hasInitialProvider = providers.any(
+      (MassageProvider provider) => provider.id == widget.initialProviderId,
+    );
+    return hasInitialProvider ? widget.initialProviderId : providers.first.id;
+  }
+
+  int? _initialTherapistId() {
+    final List<MassageTherapist> therapists = _therapistsForSelectedProvider(
+      providerId: _selectedProviderId,
+      includeTherapistId: widget.initialTherapistId,
+    );
+    if (therapists.isEmpty) {
+      return null;
+    }
+    final bool hasInitialTherapist = therapists.any(
+      (MassageTherapist therapist) => therapist.id == widget.initialTherapistId,
+    );
+    return hasInitialTherapist
+        ? widget.initialTherapistId
+        : therapists.first.id;
+  }
+
+  List<MassageTherapist> _therapistsForSelectedProvider({
+    int? providerId,
+    int? includeTherapistId,
+  }) {
+    final int? resolvedProviderId = providerId ?? _selectedProviderId;
+    if (resolvedProviderId == null) {
+      return const <MassageTherapist>[];
+    }
+    MassageProvider? provider;
+    for (final MassageProvider candidate in widget.providers) {
+      if (candidate.id == resolvedProviderId) {
+        provider = candidate;
+        break;
+      }
+    }
+    if (provider == null) {
+      return const <MassageTherapist>[];
+    }
+    final List<MassageTherapist> therapists =
+        provider.therapists
+            .where(
+              (MassageTherapist therapist) =>
+                  therapist.active || therapist.id == includeTherapistId,
+            )
+            .toList()
+          ..sort(
+            (MassageTherapist a, MassageTherapist b) =>
+                a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
+    return therapists;
   }
 }
 
@@ -1763,7 +2011,9 @@ class _BookingActionDialog extends StatelessWidget {
                       child: OutlinedButton.icon(
                         onPressed: booking.paid
                             ? null
-                            : () => Navigator.of(context).pop(_BookingAction.payment),
+                            : () => Navigator.of(
+                                context,
+                              ).pop(_BookingAction.payment),
                         icon: const Icon(Icons.payments_rounded),
                         label: const Text('Informar pago'),
                       ),
@@ -1831,9 +2081,9 @@ class _BookingSelectionDialog extends StatelessWidget {
             const SizedBox(height: 8),
             Text(
               helperMessage!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: CostaNorteBrand.mutedInk,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: CostaNorteBrand.mutedInk),
             ),
           ],
           const SizedBox(height: 18),
@@ -1845,7 +2095,8 @@ class _BookingSelectionDialog extends StatelessWidget {
                     separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (BuildContext context, int index) {
                       final MassageBooking booking = bookings[index];
-                      final bool isSelectable = canSelect?.call(booking) ?? true;
+                      final bool isSelectable =
+                          canSelect?.call(booking) ?? true;
                       return Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -1867,7 +2118,8 @@ class _BookingSelectionDialog extends StatelessWidget {
                                   ),
                                   const SizedBox(height: 4),
                                   Text(
-                                    '${_timeLabel(booking.startAt)} - ${booking.treatment} - ${booking.providerName}',
+                                    '${_timeLabel(booking.startAt)} - ${booking.treatment} - '
+                                    '${booking.providerName} / ${booking.therapistName}',
                                     style: Theme.of(
                                       context,
                                     ).textTheme.bodyMedium,
@@ -1875,21 +2127,22 @@ class _BookingSelectionDialog extends StatelessWidget {
                                   const SizedBox(height: 4),
                                   Text(
                                     _statusDescription(booking),
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall?.copyWith(
-                                      color: _statusColor(booking),
-                                    ),
+                                    style: Theme.of(context).textTheme.bodySmall
+                                        ?.copyWith(
+                                          color: _statusColor(booking),
+                                        ),
                                   ),
-                                  if (!isSelectable && blockedReason != null) ...<Widget>[
+                                  if (!isSelectable &&
+                                      blockedReason != null) ...<Widget>[
                                     const SizedBox(height: 4),
                                     Text(
                                       blockedReason!(booking),
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall?.copyWith(
-                                        color: CostaNorteBrand.mutedInk,
-                                      ),
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: CostaNorteBrand.mutedInk,
+                                          ),
                                     ),
                                   ],
                                 ],
@@ -1898,9 +2151,9 @@ class _BookingSelectionDialog extends StatelessWidget {
                             const SizedBox(width: 12),
                             FilledButton(
                               onPressed: isSelectable
-                                  ? () => Navigator.of(context).pop<MassageBooking>(
-                                        booking,
-                                      )
+                                  ? () => Navigator.of(
+                                      context,
+                                    ).pop<MassageBooking>(booking)
                                   : null,
                               child: Text(onSelectLabel),
                             ),
@@ -1963,9 +2216,12 @@ class _PaymentBookingDialogState extends State<_PaymentBookingDialog> {
   @override
   void initState() {
     super.initState();
-    _notesController = TextEditingController(text: widget.booking.paymentNotes ?? '');
+    _notesController = TextEditingController(
+      text: widget.booking.paymentNotes ?? '',
+    );
     _paymentMethod = widget.booking.paymentMethod ?? MassagePaymentMethod.card;
-    final DateTime baseDate = widget.booking.paymentDate ?? widget.booking.bookingDate;
+    final DateTime baseDate =
+        widget.booking.paymentDate ?? widget.booking.bookingDate;
     _paymentDate = DateTime(baseDate.year, baseDate.month, baseDate.day);
   }
 
@@ -2191,8 +2447,11 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _specialtyController = TextEditingController();
   final TextEditingController _contactController = TextEditingController();
+  final TextEditingController _therapistNameController =
+      TextEditingController();
 
   late List<MassageProvider> _providers;
+  int? _selectedProviderId;
   bool _saving = false;
 
   @override
@@ -2206,9 +2465,22 @@ class _ProviderDialogState extends State<_ProviderDialog> {
             specialty: provider.specialty,
             contact: provider.contact,
             active: provider.active,
+            therapists: provider.therapists
+                .map(
+                  (MassageTherapist therapist) => MassageTherapist(
+                    id: therapist.id,
+                    name: therapist.name,
+                    active: therapist.active,
+                  ),
+                )
+                .toList(),
           ),
         )
         .toList();
+    _selectedProviderId = _providers.isEmpty ? null : _providers.first.id;
+    if (_providers.isNotEmpty) {
+      _loadProviderForm(_providers.first);
+    }
   }
 
   @override
@@ -2216,6 +2488,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     _nameController.dispose();
     _specialtyController.dispose();
     _contactController.dispose();
+    _therapistNameController.dispose();
     super.dispose();
   }
 
@@ -2248,49 +2521,71 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                     separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (BuildContext context, int index) {
                       final MassageProvider provider = _providers[index];
+                      final bool selected = provider.id == _selectedProviderId;
                       return Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: CostaNorteBrand.line),
+                          border: Border.all(
+                            color: selected
+                                ? CostaNorteBrand.royalBlueDeep
+                                : CostaNorteBrand.line,
+                          ),
+                          color: selected ? CostaNorteBrand.mist : Colors.white,
                         ),
-                        child: Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: <Widget>[
-                                  Text(
-                                    provider.name,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleLarge,
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    provider.specialty,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodyMedium,
-                                  ),
-                                  const SizedBox(height: 6),
-                                  Text(
-                                    provider.contact,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodySmall,
-                                  ),
-                                ],
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(18),
+                          onTap: () {
+                            setState(() {
+                              _selectedProviderId = provider.id;
+                              _loadProviderForm(provider);
+                            });
+                          },
+                          child: Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: <Widget>[
+                                    Text(
+                                      provider.name,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.titleLarge,
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      provider.specialty,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodyMedium,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      provider.contact,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '${provider.therapists.where((MassageTherapist therapist) => therapist.active).length} masajistas ativos',
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodySmall,
+                                    ),
+                                  ],
+                                ),
                               ),
-                            ),
-                            Switch(
-                              value: provider.active,
-                              onChanged: _saving
-                                  ? null
-                                  : (bool value) =>
-                                        _toggleProvider(index, value),
-                            ),
-                          ],
+                              Switch(
+                                value: provider.active,
+                                onChanged: _saving
+                                    ? null
+                                    : (bool value) =>
+                                          _toggleProvider(index, value),
+                              ),
+                            ],
+                          ),
                         ),
                       );
                     },
@@ -2309,36 +2604,199 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: <Widget>[
-                        Text(
-                          'Novo prestador',
-                          style: Theme.of(context).textTheme.titleLarge,
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _nameController,
-                          decoration: const InputDecoration(labelText: 'Nome'),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _specialtyController,
-                          decoration: const InputDecoration(
-                            labelText: 'Especialidade',
-                          ),
-                        ),
-                        const SizedBox(height: 12),
-                        TextField(
-                          controller: _contactController,
-                          decoration: const InputDecoration(
-                            labelText: 'Contato',
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Text(
+                                  _selectedProvider == null
+                                      ? 'Novo prestador'
+                                      : 'Editar prestador',
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: _nameController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Nome',
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: _specialtyController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Especialidade',
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: _contactController,
+                                  decoration: const InputDecoration(
+                                    labelText: 'Contato',
+                                  ),
+                                ),
+                                const SizedBox(height: 16),
+                                Row(
+                                  children: <Widget>[
+                                    Expanded(
+                                      child: FilledButton.icon(
+                                        onPressed: _saving
+                                            ? null
+                                            : _saveProvider,
+                                        icon: Icon(
+                                          _selectedProvider == null
+                                              ? Icons.playlist_add_rounded
+                                              : Icons.save_rounded,
+                                        ),
+                                        label: Text(
+                                          _saving
+                                              ? 'Salvando...'
+                                              : _selectedProvider == null
+                                              ? 'Adicionar'
+                                              : 'Salvar mudancas',
+                                        ),
+                                      ),
+                                    ),
+                                    if (_selectedProvider != null) ...<Widget>[
+                                      const SizedBox(width: 12),
+                                      OutlinedButton.icon(
+                                        onPressed: _saving
+                                            ? null
+                                            : _prepareNewProvider,
+                                        icon: const Icon(
+                                          Icons.add_circle_outline_rounded,
+                                        ),
+                                        label: const Text('Novo'),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                const SizedBox(height: 24),
+                                Text(
+                                  _selectedProvider == null
+                                      ? 'Selecione um prestador'
+                                      : 'Masajistas do prestador',
+                                  style: Theme.of(context).textTheme.titleLarge,
+                                ),
+                                const SizedBox(height: 12),
+                                if (_selectedProvider == null)
+                                  Text(
+                                    'Escolha um prestador para cadastrar ou desativar masajistas.',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodyMedium,
+                                  )
+                                else ...<Widget>[
+                                  Text(
+                                    _selectedProvider!.name,
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.titleMedium,
+                                  ),
+                                  const SizedBox(height: 12),
+                                  ConstrainedBox(
+                                    constraints: const BoxConstraints(
+                                      maxHeight: 220,
+                                    ),
+                                    child: _selectedProvider!.therapists.isEmpty
+                                        ? Center(
+                                            child: Text(
+                                              'Esse prestador ainda nao possui masajistas.',
+                                              style: Theme.of(
+                                                context,
+                                              ).textTheme.bodyMedium,
+                                            ),
+                                          )
+                                        : ListView.separated(
+                                            shrinkWrap: true,
+                                            itemCount: _selectedProvider!
+                                                .therapists
+                                                .length,
+                                            separatorBuilder: (_, _) =>
+                                                const SizedBox(height: 10),
+                                            itemBuilder:
+                                                (
+                                                  BuildContext context,
+                                                  int index,
+                                                ) {
+                                                  final MassageTherapist
+                                                  therapist = _selectedProvider!
+                                                      .therapists[index];
+                                                  return Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 12,
+                                                          vertical: 10,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            16,
+                                                          ),
+                                                      color: Colors.white,
+                                                      border: Border.all(
+                                                        color: CostaNorteBrand
+                                                            .line,
+                                                      ),
+                                                    ),
+                                                    child: Row(
+                                                      children: <Widget>[
+                                                        Expanded(
+                                                          child: Text(
+                                                            therapist.name,
+                                                            style:
+                                                                Theme.of(
+                                                                      context,
+                                                                    )
+                                                                    .textTheme
+                                                                    .bodyLarge,
+                                                          ),
+                                                        ),
+                                                        Switch(
+                                                          value:
+                                                              therapist.active,
+                                                          onChanged: _saving
+                                                              ? null
+                                                              : (
+                                                                  bool value,
+                                                                ) => _toggleTherapist(
+                                                                  _selectedProvider!,
+                                                                  therapist,
+                                                                  value,
+                                                                ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+                                                },
+                                          ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  TextField(
+                                    controller: _therapistNameController,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Novo masajista',
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  FilledButton.icon(
+                                    onPressed: _saving ? null : _addTherapist,
+                                    icon: const Icon(
+                                      Icons.person_add_alt_1_rounded,
+                                    ),
+                                    label: Text(
+                                      _saving
+                                          ? 'Salvando...'
+                                          : 'Adicionar masajista',
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
                           ),
                         ),
                         const SizedBox(height: 16),
-                        FilledButton.icon(
-                          onPressed: _saving ? null : _addProvider,
-                          icon: const Icon(Icons.playlist_add_rounded),
-                          label: Text(_saving ? 'Salvando...' : 'Adicionar'),
-                        ),
-                        const Spacer(),
                         Row(
                           children: <Widget>[
                             Expanded(
@@ -2425,12 +2883,14 @@ class _ProviderDialogState extends State<_ProviderDialog> {
             (MassageProvider a, MassageProvider b) =>
                 a.name.toLowerCase().compareTo(b.name.toLowerCase()),
           );
+        _selectedProviderId = created.id;
+        _loadProviderForm(
+          _providers.firstWhere(
+            (MassageProvider provider) => provider.id == created.id,
+          ),
+        );
         _saving = false;
       });
-
-      _nameController.clear();
-      _specialtyController.clear();
-      _contactController.clear();
       await AppAlerts.success(
         context,
         title: 'Prestador salvo',
@@ -2449,6 +2909,14 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         message: error.toString().replaceFirst('Bad state: ', ''),
       );
     }
+  }
+
+  Future<void> _saveProvider() async {
+    if (_selectedProvider == null) {
+      await _addProvider();
+      return;
+    }
+    await _updateSelectedProvider();
   }
 
   Future<void> _toggleProvider(int index, bool active) async {
@@ -2473,7 +2941,10 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         return;
       }
       setState(() {
-        _providers[index] = updated;
+        _providers[index] =
+            updated.therapists.isEmpty && provider.therapists.isNotEmpty
+            ? updated.copyWith(therapists: provider.therapists)
+            : updated;
         _saving = false;
       });
       await AppAlerts.success(
@@ -2492,6 +2963,266 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       await AppAlerts.error(
         context,
         title: 'Falha ao atualizar prestador',
+        message: error.toString().replaceFirst('Bad state: ', ''),
+      );
+    }
+  }
+
+  MassageProvider? get _selectedProvider {
+    if (_selectedProviderId == null) {
+      return null;
+    }
+    for (final MassageProvider provider in _providers) {
+      if (provider.id == _selectedProviderId) {
+        return provider;
+      }
+    }
+    return null;
+  }
+
+  void _prepareNewProvider() {
+    setState(() {
+      _selectedProviderId = null;
+      _nameController.clear();
+      _specialtyController.clear();
+      _contactController.clear();
+      _therapistNameController.clear();
+    });
+  }
+
+  void _loadProviderForm(MassageProvider provider) {
+    _nameController.text = provider.name;
+    _specialtyController.text = provider.specialty;
+    _contactController.text = provider.contact;
+    _therapistNameController.clear();
+  }
+
+  Future<void> _updateSelectedProvider() async {
+    final MassageProvider? provider = _selectedProvider;
+    final String name = _nameController.text.trim();
+    final String specialty = _specialtyController.text.trim();
+    final String contact = _contactController.text.trim();
+    if (provider == null) {
+      return;
+    }
+    if (name.isEmpty || specialty.isEmpty || contact.isEmpty) {
+      await AppAlerts.warning(
+        context,
+        title: 'Campos obrigatorios',
+        message: 'Complete nome, especialidade e contato.',
+      );
+      return;
+    }
+
+    final bool exists = _providers.any(
+      (MassageProvider item) =>
+          item.id != provider.id &&
+          item.name.trim().toLowerCase() == name.toLowerCase() &&
+          item.contact.trim().toLowerCase() == contact.toLowerCase(),
+    );
+    if (exists) {
+      await AppAlerts.info(
+        context,
+        title: 'Prestador duplicado',
+        message: 'Ja existe outro prestador com esse nome e contato.',
+      );
+      return;
+    }
+
+    final int index = _providers.indexWhere(
+      (MassageProvider item) => item.id == provider.id,
+    );
+    setState(() {
+      _saving = true;
+      _providers[index] = provider.copyWith(
+        name: name,
+        specialty: specialty,
+        contact: contact,
+      );
+    });
+
+    try {
+      final MassageProvider updated = await widget.massageAppService
+          .updateProvider(
+            provider.id,
+            UpdateMassageProviderModel(
+              name: name,
+              specialty: specialty,
+              contact: contact,
+              active: provider.active,
+            ),
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _providers[index] =
+            updated.therapists.isEmpty && provider.therapists.isNotEmpty
+            ? updated.copyWith(therapists: provider.therapists)
+            : updated;
+        _providers.sort(
+          (MassageProvider a, MassageProvider b) =>
+              a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+        );
+        _selectedProviderId = updated.id;
+        _saving = false;
+        _loadProviderForm(_selectedProvider!);
+      });
+      await AppAlerts.success(
+        context,
+        title: 'Prestador atualizado',
+        message: '${updated.name} foi atualizado com sucesso.',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _providers[index] = provider;
+        _saving = false;
+        _loadProviderForm(provider);
+      });
+      await AppAlerts.error(
+        context,
+        title: 'Falha ao atualizar prestador',
+        message: error.toString().replaceFirst('Bad state: ', ''),
+      );
+    }
+  }
+
+  Future<void> _addTherapist() async {
+    final MassageProvider? provider = _selectedProvider;
+    final String name = _therapistNameController.text.trim();
+    if (provider == null) {
+      return;
+    }
+    if (name.isEmpty) {
+      await AppAlerts.warning(
+        context,
+        title: 'Campo obrigatorio',
+        message: 'Informe o nome do masajista.',
+      );
+      return;
+    }
+    final bool exists = provider.therapists.any(
+      (MassageTherapist therapist) =>
+          therapist.name.trim().toLowerCase() == name.toLowerCase(),
+    );
+    if (exists) {
+      await AppAlerts.info(
+        context,
+        title: 'Masajista ja cadastrado',
+        message:
+            'Ja existe um masajista com esse nome para o prestador selecionado.',
+      );
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+    });
+
+    try {
+      final MassageTherapist created = await widget.massageAppService
+          .createTherapist(
+            provider.id,
+            CreateMassageTherapistModel(name: name),
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        final int providerIndex = _providers.indexWhere(
+          (MassageProvider item) => item.id == provider.id,
+        );
+        final List<MassageTherapist> therapists =
+            <MassageTherapist>[...provider.therapists, created]..sort(
+              (MassageTherapist a, MassageTherapist b) =>
+                  a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+            );
+        _providers[providerIndex] = provider.copyWith(therapists: therapists);
+        _saving = false;
+      });
+      _therapistNameController.clear();
+      await AppAlerts.success(
+        context,
+        title: 'Masajista salvo',
+        message: 'Masajista criado para o prestador selecionado.',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _saving = false;
+      });
+      await AppAlerts.error(
+        context,
+        title: 'Falha ao salvar masajista',
+        message: error.toString().replaceFirst('Bad state: ', ''),
+      );
+    }
+  }
+
+  Future<void> _toggleTherapist(
+    MassageProvider provider,
+    MassageTherapist therapist,
+    bool active,
+  ) async {
+    final int providerIndex = _providers.indexWhere(
+      (MassageProvider item) => item.id == provider.id,
+    );
+    final int therapistIndex = provider.therapists.indexWhere(
+      (MassageTherapist item) => item.id == therapist.id,
+    );
+    setState(() {
+      _saving = true;
+      final List<MassageTherapist> therapists = <MassageTherapist>[
+        ...provider.therapists,
+      ];
+      therapists[therapistIndex] = therapist.copyWith(active: active);
+      _providers[providerIndex] = provider.copyWith(therapists: therapists);
+    });
+
+    try {
+      final MassageTherapist updated = await widget.massageAppService
+          .updateTherapist(
+            provider.id,
+            therapist.id,
+            UpdateMassageTherapistModel(name: therapist.name, active: active),
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        final List<MassageTherapist> therapists = <MassageTherapist>[
+          ..._providers[providerIndex].therapists,
+        ];
+        therapists[therapistIndex] = updated;
+        _providers[providerIndex] = _providers[providerIndex].copyWith(
+          therapists: therapists,
+        );
+        _saving = false;
+      });
+      await AppAlerts.success(
+        context,
+        title: 'Masajista actualizado',
+        message: '${updated.name} foi atualizado com sucesso.',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        final List<MassageTherapist> therapists = <MassageTherapist>[
+          ...provider.therapists,
+        ];
+        _providers[providerIndex] = provider.copyWith(therapists: therapists);
+        _saving = false;
+      });
+      await AppAlerts.error(
+        context,
+        title: 'Falha ao atualizar masajista',
         message: error.toString().replaceFirst('Bad state: ', ''),
       );
     }
@@ -2547,7 +3278,8 @@ String _statusDescription(MassageBooking booking) {
   if (!booking.paid) {
     return 'Pagamento pendente';
   }
-  final String methodLabel = booking.paymentMethod?.label ?? 'Meio nao informado';
+  final String methodLabel =
+      booking.paymentMethod?.label ?? 'Meio nao informado';
   final String dateLabel = booking.paymentDate == null
       ? 'data nao informada'
       : _formatShortDateLabel(booking.paymentDate!);

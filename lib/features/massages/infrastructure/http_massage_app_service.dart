@@ -8,7 +8,8 @@ import '../application/massage_app_service.dart';
 import '../domain/massage_models.dart';
 
 final class HttpMassageAppService implements MassageAppService {
-  HttpMassageAppService({required ApiClient apiClient}) : _apiClient = apiClient;
+  HttpMassageAppService({required ApiClient apiClient})
+    : _apiClient = apiClient;
 
   static const Map<String, String> _jsonHeaders = <String, String>{
     HttpHeaders.contentTypeHeader: 'application/json',
@@ -18,7 +19,9 @@ final class HttpMassageAppService implements MassageAppService {
   final ApiClient _apiClient;
 
   @override
-  Future<MassageProvider> createProvider(CreateMassageProviderModel input) async {
+  Future<MassageProvider> createProvider(
+    CreateMassageProviderModel input,
+  ) async {
     final ApiResponse response = await _runRequest(
       () => _apiClient.post(
         'massages/providers',
@@ -160,6 +163,43 @@ final class HttpMassageAppService implements MassageAppService {
   }
 
   @override
+  Future<MassageTherapist> createTherapist(
+    int providerId,
+    CreateMassageTherapistModel input,
+  ) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.post(
+        'massages/providers/$providerId/therapists',
+        headers: _jsonHeaders,
+        body: jsonEncode(input.toJson()),
+      ),
+    );
+    if (!response.isSuccess) {
+      throw StateError(_extractApiErrorMessage(response));
+    }
+    return MassageTherapist.fromJson(_asMap(_tryDecode(response.body)));
+  }
+
+  @override
+  Future<MassageTherapist> updateTherapist(
+    int providerId,
+    int therapistId,
+    UpdateMassageTherapistModel input,
+  ) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.put(
+        'massages/providers/$providerId/therapists/$therapistId',
+        headers: _jsonHeaders,
+        body: jsonEncode(input.toJson()),
+      ),
+    );
+    if (!response.isSuccess) {
+      throw StateError(_extractApiErrorMessage(response));
+    }
+    return MassageTherapist.fromJson(_asMap(_tryDecode(response.body)));
+  }
+
+  @override
   Future<MassageBooking> updatePayment(
     int bookingId,
     UpdateMassagePaymentModel input,
@@ -209,7 +249,9 @@ final class HttpMassageAppService implements MassageAppService {
     } on HttpException {
       throw StateError('Erro HTTP de transporte ao consultar o backend local.');
     } on FormatException catch (error) {
-      throw StateError('Resposta inv\u00e1lida do backend local: ${error.message}');
+      throw StateError(
+        'Resposta inv\u00e1lida do backend local: ${error.message}',
+      );
     }
   }
 

@@ -10,6 +10,17 @@ abstract interface class MassageAppService {
     UpdateMassageProviderModel input,
   );
 
+  Future<MassageTherapist> createTherapist(
+    int providerId,
+    CreateMassageTherapistModel input,
+  );
+
+  Future<MassageTherapist> updateTherapist(
+    int providerId,
+    int therapistId,
+    UpdateMassageTherapistModel input,
+  );
+
   Future<List<MassageBooking>> listBookings({
     String? bookingDate,
     String? clientName,

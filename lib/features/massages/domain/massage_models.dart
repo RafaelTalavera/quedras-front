@@ -46,6 +46,7 @@ class MassageProvider {
     required this.specialty,
     required this.contact,
     required this.active,
+    required this.therapists,
   });
 
   final int id;
@@ -53,14 +54,34 @@ class MassageProvider {
   final String specialty;
   final String contact;
   final bool active;
+  final List<MassageTherapist> therapists;
 
   factory MassageProvider.fromJson(Map<String, dynamic> json) {
+    final Object? therapistsRaw =
+        json['therapists'] ?? json['masseuses'] ?? json['massageTherapists'];
+    final Map<String, dynamic>? contactPerson = _asMapOrNull(json['provider']);
     return MassageProvider(
-      id: (json['id'] as num).toInt(),
-      name: json['name'] as String? ?? '',
-      specialty: json['specialty'] as String? ?? '',
-      contact: json['contact'] as String? ?? '',
+      id: _readInt(json, 'id') ?? _readInt(contactPerson, 'id') ?? 0,
+      name:
+          _readString(json, 'name') ?? _readString(contactPerson, 'name') ?? '',
+      specialty:
+          _readString(json, 'specialty') ??
+          _readString(contactPerson, 'specialty') ??
+          '',
+      contact:
+          _readString(json, 'contact') ??
+          _readString(contactPerson, 'contact') ??
+          '',
       active: json['active'] as bool? ?? false,
+      therapists: therapistsRaw is List
+          ? therapistsRaw
+                .map<MassageTherapist>(
+                  (Object? item) => MassageTherapist.fromJson(
+                    _asMapOrNull(item) ?? const <String, dynamic>{},
+                  ),
+                )
+                .toList()
+          : const <MassageTherapist>[],
     );
   }
 
@@ -70,12 +91,46 @@ class MassageProvider {
     String? specialty,
     String? contact,
     bool? active,
+    List<MassageTherapist>? therapists,
   }) {
     return MassageProvider(
       id: id ?? this.id,
       name: name ?? this.name,
       specialty: specialty ?? this.specialty,
       contact: contact ?? this.contact,
+      active: active ?? this.active,
+      therapists: therapists ?? this.therapists,
+    );
+  }
+}
+
+class MassageTherapist {
+  const MassageTherapist({
+    required this.id,
+    required this.name,
+    required this.active,
+  });
+
+  final int id;
+  final String name;
+  final bool active;
+
+  factory MassageTherapist.fromJson(Map<String, dynamic> json) {
+    final Map<String, dynamic>? nested = _asMapOrNull(
+      json['therapist'] ?? json['masseuse'],
+    );
+    return MassageTherapist(
+      id: _readInt(json, 'id') ?? _readInt(nested, 'id') ?? 0,
+      name: _readString(json, 'name') ?? _readString(nested, 'name') ?? '',
+      active:
+          (json['active'] as bool?) ?? (nested?['active'] as bool?) ?? false,
+    );
+  }
+
+  MassageTherapist copyWith({int? id, String? name, bool? active}) {
+    return MassageTherapist(
+      id: id ?? this.id,
+      name: name ?? this.name,
       active: active ?? this.active,
     );
   }
@@ -93,6 +148,9 @@ class MassageBooking {
     required this.providerId,
     required this.providerName,
     required this.providerActive,
+    required this.therapistId,
+    required this.therapistName,
+    required this.therapistActive,
     required this.paid,
     required this.paymentMethod,
     required this.paymentDate,
@@ -117,6 +175,9 @@ class MassageBooking {
   final int providerId;
   final String providerName;
   final bool providerActive;
+  final int therapistId;
+  final String therapistName;
+  final bool therapistActive;
   final bool paid;
   final MassagePaymentMethod? paymentMethod;
   final DateTime? paymentDate;
@@ -131,6 +192,10 @@ class MassageBooking {
   final String? cancelledBy;
 
   factory MassageBooking.fromJson(Map<String, dynamic> json) {
+    final Map<String, dynamic>? provider = _asMapOrNull(json['provider']);
+    final Map<String, dynamic>? therapist = _asMapOrNull(
+      json['therapist'] ?? json['masseuse'],
+    );
     return MassageBooking(
       id: (json['id'] as num).toInt(),
       bookingDate: DateTime.parse(json['bookingDate'] as String),
@@ -139,9 +204,30 @@ class MassageBooking {
       guestReference: json['guestReference'] as String? ?? '',
       treatment: json['treatment'] as String? ?? '',
       amount: (json['amount'] as num?)?.toDouble() ?? 0,
-      providerId: (json['providerId'] as num).toInt(),
-      providerName: json['providerName'] as String? ?? 'Prestador',
-      providerActive: json['providerActive'] as bool? ?? false,
+      providerId: _readInt(json, 'providerId') ?? _readInt(provider, 'id') ?? 0,
+      providerName:
+          _readString(json, 'providerName') ??
+          _readString(provider, 'name') ??
+          'Prestador',
+      providerActive:
+          (json['providerActive'] as bool?) ??
+          (provider?['active'] as bool?) ??
+          false,
+      therapistId:
+          _readInt(json, 'therapistId') ??
+          _readInt(json, 'masseuseId') ??
+          _readInt(therapist, 'id') ??
+          0,
+      therapistName:
+          _readString(json, 'therapistName') ??
+          _readString(json, 'masseuseName') ??
+          _readString(therapist, 'name') ??
+          'Masajista',
+      therapistActive:
+          (json['therapistActive'] as bool?) ??
+          (json['masseuseActive'] as bool?) ??
+          (therapist?['active'] as bool?) ??
+          false,
       paid: json['paid'] as bool? ?? false,
       paymentMethod: MassagePaymentMethod.tryParse(
         json['paymentMethod'] as String?,
@@ -182,6 +268,9 @@ class MassageBooking {
     int? providerId,
     String? providerName,
     bool? providerActive,
+    int? therapistId,
+    String? therapistName,
+    bool? therapistActive,
     bool? paid,
     MassagePaymentMethod? paymentMethod,
     DateTime? paymentDate,
@@ -206,6 +295,9 @@ class MassageBooking {
       providerId: providerId ?? this.providerId,
       providerName: providerName ?? this.providerName,
       providerActive: providerActive ?? this.providerActive,
+      therapistId: therapistId ?? this.therapistId,
+      therapistName: therapistName ?? this.therapistName,
+      therapistActive: therapistActive ?? this.therapistActive,
       paid: paid ?? this.paid,
       paymentMethod: paymentMethod ?? this.paymentMethod,
       paymentDate: paymentDate ?? this.paymentDate,
@@ -262,6 +354,7 @@ class CreateMassageBookingModel {
     required this.treatment,
     required this.amount,
     required this.providerId,
+    required this.therapistId,
     required this.paid,
     required this.paymentMethod,
     required this.paymentDate,
@@ -275,6 +368,7 @@ class CreateMassageBookingModel {
   final String treatment;
   final double amount;
   final int providerId;
+  final int therapistId;
   final bool paid;
   final MassagePaymentMethod? paymentMethod;
   final String? paymentDate;
@@ -289,6 +383,7 @@ class CreateMassageBookingModel {
       'treatment': treatment,
       'amount': amount,
       'providerId': providerId,
+      'therapistId': therapistId,
       'paid': paid,
       'paymentMethod': paymentMethod?.apiValue,
       'paymentDate': paymentDate,
@@ -326,6 +421,7 @@ class UpdateMassageBookingModel {
     required this.treatment,
     required this.amount,
     required this.providerId,
+    required this.therapistId,
     required this.paid,
     required this.paymentMethod,
     required this.paymentDate,
@@ -339,6 +435,7 @@ class UpdateMassageBookingModel {
   final String treatment;
   final double amount;
   final int providerId;
+  final int therapistId;
   final bool paid;
   final MassagePaymentMethod? paymentMethod;
   final String? paymentDate;
@@ -353,6 +450,7 @@ class UpdateMassageBookingModel {
       'treatment': treatment,
       'amount': amount,
       'providerId': providerId,
+      'therapistId': therapistId,
       'paid': paid,
       'paymentMethod': paymentMethod?.apiValue,
       'paymentDate': paymentDate,
@@ -416,10 +514,51 @@ class UpdateMassageProviderModel {
   }
 }
 
+class CreateMassageTherapistModel {
+  const CreateMassageTherapistModel({required this.name});
+
+  final String name;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{'name': name};
+  }
+}
+
+class UpdateMassageTherapistModel {
+  const UpdateMassageTherapistModel({required this.name, required this.active});
+
+  final String name;
+  final bool active;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{'name': name, 'active': active};
+  }
+}
+
 String? _trimOrNull(String? value) {
   if (value == null) {
     return null;
   }
   final String normalized = value.trim();
   return normalized.isEmpty ? null : normalized;
+}
+
+Map<String, dynamic>? _asMapOrNull(Object? value) {
+  if (value is! Map) {
+    return null;
+  }
+  return value.map<String, dynamic>(
+    (Object? key, Object? mapValue) =>
+        MapEntry<String, dynamic>(key.toString(), mapValue),
+  );
+}
+
+String? _readString(Map<String, dynamic>? json, String key) {
+  final Object? value = json?[key];
+  return value is String ? value : null;
+}
+
+int? _readInt(Map<String, dynamic>? json, String key) {
+  final Object? value = json?[key];
+  return value is num ? value.toInt() : null;
 }

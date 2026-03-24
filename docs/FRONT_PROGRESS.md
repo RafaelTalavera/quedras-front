@@ -31,8 +31,22 @@
 - Mensajes visibles y errores propagados a la UI normalizados a portugues de Brasil (`pt-BR`).
 - Validaciones ejecutadas en esta fase: `flutter analyze`, `flutter test`.
 
+## Actualizacion Massagens - Prestadores
+- Fecha: 2026-03-24
+- `Massagens` ya opera con relacion `prestador -> masajista`.
+- El frontend permite administrar varios masajistas por prestador.
+- El dialogo de `Prestadores` ahora soporta:
+  - alta de prestador
+  - edicion de prestador seleccionado
+  - activacion/desactivacion de prestador
+  - alta de masajista dentro del prestador
+  - activacion/desactivacion de masajista
+- El formulario de atencion usa `providerId` y `therapistId`.
+- La validacion de conflicto horario se hace por masajista.
+- Documento de detalle: `docs/MASSAGES_PROVIDERS_STATUS.md`.
+
 ## Pendientes inmediatos frontend
-- Cerrar y validar contrato backend especifico para `Massagens` con `status`, edicion, cancelacion y auditoria por usuario.
+- Cerrar y validar contrato backend especifico para `Massagens` con estructura real de `therapists`, `status`, edicion, cancelacion y auditoria por usuario.
 - Definir contrato backend especifico para `Tours e Viagens`.
 - Verificar en backend que JWT quede persistido como autor real en `createdBy/updatedBy/cancelledBy`.
 - Evaluar si la sesion seguira solo en memoria o necesitara persistencia controlada.

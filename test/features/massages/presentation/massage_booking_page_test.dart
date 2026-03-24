@@ -48,11 +48,10 @@ void main() {
   testWidgets(
     'MassageBookingPage permite cancelar un atendimento con observacion',
     (WidgetTester tester) async {
-      final _FakeMassageAppService service = _FakeMassageAppService.withBookings(
-        <MassageBooking>[
-          _bookingFixture(id: 10, clientName: 'Maria', paid: false),
-        ],
-      );
+      final _FakeMassageAppService service =
+          _FakeMassageAppService.withBookings(<MassageBooking>[
+            _bookingFixture(id: 10, clientName: 'Maria', paid: false),
+          ]);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -83,11 +82,10 @@ void main() {
   testWidgets(
     'MassageBookingPage permite informar pago desde la accion rapida superior',
     (WidgetTester tester) async {
-      final _FakeMassageAppService service = _FakeMassageAppService.withBookings(
-        <MassageBooking>[
-          _bookingFixture(id: 10, clientName: 'Maria', paid: false),
-        ],
-      );
+      final _FakeMassageAppService service =
+          _FakeMassageAppService.withBookings(<MassageBooking>[
+            _bookingFixture(id: 10, clientName: 'Maria', paid: false),
+          ]);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -98,7 +96,11 @@ void main() {
       final DateTime bookingDate = service.currentBookings.single.bookingDate;
 
       expect(
-        tester.widget<OutlinedButton>(find.widgetWithText(OutlinedButton, 'Informar pago')).onPressed,
+        tester
+            .widget<OutlinedButton>(
+              find.widgetWithText(OutlinedButton, 'Informar pago'),
+            )
+            .onPressed,
         isNotNull,
       );
 
@@ -131,11 +133,10 @@ void main() {
   testWidgets(
     'MassageBookingPage muestra informar pago en acciones del booking',
     (WidgetTester tester) async {
-      final _FakeMassageAppService service = _FakeMassageAppService.withBookings(
-        <MassageBooking>[
-          _bookingFixture(id: 10, clientName: 'Maria', paid: false),
-        ],
-      );
+      final _FakeMassageAppService service =
+          _FakeMassageAppService.withBookings(<MassageBooking>[
+            _bookingFixture(id: 10, clientName: 'Maria', paid: false),
+          ]);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -158,11 +159,10 @@ void main() {
   testWidgets(
     'MassageBookingPage lista atendimientos no elegibles en informar pago con motivo visible',
     (WidgetTester tester) async {
-      final _FakeMassageAppService service = _FakeMassageAppService.withBookings(
-        <MassageBooking>[
-          _bookingFixture(id: 10, clientName: 'Maria', paid: true),
-        ],
-      );
+      final _FakeMassageAppService service =
+          _FakeMassageAppService.withBookings(<MassageBooking>[
+            _bookingFixture(id: 10, clientName: 'Maria', paid: true),
+          ]);
 
       await tester.pumpWidget(
         MaterialApp(
@@ -181,7 +181,11 @@ void main() {
       );
       expect(find.text('Pagamento ja informado'), findsOneWidget);
       expect(
-        tester.widget<FilledButton>(find.widgetWithText(FilledButton, 'Informar pago')).onPressed,
+        tester
+            .widget<FilledButton>(
+              find.widgetWithText(FilledButton, 'Informar pago'),
+            )
+            .onPressed,
         isNull,
       );
     },
@@ -190,7 +194,9 @@ void main() {
 
 final class _FakeMassageAppService implements MassageAppService {
   _FakeMassageAppService({List<MassageBooking>? initialBookings})
-    : _bookings = List<MassageBooking>.from(initialBookings ?? const <MassageBooking>[]);
+    : _bookings = List<MassageBooking>.from(
+        initialBookings ?? const <MassageBooking>[],
+      );
 
   _FakeMassageAppService.withBookings(List<MassageBooking> bookings)
     : _bookings = List<MassageBooking>.from(bookings);
@@ -207,7 +213,8 @@ final class _FakeMassageAppService implements MassageAppService {
   int? paymentUpdatedBookingId;
   UpdateMassagePaymentModel? paymentUpdate;
 
-  List<MassageBooking> get currentBookings => List<MassageBooking>.unmodifiable(_bookings);
+  List<MassageBooking> get currentBookings =>
+      List<MassageBooking>.unmodifiable(_bookings);
 
   @override
   Future<MassageBooking> createBooking(CreateMassageBookingModel input) async {
@@ -223,6 +230,9 @@ final class _FakeMassageAppService implements MassageAppService {
       providerId: input.providerId,
       providerName: 'Danuska',
       providerActive: true,
+      therapistId: input.therapistId,
+      therapistName: 'Danuska',
+      therapistActive: true,
       paid: input.paid,
       paymentMethod: input.paymentMethod,
       paymentDate: input.paymentDate == null
@@ -253,7 +263,16 @@ final class _FakeMassageAppService implements MassageAppService {
       specialty: 'Relaxante',
       contact: 'Interno',
       active: true,
+      therapists: <MassageTherapist>[],
     );
+  }
+
+  @override
+  Future<MassageTherapist> createTherapist(
+    int providerId,
+    CreateMassageTherapistModel input,
+  ) async {
+    return MassageTherapist(id: 99, name: input.name, active: true);
   }
 
   @override
@@ -276,6 +295,9 @@ final class _FakeMassageAppService implements MassageAppService {
         specialty: 'Relaxante',
         contact: 'Interno',
         active: true,
+        therapists: <MassageTherapist>[
+          MassageTherapist(id: 101, name: 'Danuska', active: true),
+        ],
       ),
     ];
   }
@@ -287,7 +309,9 @@ final class _FakeMassageAppService implements MassageAppService {
   ) async {
     paymentUpdatedBookingId = bookingId;
     paymentUpdate = input;
-    final int index = _bookings.indexWhere((MassageBooking item) => item.id == bookingId);
+    final int index = _bookings.indexWhere(
+      (MassageBooking item) => item.id == bookingId,
+    );
     final MassageBooking updated = _bookings[index].copyWith(
       paid: true,
       paymentMethod: input.paymentMethod,
@@ -306,7 +330,9 @@ final class _FakeMassageAppService implements MassageAppService {
     UpdateMassageBookingModel input,
   ) async {
     updatedBookings.add(input);
-    final int index = _bookings.indexWhere((MassageBooking item) => item.id == bookingId);
+    final int index = _bookings.indexWhere(
+      (MassageBooking item) => item.id == bookingId,
+    );
     final MassageBooking updated = _bookings[index].copyWith(
       bookingDate: DateTime.parse(input.bookingDate),
       startTime: input.startTime,
@@ -317,6 +343,9 @@ final class _FakeMassageAppService implements MassageAppService {
       providerId: input.providerId,
       providerName: 'Danuska',
       providerActive: true,
+      therapistId: input.therapistId,
+      therapistName: 'Danuska',
+      therapistActive: true,
       paid: input.paid,
       paymentMethod: input.paymentMethod,
       paymentDate: input.paymentDate == null
@@ -341,6 +370,22 @@ final class _FakeMassageAppService implements MassageAppService {
       specialty: input.specialty,
       contact: input.contact,
       active: input.active,
+      therapists: const <MassageTherapist>[
+        MassageTherapist(id: 101, name: 'Danuska', active: true),
+      ],
+    );
+  }
+
+  @override
+  Future<MassageTherapist> updateTherapist(
+    int providerId,
+    int therapistId,
+    UpdateMassageTherapistModel input,
+  ) async {
+    return MassageTherapist(
+      id: therapistId,
+      name: input.name,
+      active: input.active,
     );
   }
 
@@ -351,7 +396,9 @@ final class _FakeMassageAppService implements MassageAppService {
   ) async {
     cancelledBookingId = bookingId;
     cancelNotes = input.cancellationNotes;
-    final int index = _bookings.indexWhere((MassageBooking item) => item.id == bookingId);
+    final int index = _bookings.indexWhere(
+      (MassageBooking item) => item.id == bookingId,
+    );
     final MassageBooking cancelled = _bookings[index].copyWith(
       status: MassageBookingStatus.cancelled,
       cancellationNotes: input.cancellationNotes,
@@ -383,6 +430,9 @@ MassageBooking _bookingFixture({
     providerId: 1,
     providerName: 'Danuska',
     providerActive: true,
+    therapistId: 101,
+    therapistName: 'Danuska',
+    therapistActive: true,
     paid: paid,
     paymentMethod: paid ? MassagePaymentMethod.card : null,
     paymentDate: paid ? bookingDate : null,
