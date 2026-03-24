@@ -1,5 +1,14 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-03-24 | Post Hito 12 | Quadras alineado al estandar de calendario y mejora del selector horario
+- Componente afectado: Frontend (`Quadras`) + documentacion UI
+- Archivos tocados:
+  - `lib/features/tennis/presentation/tennis_rental_page.dart`
+  - `docs/CALENDAR_LAYOUT_STANDARD.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Corregir el desvio visual de `Quadras` respecto al calendario aprobado en `Massagens` y simplificar la reserva de horario con una UX mas operativa.
+- Impacto funcional: `Quadras` ahora usa agenda mensual compacta con el mismo patron interno de `Massagens`, el selector de mes queda unificado dentro del card y el formulario de reserva propone `Fin = Inicio + 1 hora` con opcion de extender manualmente el horario final.
+
 ## 2026-03-24 | Post Hito 12 | Corte documental de desarrollo y siguiente etapa de mejora
 - Componente afectado: Frontend (documentacion transversal + `Quadras`)
 - Archivos tocados:

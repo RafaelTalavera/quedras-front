@@ -33,6 +33,24 @@
   - icono de referencia
   - contador o indicador minimo de reservas o atendimientos
 - Los dias con reservas deben tener referencia visual propia.
+- No deben convertirse en mini-resumenes del dia dentro de la celda.
+- No deben listar clientes, montos ni bloques internos adicionales dentro de la agenda mensual.
+- La logica visual aprobada es:
+  - seleccionado: fondo calido y borde dorado
+  - con actividad: fondo azul suave y borde azul profundo
+  - sin actividad: fondo blanco y borde neutro
+
+## Regla de cabecera de agenda
+- La cabecera de la agenda mensual debe mantener patron operativo simple.
+- Debe mostrar titulo a la izquierda y selector de mes a la derecha dentro del mismo card.
+- No deben agregarse navegadores paralelos con flechas si el patron vigente ya usa selector directo.
+
+## Regla de formularios de horario para Quadras
+- El formulario de nueva reserva de `Quadras` debe priorizar seleccion simple de horario.
+- `Inicio` y `Fin` deben editarse desde controles directos y faciles de leer.
+- Al cambiar `Inicio`, el sistema debe proponer `Fin = Inicio + 1 hora` en el acto.
+- El operador puede extender `Fin` manualmente para reservas de mayor duracion.
+- `Fin` solo debe permitir horarios posteriores a `Inicio`.
 
 ## Regla de consistencia
 - Este layout debe reutilizarse como patron para futuras implementaciones de calendarios dentro del sistema.
