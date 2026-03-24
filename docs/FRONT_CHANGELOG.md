@@ -389,3 +389,14 @@
   - `docs/MASSAGES_PROVIDERS_STATUS.md`
 - Motivo del cambio: Separar proveedor comercial de masajista operativo, permitir multiples masajistas por prestador y habilitar administracion del prestador seleccionado.
 - Impacto funcional: El operador ahora selecciona `prestador -> masajista` al cargar atenciones, puede activar/desactivar masajistas, agregar masajistas dentro de un prestador y editar datos del prestador sin salir del dialogo.
+
+## 2026-03-24 | Post Hito 12 | Estandar de alta y filtro para prestadores de massagens
+- Componente afectado: Frontend (`Massagens` UI + documentacion operativa)
+- Archivos tocados:
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `docs/MASSAGES_PROVIDER_ADD_STANDARD.md`
+  - `docs/MASSAGES_PROVIDERS_STATUS.md`
+  - `docs/FRONT_CHANGELOG.md`
+  - `README.md`
+- Motivo del cambio: Alinear el dialogo de prestadores a un flujo sin preseleccion, con resumen previo, tarjetas compactas, filtro por nombre y leyenda visual explicita para activacion.
+- Impacto funcional: El operador ahora entra al dialogo en estado neutro, puede encontrar prestadores por coincidencia parcial de nombre y ve el estado `ON/OFF` del prestador de forma textual y consistente; el patron queda documentado para futuras implementaciones del proyecto.

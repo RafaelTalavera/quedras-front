@@ -24,13 +24,20 @@ Pantalla principal: `lib/features/massages/presentation/massage_booking_page.dar
 
 ### UI de Prestadores
 - Se puede listar prestadores.
+- El dialogo abre sin prestador preseleccionado.
+- Se muestra un resumen previo antes del listado y del panel de edicion.
 - Se puede seleccionar un prestador.
 - Se puede crear un prestador nuevo.
 - Se puede editar el prestador seleccionado:
   - nombre
   - especialidad
   - contacto
+- Se puede filtrar por nombre con coincidencia parcial de cadena.
+- Si no hay coincidencias, la UI muestra estado vacio.
 - Se puede activar o desactivar un prestador.
+- La activacion ahora expone leyenda visible:
+  - `ON` azul
+  - `OFF` rojo
 - Dentro del prestador seleccionado se puede:
   - listar masajistas
   - agregar masajistas
@@ -46,6 +53,8 @@ Pantalla principal: `lib/features/massages/presentation/massage_booking_page.dar
 - Se corrigio overflow del panel derecho del dialogo de prestadores.
 - El bloque derecho ahora usa scroll interno y acciones fijas abajo.
 - La lista de masajistas usa altura acotada para no romper el dialogo.
+- Las tarjetas de prestadores fueron reducidas y compactadas.
+- El flujo de gestion ahora separa estado neutro, estado de alta y estado de edicion.
 
 ## Dependencias con backend
 - `GET /massages/providers` debe devolver proveedores con `therapists` embebidos.

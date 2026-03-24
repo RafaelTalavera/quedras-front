@@ -2447,12 +2447,15 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _specialtyController = TextEditingController();
   final TextEditingController _contactController = TextEditingController();
+  final TextEditingController _providerFilterController =
+      TextEditingController();
   final TextEditingController _therapistNameController =
       TextEditingController();
   final FocusNode _therapistNameFocusNode = FocusNode();
 
   late List<MassageProvider> _providers;
   int? _selectedProviderId;
+  bool _creatingProvider = false;
   bool _saving = false;
 
   @override
@@ -2478,10 +2481,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
           ),
         )
         .toList();
-    _selectedProviderId = _providers.isEmpty ? null : _providers.first.id;
-    if (_providers.isNotEmpty) {
-      _loadProviderForm(_providers.first);
-    }
+    _selectedProviderId = null;
+    _clearProviderForm();
   }
 
   @override
@@ -2489,6 +2490,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     _nameController.dispose();
     _specialtyController.dispose();
     _contactController.dispose();
+    _providerFilterController.dispose();
     _therapistNameController.dispose();
     _therapistNameFocusNode.dispose();
     super.dispose();
@@ -2511,11 +2513,33 @@ class _ProviderDialogState extends State<_ProviderDialog> {
             'Cadastre fornecedores aqui para disponibiliza-los no combo da agenda.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
+          const SizedBox(height: 14),
+          _buildProviderSummary(context),
           const SizedBox(height: 12),
           OutlinedButton.icon(
             onPressed: _saving ? null : _prepareNewProvider,
             icon: const Icon(Icons.add_circle_outline_rounded),
             label: const Text('Agregar novo prestador'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _providerFilterController,
+            onChanged: (_) => setState(() {}),
+            decoration: InputDecoration(
+              labelText: 'Filtrar por nome',
+              hintText: 'Digite letras do nome do prestador',
+              prefixIcon: const Icon(Icons.search_rounded),
+              suffixIcon: _providerFilterController.text.isEmpty
+                  ? null
+                  : IconButton(
+                      onPressed: () {
+                        setState(() {
+                          _providerFilterController.clear();
+                        });
+                      },
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+            ),
           ),
           const SizedBox(height: 18),
           Expanded(
@@ -2524,80 +2548,132 @@ class _ProviderDialogState extends State<_ProviderDialog> {
               children: <Widget>[
                 Expanded(
                   flex: 4,
-                  child: ListView.separated(
-                    itemCount: _providers.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 12),
-                    itemBuilder: (BuildContext context, int index) {
-                      final MassageProvider provider = _providers[index];
-                      final bool selected = provider.id == _selectedProviderId;
-                      return Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(
-                            color: selected
-                                ? CostaNorteBrand.royalBlueDeep
-                                : CostaNorteBrand.line,
+                  child: _filteredProviders.isEmpty
+                      ? Container(
+                          padding: const EdgeInsets.all(18),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(18),
+                            color: Colors.white,
+                            border: Border.all(color: CostaNorteBrand.line),
                           ),
-                          color: selected ? CostaNorteBrand.mist : Colors.white,
-                        ),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(18),
-                          onTap: () {
-                            setState(() {
-                              _selectedProviderId = provider.id;
-                              _loadProviderForm(provider);
-                            });
-                          },
-                          child: Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Text(
+                            'Nenhum prestador coincide com a busca informada.',
+                            style: Theme.of(context).textTheme.bodyMedium,
+                          ),
+                        )
+                      : ListView.separated(
+                          itemCount: _filteredProviders.length,
+                          separatorBuilder: (_, _) =>
+                              const SizedBox(height: 10),
+                          itemBuilder: (BuildContext context, int index) {
+                            final MassageProvider provider =
+                                _filteredProviders[index];
+                            final bool selected =
+                                provider.id == _selectedProviderId;
+                            final int activeTherapists = provider.therapists
+                                .where(
+                                  (MassageTherapist therapist) =>
+                                      therapist.active,
+                                )
+                                .length;
+                            return Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: selected
+                                      ? CostaNorteBrand.royalBlueDeep
+                                      : CostaNorteBrand.line,
+                                ),
+                                color: selected
+                                    ? CostaNorteBrand.mist
+                                    : Colors.white,
+                              ),
+                              child: InkWell(
+                                borderRadius: BorderRadius.circular(14),
+                                onTap: () {
+                                  setState(() {
+                                    _selectProvider(provider);
+                                  });
+                                },
+                                child: Row(
                                   children: <Widget>[
-                                    Text(
-                                      provider.name,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.titleLarge,
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: <Widget>[
+                                          Text(
+                                            provider.name,
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .titleMedium
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            provider.specialty,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodyMedium,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            provider.contact,
+                                            style: Theme.of(
+                                              context,
+                                            ).textTheme.bodySmall,
+                                          ),
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            '$activeTherapists masajistas ativos',
+                                            style: Theme.of(context)
+                                                .textTheme
+                                                .bodySmall
+                                                ?.copyWith(
+                                                  color:
+                                                      CostaNorteBrand.mutedInk,
+                                                ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      provider.specialty,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodyMedium,
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      provider.contact,
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall,
-                                    ),
-                                    const SizedBox(height: 6),
-                                    Text(
-                                      '${provider.therapists.where((MassageTherapist therapist) => therapist.active).length} masajistas ativos',
-                                      style: Theme.of(
-                                        context,
-                                      ).textTheme.bodySmall,
+                                    Column(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: <Widget>[
+                                        Text(
+                                          provider.active ? 'ON' : 'OFF',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .labelMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w700,
+                                                color: provider.active
+                                                    ? CostaNorteBrand
+                                                          .royalBlueDeep
+                                                    : CostaNorteBrand.error,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Switch(
+                                          value: provider.active,
+                                          onChanged: _saving
+                                              ? null
+                                              : (bool value) => _toggleProvider(
+                                                  provider.id,
+                                                  value,
+                                                ),
+                                        ),
+                                      ],
                                     ),
                                   ],
                                 ),
                               ),
-                              Switch(
-                                value: provider.active,
-                                onChanged: _saving
-                                    ? null
-                                    : (bool value) =>
-                                          _toggleProvider(index, value),
-                              ),
-                            ],
-                          ),
+                            );
+                          },
                         ),
-                      );
-                    },
-                  ),
                 ),
                 const SizedBox(width: 18),
                 Expanded(
@@ -2614,198 +2690,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                       children: <Widget>[
                         Expanded(
                           child: SingleChildScrollView(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text(
-                                  _selectedProvider == null
-                                      ? 'Novo prestador'
-                                      : 'Editar prestador',
-                                  style: Theme.of(context).textTheme.titleLarge,
-                                ),
-                                const SizedBox(height: 12),
-                                TextField(
-                                  controller: _nameController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Nome',
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                TextField(
-                                  controller: _specialtyController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Especialidade',
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                TextField(
-                                  controller: _contactController,
-                                  decoration: const InputDecoration(
-                                    labelText: 'Contato',
-                                  ),
-                                ),
-                                const SizedBox(height: 16),
-                                FilledButton.icon(
-                                  onPressed: _saving ? null : _saveProvider,
-                                  icon: Icon(
-                                    _selectedProvider == null
-                                        ? Icons.playlist_add_rounded
-                                        : Icons.save_rounded,
-                                  ),
-                                  label: Text(
-                                    _saving
-                                        ? 'Salvando...'
-                                        : _selectedProvider == null
-                                        ? 'Adicionar'
-                                        : 'Salvar mudancas',
-                                  ),
-                                ),
-                                const SizedBox(height: 24),
-                                Row(
-                                  children: <Widget>[
-                                    Expanded(
-                                      child: Text(
-                                        _selectedProvider == null
-                                            ? 'Selecione um prestador'
-                                            : 'Masajistas do prestador',
-                                        style: Theme.of(
-                                          context,
-                                        ).textTheme.titleLarge,
-                                      ),
-                                    ),
-                                    if (_selectedProvider != null)
-                                      OutlinedButton.icon(
-                                        onPressed: _saving
-                                            ? null
-                                            : () {
-                                                _therapistNameController
-                                                    .clear();
-                                                _therapistNameFocusNode
-                                                    .requestFocus();
-                                              },
-                                        icon: const Icon(
-                                          Icons.person_add_alt_1_rounded,
-                                        ),
-                                        label: const Text('Novo masajista'),
-                                      ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                if (_selectedProvider == null)
-                                  Text(
-                                    'Escolha um prestador para cadastrar ou desativar masajistas.',
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.bodyMedium,
-                                  )
-                                else ...<Widget>[
-                                  Text(
-                                    _selectedProvider!.name,
-                                    style: Theme.of(
-                                      context,
-                                    ).textTheme.titleMedium,
-                                  ),
-                                  const SizedBox(height: 12),
-                                  ConstrainedBox(
-                                    constraints: const BoxConstraints(
-                                      maxHeight: 220,
-                                    ),
-                                    child: _selectedProvider!.therapists.isEmpty
-                                        ? Center(
-                                            child: Text(
-                                              'Esse prestador ainda nao possui masajistas.',
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.bodyMedium,
-                                            ),
-                                          )
-                                        : ListView.separated(
-                                            shrinkWrap: true,
-                                            itemCount: _selectedProvider!
-                                                .therapists
-                                                .length,
-                                            separatorBuilder: (_, _) =>
-                                                const SizedBox(height: 10),
-                                            itemBuilder:
-                                                (
-                                                  BuildContext context,
-                                                  int index,
-                                                ) {
-                                                  final MassageTherapist
-                                                  therapist = _selectedProvider!
-                                                      .therapists[index];
-                                                  return Container(
-                                                    padding:
-                                                        const EdgeInsets.symmetric(
-                                                          horizontal: 12,
-                                                          vertical: 10,
-                                                        ),
-                                                    decoration: BoxDecoration(
-                                                      borderRadius:
-                                                          BorderRadius.circular(
-                                                            16,
-                                                          ),
-                                                      color: Colors.white,
-                                                      border: Border.all(
-                                                        color: CostaNorteBrand
-                                                            .line,
-                                                      ),
-                                                    ),
-                                                    child: Row(
-                                                      children: <Widget>[
-                                                        Expanded(
-                                                          child: Text(
-                                                            therapist.name,
-                                                            style:
-                                                                Theme.of(
-                                                                      context,
-                                                                    )
-                                                                    .textTheme
-                                                                    .bodyLarge,
-                                                          ),
-                                                        ),
-                                                        Switch(
-                                                          value:
-                                                              therapist.active,
-                                                          onChanged: _saving
-                                                              ? null
-                                                              : (
-                                                                  bool value,
-                                                                ) => _toggleTherapist(
-                                                                  _selectedProvider!,
-                                                                  therapist,
-                                                                  value,
-                                                                ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  );
-                                                },
-                                          ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  TextField(
-                                    controller: _therapistNameController,
-                                    focusNode: _therapistNameFocusNode,
-                                    decoration: const InputDecoration(
-                                      labelText: 'Novo masajista',
-                                    ),
-                                  ),
-                                  const SizedBox(height: 12),
-                                  FilledButton.icon(
-                                    onPressed: _saving ? null : _addTherapist,
-                                    icon: const Icon(
-                                      Icons.person_add_alt_1_rounded,
-                                    ),
-                                    label: Text(
-                                      _saving
-                                          ? 'Salvando...'
-                                          : 'Agregar masajista',
-                                    ),
-                                  ),
-                                ],
-                              ],
-                            ),
+                            child: _buildProviderEditor(context),
                           ),
                         ),
                         const SizedBox(height: 16),
@@ -2844,6 +2729,267 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         ],
       ),
     );
+  }
+
+  Widget _buildProviderSummary(BuildContext context) {
+    final int activeProviders = _providers
+        .where((MassageProvider provider) => provider.active)
+        .length;
+    final int activeTherapists = _providers.fold<int>(
+      0,
+      (int total, MassageProvider provider) =>
+          total +
+          provider.therapists
+              .where((MassageTherapist therapist) => therapist.active)
+              .length,
+    );
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(18),
+        color: CostaNorteBrand.mist,
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Resumo rapido',
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Escolha primeiro o que deseja modificar. Nenhum prestador fica pre-selecionado ao abrir esta tela.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              _buildSummaryChip(
+                context,
+                Icons.groups_2_rounded,
+                '${_providers.length} prestadores',
+              ),
+              _buildSummaryChip(
+                context,
+                Icons.verified_user_rounded,
+                '$activeProviders ativos',
+              ),
+              _buildSummaryChip(
+                context,
+                Icons.spa_outlined,
+                '$activeTherapists masajistas ativos',
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummaryChip(BuildContext context, IconData icon, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: Colors.white,
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 16, color: CostaNorteBrand.royalBlueDeep),
+          const SizedBox(width: 6),
+          Text(label, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProviderEditor(BuildContext context) {
+    if (!_isEditingProvider) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(18),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: Colors.white,
+          border: Border.all(color: CostaNorteBrand.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Icon(
+              Icons.touch_app_rounded,
+              color: CostaNorteBrand.royalBlueDeep,
+              size: 28,
+            ),
+            const SizedBox(height: 12),
+            Text(
+              'Selecione um prestador para editar',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Use as tarjetas da esquerda para editar um prestador existente ou crie um novo com o botao superior.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          _creatingProvider ? 'Novo prestador' : 'Editar prestador',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _nameController,
+          decoration: const InputDecoration(labelText: 'Nome'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _specialtyController,
+          decoration: const InputDecoration(labelText: 'Especialidade'),
+        ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _contactController,
+          decoration: const InputDecoration(labelText: 'Contato'),
+        ),
+        const SizedBox(height: 16),
+        FilledButton.icon(
+          onPressed: _saving ? null : _saveProvider,
+          icon: Icon(
+            _creatingProvider ? Icons.playlist_add_rounded : Icons.save_rounded,
+          ),
+          label: Text(
+            _saving
+                ? 'Salvando...'
+                : _creatingProvider
+                ? 'Adicionar'
+                : 'Salvar mudancas',
+          ),
+        ),
+        const SizedBox(height: 24),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                _creatingProvider ? 'Masajistas' : 'Masajistas do prestador',
+                style: Theme.of(context).textTheme.titleLarge,
+              ),
+            ),
+            if (_selectedProvider != null)
+              OutlinedButton.icon(
+                onPressed: _saving
+                    ? null
+                    : () {
+                        _therapistNameController.clear();
+                        _therapistNameFocusNode.requestFocus();
+                      },
+                icon: const Icon(Icons.person_add_alt_1_rounded),
+                label: const Text('Novo masajista'),
+              ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        if (_creatingProvider)
+          Text(
+            'Salve primeiro o prestador para poder registrar e ativar masajistas.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          )
+        else ...<Widget>[
+          Text(
+            _selectedProvider!.name,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 12),
+          ConstrainedBox(
+            constraints: const BoxConstraints(maxHeight: 220),
+            child: _selectedProvider!.therapists.isEmpty
+                ? Center(
+                    child: Text(
+                      'Esse prestador ainda nao possui masajistas.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  )
+                : ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: _selectedProvider!.therapists.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    itemBuilder: (BuildContext context, int index) {
+                      final MassageTherapist therapist =
+                          _selectedProvider!.therapists[index];
+                      return Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(16),
+                          color: Colors.white,
+                          border: Border.all(color: CostaNorteBrand.line),
+                        ),
+                        child: Row(
+                          children: <Widget>[
+                            Expanded(
+                              child: Text(
+                                therapist.name,
+                                style: Theme.of(context).textTheme.bodyLarge,
+                              ),
+                            ),
+                            Switch(
+                              value: therapist.active,
+                              onChanged: _saving
+                                  ? null
+                                  : (bool value) => _toggleTherapist(
+                                      _selectedProvider!,
+                                      therapist,
+                                      value,
+                                    ),
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _therapistNameController,
+            focusNode: _therapistNameFocusNode,
+            decoration: const InputDecoration(labelText: 'Novo masajista'),
+          ),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            onPressed: _saving ? null : _addTherapist,
+            icon: const Icon(Icons.person_add_alt_1_rounded),
+            label: Text(_saving ? 'Salvando...' : 'Agregar masajista'),
+          ),
+        ],
+      ],
+    );
+  }
+
+  List<MassageProvider> get _filteredProviders {
+    final String query = _providerFilterController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      return _providers;
+    }
+    return _providers.where((MassageProvider provider) {
+      return provider.name.toLowerCase().contains(query);
+    }).toList();
   }
 
   Future<void> _addProvider() async {
@@ -2895,8 +3041,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
             (MassageProvider a, MassageProvider b) =>
                 a.name.toLowerCase().compareTo(b.name.toLowerCase()),
           );
-        _selectedProviderId = created.id;
-        _loadProviderForm(
+        _creatingProvider = false;
+        _selectProvider(
           _providers.firstWhere(
             (MassageProvider provider) => provider.id == created.id,
           ),
@@ -2924,14 +3070,20 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   }
 
   Future<void> _saveProvider() async {
-    if (_selectedProvider == null) {
+    if (_creatingProvider) {
       await _addProvider();
       return;
     }
     await _updateSelectedProvider();
   }
 
-  Future<void> _toggleProvider(int index, bool active) async {
+  Future<void> _toggleProvider(int providerId, bool active) async {
+    final int index = _providers.indexWhere(
+      (MassageProvider provider) => provider.id == providerId,
+    );
+    if (index < 0) {
+      return;
+    }
     final MassageProvider provider = _providers[index];
     setState(() {
       _saving = true;
@@ -2992,14 +3144,27 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     return null;
   }
 
+  bool get _isEditingProvider => _creatingProvider || _selectedProvider != null;
+
   void _prepareNewProvider() {
     setState(() {
       _selectedProviderId = null;
-      _nameController.clear();
-      _specialtyController.clear();
-      _contactController.clear();
-      _therapistNameController.clear();
+      _creatingProvider = true;
+      _clearProviderForm();
     });
+  }
+
+  void _selectProvider(MassageProvider provider) {
+    _selectedProviderId = provider.id;
+    _creatingProvider = false;
+    _loadProviderForm(provider);
+  }
+
+  void _clearProviderForm() {
+    _nameController.clear();
+    _specialtyController.clear();
+    _contactController.clear();
+    _therapistNameController.clear();
   }
 
   void _loadProviderForm(MassageProvider provider) {
@@ -3076,9 +3241,13 @@ class _ProviderDialogState extends State<_ProviderDialog> {
           (MassageProvider a, MassageProvider b) =>
               a.name.toLowerCase().compareTo(b.name.toLowerCase()),
         );
-        _selectedProviderId = updated.id;
+        _creatingProvider = false;
         _saving = false;
-        _loadProviderForm(_selectedProvider!);
+        _selectProvider(
+          _providers.firstWhere(
+            (MassageProvider item) => item.id == updated.id,
+          ),
+        );
       });
       await AppAlerts.success(
         context,
