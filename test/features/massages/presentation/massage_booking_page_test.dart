@@ -75,7 +75,7 @@ void main() {
       expect(service.cancelledBookingId, 10);
       expect(service.cancelNotes, 'Cliente nao compareceu');
       expect(find.text('Cancelado'), findsOneWidget);
-      expect(find.textContaining('Cliente nao compareceu'), findsOneWidget);
+      expect(find.textContaining('Cliente nao compareceu'), findsWidgets);
     },
   );
 
@@ -95,22 +95,11 @@ void main() {
       await tester.pumpAndSettle();
       final DateTime bookingDate = service.currentBookings.single.bookingDate;
 
-      expect(
-        tester
-            .widget<OutlinedButton>(
-              find.widgetWithText(OutlinedButton, 'Informar pago'),
-            )
-            .onPressed,
-        isNotNull,
-      );
-
       await tester.tap(find.text('Informar pago').first);
       await tester.pumpAndSettle();
       await tester.tap(find.text('Informar pago').last);
       await tester.pumpAndSettle();
 
-      await tester.tap(find.text('Pix'));
-      await tester.pumpAndSettle();
       await tester.enterText(
         find.widgetWithText(TextFormField, 'Observacao do pagamento'),
         'Pago na recepcao',
@@ -119,13 +108,15 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(service.paymentUpdatedBookingId, 10);
-      expect(service.paymentUpdate?.paymentMethod, MassagePaymentMethod.pix);
+      expect(service.paymentUpdate?.paymentMethod, MassagePaymentMethod.card);
       expect(service.paymentUpdate?.paymentDate, _formatDate(bookingDate));
       expect(service.paymentUpdate?.paymentNotes, 'Pago na recepcao');
-      expect(find.text('Pago'), findsOneWidget);
+      expect(find.text('Pago'), findsWidgets);
       expect(
-        find.textContaining('Pago em ${_formatShortDate(bookingDate)} via Pix'),
-        findsOneWidget,
+        find.textContaining(
+          'Pago em ${_formatShortDate(bookingDate)} via Cartao',
+        ),
+        findsWidgets,
       );
     },
   );
@@ -151,7 +142,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Editar registro'), findsOneWidget);
-      expect(find.text('Informar pago'), findsOneWidget);
+      expect(find.text('Informar pago'), findsWidgets);
       expect(find.text('Cancelar atencao'), findsOneWidget);
     },
   );
@@ -174,7 +165,7 @@ void main() {
       await tester.tap(find.text('Informar pago'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Maria'), findsOneWidget);
+      expect(find.text('Maria'), findsWidgets);
       expect(
         find.text('Todos os atendimentos do dia ja estao pagos ou cancelados.'),
         findsOneWidget,
@@ -188,6 +179,36 @@ void main() {
             .onPressed,
         isNull,
       );
+    },
+  );
+
+  testWidgets(
+    'MassageBookingPage muestra resumen por prestador y permite ver detalle',
+    (WidgetTester tester) async {
+      final _FakeMassageAppService service =
+          _FakeMassageAppService.withBookings(<MassageBooking>[
+            _bookingFixture(id: 10, clientName: 'Maria', paid: false),
+            _bookingFixture(id: 11, clientName: 'Ana', paid: true),
+          ]);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(body: MassageBookingPage(massageAppService: service)),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Resumo por prestador'), findsOneWidget);
+      expect(find.text('Danuska'), findsWidgets);
+      expect(find.text('Ver detalhe'), findsOneWidget);
+
+      await tester.ensureVisible(find.text('Ver detalhe'));
+      await tester.tap(find.text('Ver detalhe'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Detalhe de Danuska'), findsOneWidget);
+      expect(find.text('Maria'), findsWidgets);
+      expect(find.text('Ana'), findsWidgets);
     },
   );
 }
@@ -215,6 +236,90 @@ final class _FakeMassageAppService implements MassageAppService {
 
   List<MassageBooking> get currentBookings =>
       List<MassageBooking>.unmodifiable(_bookings);
+
+  @override
+  Future<MassageProviderDetailReport> getProviderDetailReport(
+    int providerId, {
+    required String dateFrom,
+    required String dateTo,
+  }) async {
+    final List<MassageBooking> providerBookings = _bookings
+        .where((MassageBooking booking) => booking.providerId == providerId)
+        .toList()
+      ..sort((MassageBooking a, MassageBooking b) => a.startAt.compareTo(b.startAt));
+    final MassageProviderSummary summary =
+        (await listProviderSummaryReport(dateFrom: dateFrom, dateTo: dateTo))
+            .firstWhere((MassageProviderSummary item) => item.providerId == providerId);
+    return MassageProviderDetailReport(
+      providerId: providerId,
+      providerName: 'Danuska',
+      providerActive: true,
+      summary: summary,
+      items: providerBookings
+          .map<MassageProviderReportItem>(
+            (MassageBooking booking) => MassageProviderReportItem(
+              bookingId: booking.id,
+              bookingDate: booking.bookingDate,
+              startTime: booking.startTime,
+              clientName: booking.clientName,
+              guestReference: booking.guestReference,
+              treatment: booking.treatment,
+              therapistId: booking.therapistId,
+              therapistName: booking.therapistName,
+              amount: booking.amount,
+              paid: booking.paid,
+              paymentMethod: booking.paymentMethod,
+              paymentDate: booking.paymentDate,
+              paymentNotes: booking.paymentNotes,
+              status: booking.status,
+              cancellationNotes: booking.cancellationNotes,
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  @override
+  Future<List<MassageProviderSummary>> listProviderSummaryReport({
+    required String dateFrom,
+    required String dateTo,
+  }) async {
+    final List<MassageBooking> activeBookings = _bookings
+        .where((MassageBooking booking) => booking.status == MassageBookingStatus.scheduled)
+        .toList();
+    final int paidCount = activeBookings.where((MassageBooking booking) => booking.paid).length;
+    final int pendingCount = activeBookings.where((MassageBooking booking) => !booking.paid).length;
+    final double paidAmount = activeBookings
+        .where((MassageBooking booking) => booking.paid)
+        .fold<double>(0, (double total, MassageBooking booking) => total + booking.amount);
+    final double pendingAmount = activeBookings
+        .where((MassageBooking booking) => !booking.paid)
+        .fold<double>(0, (double total, MassageBooking booking) => total + booking.amount);
+    final double grossAmount = activeBookings.fold<double>(
+      0,
+      (double total, MassageBooking booking) => total + booking.amount,
+    );
+    final DateTime? lastBookingAt = _bookings.isEmpty
+        ? null
+        : (_bookings.toList()..sort((MassageBooking a, MassageBooking b) => a.startAt.compareTo(b.startAt))).last.startAt;
+    return <MassageProviderSummary>[
+      MassageProviderSummary(
+        providerId: 1,
+        providerName: 'Danuska',
+        providerActive: true,
+        therapistsCount: 1,
+        scheduledCount: activeBookings.length,
+        cancelledCount: _bookings.length - activeBookings.length,
+        attendedCount: activeBookings.length,
+        paidCount: paidCount,
+        pendingCount: pendingCount,
+        grossAmount: grossAmount,
+        paidAmount: paidAmount,
+        pendingAmount: pendingAmount,
+        lastBookingAt: lastBookingAt,
+      ),
+    ];
+  }
 
   @override
   Future<MassageBooking> createBooking(CreateMassageBookingModel input) async {

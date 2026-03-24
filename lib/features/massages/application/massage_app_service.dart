@@ -1,6 +1,17 @@
 import '../domain/massage_models.dart';
 
 abstract interface class MassageAppService {
+  Future<List<MassageProviderSummary>> listProviderSummaryReport({
+    required String dateFrom,
+    required String dateTo,
+  });
+
+  Future<MassageProviderDetailReport> getProviderDetailReport(
+    int providerId, {
+    required String dateFrom,
+    required String dateTo,
+  });
+
   Future<List<MassageProvider>> listProviders({bool activeOnly = false});
 
   Future<MassageProvider> createProvider(CreateMassageProviderModel input);

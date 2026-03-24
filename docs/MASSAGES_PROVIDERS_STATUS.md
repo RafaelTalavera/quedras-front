@@ -49,6 +49,28 @@ Pantalla principal: `lib/features/massages/presentation/massage_booking_page.dar
 - La agenda y los listados muestran proveedor y masajista.
 - La validacion de solapamiento ahora corre por `therapistId`.
 
+### UI de Resumen por Prestador
+- La pantalla principal ya muestra una visualizacion de reporte por prestador.
+- El bloque `Resumo por prestador` permite:
+  - elegir rango `inicio / fim`
+  - consultar resumen por prestador
+  - ver tabla con atenciones y cobros
+  - seleccionar un prestador
+  - abrir el detalle del prestador seleccionado en la misma pantalla
+- La visualizacion no reemplaza:
+  - `Resumo do mes`
+  - agenda mensual
+  - panel `Dia selecionado`
+- El detalle muestra:
+  - cliente
+  - fecha
+  - hora
+  - tratamiento
+  - referencia/habitacion
+  - masajista
+  - valor
+  - estado y pago
+
 ### Ajustes de layout aplicados
 - Se corrigio overflow del panel derecho del dialogo de prestadores.
 - El bloque derecho ahora usa scroll interno y acciones fijas abajo.
@@ -61,6 +83,8 @@ Pantalla principal: `lib/features/massages/presentation/massage_booking_page.dar
 - `POST /massages/bookings` y `PUT /massages/bookings/{id}` deben aceptar `therapistId`.
 - `POST /massages/providers/{providerId}/therapists` debe crear masajista.
 - `PUT /massages/providers/{providerId}/therapists/{therapistId}` debe actualizar masajista.
+- `GET /massages/reports/providers/summary` debe devolver resumen por prestador para rango consultado.
+- `GET /massages/reports/providers/{providerId}/details` debe devolver detalle del prestador para rango consultado.
 
 ## Estado real de backend
 - El backend no vive en este repo frontend.
@@ -70,7 +94,10 @@ Pantalla principal: `lib/features/massages/presentation/massage_booking_page.dar
   - endpoints `POST/PUT /api/v1/massages/providers/{providerId}/therapists`
   - `therapistId` obligatorio en bookings
   - conflicto de horario validado por masajista
-- Resultado: el pendiente principal ya no es implementacion de backend sino validacion punta a punta del contrato real entre ambos repos.
+- Para el alcance de `resumen por prestador`, ya se implemento backend en `quadras` con:
+  - `GET /api/v1/massages/reports/providers/summary`
+  - `GET /api/v1/massages/reports/providers/{providerId}/details`
+- Resultado: la visualizacion ya existe en frontend y backend; el pendiente principal pasa a ser validacion manual punta a punta en entorno operativo.
 
 ## Validacion realizada
 - Se corrigio la migracion `V7` del backend para MySQL y se limpio el estado fallido de Flyway en entorno local.
@@ -79,9 +106,17 @@ Pantalla principal: `lib/features/massages/presentation/massage_booking_page.dar
   - listar prestadores con masajistas embebidos
   - agregar masajista dentro de un prestador
   - usar `providerId + therapistId` en el circuito de atenciones
+- Se validaron con tests los contratos de reporte para:
+  - resumen por prestador
+  - detalle por prestador
+  - rango invalido
+- El frontend ya renderiza la visualizacion de resumen por prestador y su detalle con pruebas automatizadas.
 
 ## Pendiente imediato
-- Ejecutar una nueva pasada de regresion sobre agenda y edicion de atenciones para cubrir casos con masajistas inactivos e historico existente.
+- Ejecutar una nueva pasada de validacion manual sobre:
+  - resumen por prestador en entorno real
+  - consistencia de montos entre tabla y detalle
+  - convivencia entre agenda diaria y visualizacion de reporte
 
 ## Regla de trabajo a partir de este punto
 - Todo cambio funcional de `Massagens` que modifique contrato de datos debe trabajarse en paralelo en:

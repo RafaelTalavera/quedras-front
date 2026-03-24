@@ -19,7 +19,7 @@ void main() {
   test('InMemoryReservationAppService agrega una reserva nueva', () async {
     final InMemoryReservationAppService service =
         InMemoryReservationAppService();
-    final String targetDate = '2026-03-20';
+    final String targetDate = '2026-12-20';
 
     await service.create(
       CreateReservationModel(

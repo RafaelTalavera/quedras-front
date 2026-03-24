@@ -2,11 +2,19 @@
 
 ## Estado general frontend
 - Proyecto: COSTANORTE Frontend
-- Estado: En progreso (reenfoque comercial post Hito 12)
-- Ultimo hito trabajado: Post Hito 12 - Reenfoque comercial, modulos visibles y salida pt-BR
-- Ultima actualizacion: 2026-03-20
+- Estado: En progreso (snapshot operativo post Hito 12, con `Massagens` y `Quadras` ya en uso local)
+- Ultimo hito trabajado: Post Hito 12 - consolidacion comercial, `Massagens` por prestador/masajista y operacion real de `Quadras`
+- Ultima actualizacion: 2026-03-24
 - Fuente de verdad global: `C:/Users/Public/Documents/Proyectos/quadras/docs/TABLERO_PROGRESO.md`
-- Proximo paso frontend: Cerrar contrato backend de `Massagens` con auditoria completa, cancelacion con observacion y validar `Tours e Viagens` para release.
+- Proximo paso frontend: pasar a una etapa de mejora sobre experiencia operativa, consistencia de mensajes y cierre de contratos backend pendientes.
+
+## Snapshot actual de desarrollo
+- Fecha de corte: 2026-03-24
+- `Quadras` ya opera con backend autenticado real para listar reservas, lanzar reservas, informar pago, cancelar y administrar tarifas/materiales.
+- Se validaron lanzamientos de prueba persistidos en base para `Hospede`, `Externo` y `VIP` el dia `2026-03-25`.
+- `Massagens` ya opera con relacion `prestador -> masajista`, resumen por prestador y acciones operativas integradas en la pantalla principal.
+- La autenticacion JWT sigue en memoria y protege modulos internos del sistema.
+- El frente inmediato de mejora es endurecer validaciones y UX operacional, en especial mensajes al usuario, reglas de agenda y alineacion frontend-backend donde aun hay diferencias.
 
 ## Hitos frontend
 | Hito | Nombre | Estado frontend | Tests | Documentacion | Commit | Observaciones |
@@ -45,11 +53,23 @@
 - La validacion de conflicto horario se hace por masajista.
 - Documento de detalle: `docs/MASSAGES_PROVIDERS_STATUS.md`.
 
+## Actualizacion Massagens - Visualizacion de Resumen
+- Fecha: 2026-03-24
+- `Massagens` ya muestra en el sistema la visualizacion `Resumo por prestador`.
+- El operador puede consultar un rango, ver la tabla de resumen y abrir el detalle de un prestador sin salir de la pantalla principal.
+- La visualizacion convive con:
+  - `Resumo do mes`
+  - agenda mensual
+  - panel `Dia selecionado`
+- Documento de detalle: `docs/MASSAGES_SUMMARY_REPORT_PLAN.md`.
+
 ## Pendientes inmediatos frontend
 - Cerrar y validar contrato backend especifico para `Massagens` con estructura real de `therapists`, `status`, edicion, cancelacion y auditoria por usuario.
 - Definir contrato backend especifico para `Tours e Viagens`.
 - Verificar en backend que JWT quede persistido como autor real en `createdBy/updatedBy/cancelledBy`.
 - Evaluar si la sesion seguira solo en memoria o necesitara persistencia controlada.
+- Alinear en backend la regla de `Quadras` para bloquear fechas pasadas, hoy resuelta solo en frontend.
+- Continuar mejorando alertas y textos operativos para que el operador reciba feedback mas claro segun conflicto, validacion o error real.
 
 ## Bloqueos frontend
 - Sin bloqueos tecnicos abiertos; pendiente definicion funcional de backend para los nuevos modulos comerciales.

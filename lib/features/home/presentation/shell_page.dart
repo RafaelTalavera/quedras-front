@@ -3,8 +3,12 @@ import 'dart:ui';
 import 'package:flutter/material.dart';
 
 import '../../../app/router/app_routes.dart';
+import '../../../core/theme/costa_norte_brand.dart';
+import '../../../core/widgets/costa_norte_logo.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/auth_session.dart';
+import '../../courts/application/court_app_service.dart';
+import '../../massages/application/massage_app_service.dart';
 import '../../massages/presentation/massage_booking_page.dart';
 import '../../reservations/application/reservation_app_service.dart';
 import '../../settings/presentation/settings_page.dart';
@@ -15,13 +19,17 @@ class ShellPage extends StatefulWidget {
   const ShellPage({
     required this.section,
     required this.sessionController,
+    required this.massageAppService,
     required this.reservationAppService,
+    required this.courtAppService,
     super.key,
   });
 
   final AppSection section;
   final SessionController sessionController;
+  final MassageAppService massageAppService;
   final ReservationAppService reservationAppService;
+  final CourtAppService courtAppService;
 
   @override
   State<ShellPage> createState() => _ShellPageState();
@@ -65,27 +73,39 @@ class _ShellPageState extends State<ShellPage> {
     return Scaffold(
       body: DecoratedBox(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-            colors: <Color>[
-              Color(0xFFF1E9DC),
-              Color(0xFFE3F0EC),
-              Color(0xFFF8F6EF),
-            ],
-          ),
+          gradient: CostaNorteBrand.ambientGradient,
         ),
         child: Stack(
           children: <Widget>[
             Positioned(
-              top: -80,
-              left: -60,
-              child: _GlowOrb(color: const Color(0x55167D85), diameter: 260),
+              top: -30,
+              right: -180,
+              child: IgnorePointer(
+                child: Opacity(
+                  opacity: 0.12,
+                  child: Image.asset(
+                    'assets/branding/costanorte_hero.jpg',
+                    width: 720,
+                    fit: BoxFit.cover,
+                  ),
+                ),
+              ),
             ),
             Positioned(
-              bottom: -120,
-              right: -80,
-              child: _GlowOrb(color: const Color(0x44E0B36A), diameter: 300),
+              top: -80,
+              left: -40,
+              child: _GlowOrb(
+                color: CostaNorteBrand.royalBlue.withValues(alpha: 0.12),
+                diameter: 260,
+              ),
+            ),
+            Positioned(
+              bottom: -110,
+              right: -70,
+              child: _GlowOrb(
+                color: CostaNorteBrand.gold.withValues(alpha: 0.15),
+                diameter: 320,
+              ),
             ),
             SafeArea(
               child: compactLayout
@@ -113,11 +133,9 @@ class _ShellPageState extends State<ShellPage> {
   Widget _buildContent() {
     switch (_selectedSection) {
       case AppSection.massageBooking:
-        return const MassageBookingPage();
+        return MassageBookingPage(massageAppService: widget.massageAppService);
       case AppSection.tennisRental:
-        return TennisRentalPage(
-          reservationAppService: widget.reservationAppService,
-        );
+        return TennisRentalPage(courtAppService: widget.courtAppService);
       case AppSection.toursTravel:
         return const ToursTravelPage();
       case AppSection.settings:
@@ -178,46 +196,26 @@ class _DesktopShell extends StatelessWidget {
       padding: const EdgeInsets.all(20),
       child: Row(
         children: <Widget>[
-          ClipRRect(
-            borderRadius: BorderRadius.circular(24),
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
-              child: Container(
-                width: 280,
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.76),
-                  borderRadius: BorderRadius.circular(24),
-                ),
-                child: _NavigationPanel(
-                  section: section,
-                  session: session,
-                  onSectionSelected: onSectionSelected,
-                  onLogout: onLogout,
-                ),
-              ),
+          _GlassPanel(
+            width: 302,
+            child: _NavigationPanel(
+              section: section,
+              session: session,
+              onSectionSelected: onSectionSelected,
+              onLogout: onLogout,
             ),
           ),
           const SizedBox(width: 18),
           Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(24),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 6, sigmaY: 6),
-                child: Container(
-                  padding: const EdgeInsets.all(26),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.88),
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 260),
-                    switchInCurve: Curves.easeOutCubic,
-                    switchOutCurve: Curves.easeInCubic,
-                    child: KeyedSubtree(
-                      key: ValueKey<AppSection>(section),
-                      child: content,
-                    ),
-                  ),
+            child: _GlassPanel(
+              padding: const EdgeInsets.all(26),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 260),
+                switchInCurve: Curves.easeOutCubic,
+                switchOutCurve: Curves.easeInCubic,
+                child: KeyedSubtree(
+                  key: ValueKey<AppSection>(section),
+                  child: content,
                 ),
               ),
             ),
@@ -257,29 +255,53 @@ class _CompactShell extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           Expanded(
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(20),
-              child: BackdropFilter(
-                filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.88),
-                    borderRadius: BorderRadius.circular(20),
-                  ),
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 220),
-                    child: KeyedSubtree(
-                      key: ValueKey<AppSection>(section),
-                      child: SingleChildScrollView(child: content),
-                    ),
-                  ),
+            child: _GlassPanel(
+              padding: const EdgeInsets.all(18),
+              child: AnimatedSwitcher(
+                duration: const Duration(milliseconds: 220),
+                child: KeyedSubtree(
+                  key: ValueKey<AppSection>(section),
+                  child: SingleChildScrollView(child: content),
                 ),
               ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _GlassPanel extends StatelessWidget {
+  const _GlassPanel({required this.child, this.width, this.padding});
+
+  final Widget child;
+  final double? width;
+  final EdgeInsetsGeometry? padding;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(28),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 8, sigmaY: 8),
+        child: Container(
+          width: width,
+          padding: padding,
+          decoration: BoxDecoration(
+            color: Colors.white.withValues(alpha: 0.84),
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: CostaNorteBrand.line),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: Color(0x14000000),
+                blurRadius: 30,
+                offset: Offset(0, 14),
+              ),
+            ],
+          ),
+          child: child,
+        ),
       ),
     );
   }
@@ -303,7 +325,7 @@ class _NavigationPanel extends StatelessWidget {
     return Column(
       children: <Widget>[
         const Padding(
-          padding: EdgeInsets.fromLTRB(18, 26, 18, 20),
+          padding: EdgeInsets.fromLTRB(18, 24, 18, 18),
           child: _BrandHeader(),
         ),
         Padding(
@@ -313,7 +335,7 @@ class _NavigationPanel extends StatelessWidget {
         Expanded(
           child: NavigationRail(
             selectedIndex: section.index,
-            minExtendedWidth: 230,
+            minExtendedWidth: 236,
             extended: true,
             onDestinationSelected: (int index) {
               onSectionSelected(AppSection.values[index]);
@@ -337,7 +359,7 @@ class _NavigationPanel extends StatelessWidget {
               NavigationRailDestination(
                 icon: Icon(Icons.tune_outlined),
                 selectedIcon: Icon(Icons.tune_rounded),
-                label: Text('Configurações'),
+                label: Text('Configuracoes'),
               ),
             ],
           ),
@@ -373,59 +395,52 @@ class _CompactTopBar extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(16),
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 4, sigmaY: 4),
-        child: Container(
-          padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.84),
-            borderRadius: BorderRadius.circular(16),
-          ),
-          child: Column(
+    return _GlassPanel(
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
+      child: Column(
+        children: <Widget>[
+          Row(
             children: <Widget>[
-              Row(
-                children: <Widget>[
-                  const Expanded(child: _BrandHeader(compact: true)),
-                  const SizedBox(width: 10),
-                  FilledButton.tonalIcon(
-                    onPressed: onLogout,
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Sair'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              _SessionCard(session: session, compact: true),
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: AppSection.values.map((AppSection item) {
-                  final bool selected = item == section;
-                  return ChoiceChip(
-                    label: Text(_labelForSection(item)),
-                    avatar: Icon(
-                      _iconForSection(item),
-                      size: 18,
-                      color: selected ? Colors.white : const Color(0xFF0F4C5C),
-                    ),
-                    selected: selected,
-                    onSelected: (_) => onSectionSelected(item),
-                    selectedColor: const Color(0xFF0F4C5C),
-                    labelStyle: TextStyle(
-                      color: selected ? Colors.white : const Color(0xFF0F4C5C),
-                      fontWeight: FontWeight.w700,
-                    ),
-                    side: const BorderSide(color: Color(0x1F0F4C5C)),
-                    backgroundColor: Colors.white,
-                  );
-                }).toList(),
+              const Expanded(child: _BrandHeader(compact: true)),
+              const SizedBox(width: 10),
+              FilledButton.tonalIcon(
+                onPressed: onLogout,
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text('Sair'),
               ),
             ],
           ),
-        ),
+          const SizedBox(height: 10),
+          _SessionCard(session: session, compact: true),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: AppSection.values.map((AppSection item) {
+              final bool selected = item == section;
+              return ChoiceChip(
+                label: Text(_labelForSection(item)),
+                avatar: Icon(
+                  _iconForSection(item),
+                  size: 18,
+                  color: selected
+                      ? Colors.white
+                      : CostaNorteBrand.royalBlueDeep,
+                ),
+                selected: selected,
+                onSelected: (_) => onSectionSelected(item),
+                selectedColor: CostaNorteBrand.royalBlue,
+                backgroundColor: Colors.white,
+                labelStyle: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: selected
+                      ? Colors.white
+                      : CostaNorteBrand.royalBlueDeep,
+                ),
+                side: const BorderSide(color: CostaNorteBrand.line),
+              );
+            }).toList(),
+          ),
+        ],
       ),
     );
   }
@@ -444,37 +459,35 @@ class _SessionCard extends StatelessWidget {
       return const SizedBox.shrink();
     }
 
+    final TextTheme textTheme = Theme.of(context).textTheme;
+
     return Container(
       width: double.infinity,
       padding: EdgeInsets.all(compact ? 12 : 14),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: const Color(0xFFF0F7F6),
-        border: Border.all(color: const Color(0x1F167D85)),
+        borderRadius: BorderRadius.circular(20),
+        color: CostaNorteBrand.foam,
+        border: Border.all(color: CostaNorteBrand.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Sessão ativa',
-            style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: const Color(0xFF4D6574),
-              fontWeight: FontWeight.w700,
+            'Sessao ativa',
+            style: textTheme.labelLarge?.copyWith(
+              color: CostaNorteBrand.mutedInk,
             ),
           ),
           const SizedBox(height: 6),
           Text(
             activeSession.username,
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-              color: const Color(0xFF0A3440),
-              fontWeight: FontWeight.w800,
-            ),
+            style: textTheme.titleLarge?.copyWith(color: CostaNorteBrand.ink),
           ),
           const SizedBox(height: 8),
           const Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: <Widget>[_SessionPill(label: 'Acesso ativo')],
+            children: <Widget>[_SessionPill(label: 'Acesso autorizado')],
           ),
         ],
       ),
@@ -493,15 +506,13 @@ class _SessionPill extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
-        color: const Color(0xFF167D85),
+        gradient: CostaNorteBrand.goldAccentGradient,
       ),
       child: Text(
         label,
-        style: const TextStyle(
-          color: Colors.white,
-          fontSize: 12,
-          fontWeight: FontWeight.w700,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.labelMedium?.copyWith(color: CostaNorteBrand.charcoal),
       ),
     );
   }
@@ -514,42 +525,59 @@ class _BrandHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextStyle headlineStyle = Theme.of(context).textTheme.titleLarge!
-        .copyWith(
-          fontSize: compact ? 20 : 24,
-          fontWeight: FontWeight.w800,
-          color: const Color(0xFF0A3440),
-          letterSpacing: 0.7,
-        );
+    final TextTheme textTheme = Theme.of(context).textTheme;
 
-    return Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Container(
-          width: compact ? 34 : 44,
-          height: compact ? 34 : 44,
+          width: double.infinity,
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 12 : 16,
+            vertical: compact ? 12 : 14,
+          ),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(24),
             gradient: const LinearGradient(
-              colors: <Color>[Color(0xFF167D85), Color(0xFF3EA97A)],
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
+              colors: <Color>[
+                CostaNorteBrand.royalBlueNight,
+                CostaNorteBrand.royalBlueDeep,
+              ],
+            ),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: Color(0x14000000),
+                blurRadius: 24,
+                offset: Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: CostaNorteLogo(width: compact ? 138 : 184),
+          ),
+        ),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            color: CostaNorteBrand.gold.withValues(alpha: 0.18),
+          ),
+          child: Text(
+            'Hotel Costa Norte',
+            style: textTheme.labelMedium?.copyWith(
+              color: CostaNorteBrand.charcoal,
             ),
           ),
-          child: const Icon(Icons.waves_rounded, color: Colors.white, size: 22),
         ),
-        const SizedBox(width: 10),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text('COSTA NORTE', style: headlineStyle),
-            Text(
-              'Serviços e experiências',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: const Color(0xFF536477),
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          ],
+        const SizedBox(height: 10),
+        Text(
+          'Servicos internos do hotel',
+          style: textTheme.bodySmall?.copyWith(color: CostaNorteBrand.mutedInk),
         ),
       ],
     );

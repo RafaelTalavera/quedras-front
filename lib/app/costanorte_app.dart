@@ -4,9 +4,14 @@ import '../core/config/backend_config.dart';
 import '../core/network/api_client.dart';
 import '../core/network/authorized_api_client.dart';
 import '../core/network/local_http_client.dart';
+import '../core/theme/costa_norte_brand.dart';
 import '../features/auth/application/auth_app_service.dart';
 import '../features/auth/application/session_controller.dart';
 import '../features/auth/infrastructure/http_auth_app_service.dart';
+import '../features/courts/application/court_app_service.dart';
+import '../features/courts/infrastructure/http_court_app_service.dart';
+import '../features/massages/application/massage_app_service.dart';
+import '../features/massages/infrastructure/http_massage_app_service.dart';
 import '../features/reservations/application/reservation_app_service.dart';
 import '../features/reservations/infrastructure/http_reservation_app_service.dart';
 import 'router/app_router.dart';
@@ -18,16 +23,22 @@ class CostaNorteApp extends StatefulWidget {
     ApiClient? apiClient,
     AuthAppService? authAppService,
     SessionController? sessionController,
+    MassageAppService? massageAppService,
     ReservationAppService? reservationAppService,
+    CourtAppService? courtAppService,
   }) : _apiClient = apiClient,
        _authAppService = authAppService,
        _sessionController = sessionController,
-       _reservationAppService = reservationAppService;
+       _massageAppService = massageAppService,
+       _reservationAppService = reservationAppService,
+       _courtAppService = courtAppService;
 
   final ApiClient? _apiClient;
   final AuthAppService? _authAppService;
   final SessionController? _sessionController;
+  final MassageAppService? _massageAppService;
   final ReservationAppService? _reservationAppService;
+  final CourtAppService? _courtAppService;
 
   @override
   State<CostaNorteApp> createState() => _CostaNorteAppState();
@@ -38,7 +49,9 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
   late final ApiClient _authorizedApiClient;
   late final AuthAppService _authAppService;
   late final SessionController _sessionController;
+  late final MassageAppService _massageAppService;
   late final ReservationAppService _reservationAppService;
+  late final CourtAppService _courtAppService;
 
   @override
   void initState() {
@@ -53,9 +66,15 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
     );
     _authAppService =
         widget._authAppService ?? HttpAuthAppService(apiClient: _rawApiClient);
+    _massageAppService =
+        widget._massageAppService ??
+        HttpMassageAppService(apiClient: _authorizedApiClient);
     _reservationAppService =
         widget._reservationAppService ??
         HttpReservationAppService(apiClient: _authorizedApiClient);
+    _courtAppService =
+        widget._courtAppService ??
+        HttpCourtAppService(apiClient: _authorizedApiClient);
   }
 
   @override
@@ -63,109 +82,15 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
     return MaterialApp(
       title: 'CostaNorte',
       debugShowCheckedModeBanner: false,
-      theme: _buildTheme(),
+      theme: CostaNorteBrand.buildTheme(),
       initialRoute: AppRoutes.login,
       onGenerateRoute: (settings) => AppRouter.generateRoute(
         settings: settings,
         authAppService: _authAppService,
         sessionController: _sessionController,
+        massageAppService: _massageAppService,
         reservationAppService: _reservationAppService,
-      ),
-    );
-  }
-
-  ThemeData _buildTheme() {
-    const Color oceanBlue = Color(0xFF0E4457);
-    const Color lagoon = Color(0xFF167D85);
-    const Color sand = Color(0xFFE8D0A0);
-
-    final ColorScheme colorScheme = ColorScheme.fromSeed(
-      seedColor: oceanBlue,
-      brightness: Brightness.light,
-      primary: oceanBlue,
-      surface: Colors.white,
-    );
-
-    return ThemeData(
-      useMaterial3: true,
-      colorScheme: colorScheme.copyWith(secondary: sand, tertiary: lagoon),
-      scaffoldBackgroundColor: const Color(0xFFF5F1E8),
-      fontFamily: 'Cambria',
-      appBarTheme: const AppBarTheme(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        centerTitle: false,
-        titleTextStyle: TextStyle(
-          color: Color(0xFF0F2438),
-          fontFamily: 'Cambria',
-          fontSize: 24,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.3,
-        ),
-      ),
-      cardTheme: CardThemeData(
-        color: Colors.white.withValues(alpha: 0.9),
-        elevation: 1.5,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: Color(0x160F4C5C)),
-        ),
-      ),
-      navigationRailTheme: NavigationRailThemeData(
-        backgroundColor: Colors.white.withValues(alpha: 0.78),
-        indicatorColor: const Color(0x33167D85),
-        selectedIconTheme: const IconThemeData(color: Color(0xFF0F4C5C)),
-        selectedLabelTextStyle: const TextStyle(
-          color: Color(0xFF0F4C5C),
-          fontFamily: 'Cambria',
-          fontWeight: FontWeight.w700,
-        ),
-        unselectedLabelTextStyle: const TextStyle(
-          color: Color(0xFF425466),
-          fontFamily: 'Cambria',
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          backgroundColor: oceanBlue,
-          foregroundColor: Colors.white,
-          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-      ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          foregroundColor: oceanBlue,
-          side: const BorderSide(color: Color(0x332A4A5D)),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(14),
-          ),
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: Colors.white,
-        labelStyle: const TextStyle(color: Color(0xFF536477)),
-        hintStyle: const TextStyle(color: Color(0xFF8A98A4)),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0x1F0F4C5C)),
-        ),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Color(0x1F0F4C5C)),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: lagoon, width: 1.4),
-        ),
-      ),
-      snackBarTheme: const SnackBarThemeData(
-        behavior: SnackBarBehavior.floating,
+        courtAppService: _courtAppService,
       ),
     );
   }

@@ -1,5 +1,41 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-03-24 | Post Hito 12 | Corte documental de desarrollo y siguiente etapa de mejora
+- Componente afectado: Frontend (documentacion transversal + `Quadras`)
+- Archivos tocados:
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+  - `lib/core/localization/pt_br_error_translator.dart`
+  - `lib/features/tennis/presentation/tennis_rental_page.dart`
+- Motivo del cambio: Dejar registrado el punto actual del desarrollo antes de pasar a una etapa de mejora, incluyendo el estado operativo de `Quadras` y el ultimo ajuste de alertas/validaciones visibles para el operador.
+- Impacto funcional: `Quadras` ahora bloquea fechas pasadas desde la UI, convierte el conflicto de horario ocupado en alerta de warning mas clara y mantiene documentado que el siguiente paso es endurecer UX y reglas compartidas con backend.
+
+## 2026-03-24 | Post Hito 12 | Visualizacion de resumen por prestador ya disponible en Massagens
+- Componente afectado: Frontend (`Massagens`) + documentacion funcional
+- Archivos tocados:
+  - `lib/features/massages/application/massage_app_service.dart`
+  - `lib/features/massages/domain/massage_models.dart`
+  - `lib/features/massages/infrastructure/http_massage_app_service.dart`
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `test/features/massages/infrastructure/http_massage_app_service_test.dart`
+  - `test/features/massages/presentation/massage_booking_page_test.dart`
+  - `docs/MASSAGES_SUMMARY_REPORT_PLAN.md`
+  - `docs/MASSAGES_PROVIDERS_STATUS.md`
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Completar la visualizacion aprobada para consultar resumen de atenciones y cobros por prestador, y dejar documentado que ya forma parte del sistema.
+- Impacto funcional: El operador ya puede ver la tabla `Resumo por prestador`, filtrar por rango y seleccionar un prestador para abrir su detalle dentro de `Massagens`, sin perder la agenda principal.
+
+## 2026-03-24 | Post Hito 12 | Plan documentado para resumen por prestador en Massagens
+- Componente afectado: Frontend (documentacion funcional compartida con backend)
+- Archivos tocados:
+  - `docs/MASSAGES_SUMMARY_REPORT_PLAN.md`
+  - `docs/FRONT_PROGRESS.md`
+  - `README.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Dejar especificado el siguiente paquete funcional de `Massagens` para soportar tabla de resumen por prestador y detalle navegable, alineando alcance frontend y contrato backend esperado.
+- Impacto funcional: Sin cambios de UI o API en esta pasada; queda definido el plan de implementacion, el contrato recomendado y el criterio de cierre para ejecutar el desarrollo real en ambos repositorios.
+
 ## 2026-03-23 | Post Hito 12 | Informar pago rapido en Massagens
 - Componente afectado: Frontend (`Massagens`)
 - Archivos tocados:

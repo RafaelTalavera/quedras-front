@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/costa_norte_brand.dart';
 import '../../auth/domain/auth_session.dart';
 
 class SettingsPage extends StatelessWidget {
@@ -14,20 +15,11 @@ class SettingsPage extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
-        Text(
-          'Configurações',
-          style: textTheme.headlineMedium?.copyWith(
-            color: const Color(0xFF14384A),
-            fontWeight: FontWeight.w800,
-          ),
-        ),
+        Text('Configuracoes', style: textTheme.headlineMedium),
         const SizedBox(height: 8),
         Text(
-          'Ajustes visuais e operacionais voltados ao uso interno da equipe, sem expor detalhes técnicos de infraestrutura.',
-          style: textTheme.bodyLarge?.copyWith(
-            color: const Color(0xFF5A6D77),
-            height: 1.5,
-          ),
+          'Ajustes visuais e operacionais voltados ao uso interno da equipe, sem expor detalhes tecnicos de infraestrutura.',
+          style: textTheme.bodyLarge,
         ),
         const SizedBox(height: 18),
         Wrap(
@@ -37,29 +29,29 @@ class SettingsPage extends StatelessWidget {
             _SettingCard(
               icon: Icons.person_outline_rounded,
               title: 'Operador',
-              value: session?.username ?? 'Sessão interna',
-              detail: 'Acesso ativo para gestão de serviços e experiências.',
+              value: session?.username ?? 'Sessao interna',
+              detail: 'Acesso ativo para gestao de servicos e experiencias.',
             ),
             const _SettingCard(
               icon: Icons.language_rounded,
               title: 'Idioma',
-              value: 'Português (Brasil)',
+              value: 'Portugues (Brasil)',
               detail:
-                  'Toda a experiência visível ao usuário permanece em pt-BR.',
+                  'Toda a experiencia visivel ao usuario permanece em pt-BR.',
             ),
             const _SettingCard(
               icon: Icons.palette_outlined,
               title: 'Identidade visual',
-              value: 'Padrão Costa Norte',
+              value: 'Referencia Costa Norte',
               detail:
-                  'Paleta inspirada em mar, areia e hospitalidade para manter coerência com a marca.',
+                  'Paleta, logo e imagem inspirados no Hotel Costa Norte Ingleses.',
             ),
             const _SettingCard(
               icon: Icons.notifications_none_rounded,
-              title: 'Comunicação interna',
+              title: 'Comunicacao interna',
               value: 'Planejada',
               detail:
-                  'Espaço reservado para alertas de agenda, confirmações e mudanças operacionais.',
+                  'Espaco reservado para alertas de agenda, confirmacoes e mudancas operacionais.',
             ),
           ],
         ),
@@ -83,6 +75,8 @@ class _SettingCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+
     return SizedBox(
       width: 280,
       child: Card(
@@ -96,33 +90,21 @@ class _SettingCard extends StatelessWidget {
                 height: 46,
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(14),
-                  color: const Color(0x1A0F4C5C),
+                  color: CostaNorteBrand.foam,
                 ),
-                child: Icon(icon, color: const Color(0xFF0F4C5C)),
+                child: Icon(icon, color: CostaNorteBrand.royalBlueDeep),
               ),
               const SizedBox(height: 16),
               Text(
                 title,
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: Color(0xFF5A6D77),
+                style: textTheme.labelLarge?.copyWith(
+                  color: CostaNorteBrand.mutedInk,
                 ),
               ),
               const SizedBox(height: 8),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w800,
-                  color: Color(0xFF173348),
-                ),
-              ),
+              Text(value, style: textTheme.titleLarge),
               const SizedBox(height: 8),
-              Text(
-                detail,
-                style: const TextStyle(color: Color(0xFF5A6D77), height: 1.5),
-              ),
+              Text(detail, style: textTheme.bodyMedium),
             ],
           ),
         ),

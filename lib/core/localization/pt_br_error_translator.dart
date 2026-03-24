@@ -39,6 +39,8 @@ final class PtBrErrorTranslator {
         return 'Reservas conclu\u00eddas n\u00e3o podem ser editadas.';
       case 'Reservation overlaps with an existing booking.':
         return 'J\u00e1 existe uma reserva ativa para esse hor\u00e1rio.';
+      case 'Court booking overlaps with an existing active booking.':
+        return 'Ja existe uma reserva ativa para esse horario da quadra.';
       case 'Reservation must be within operating hours 07:00 to 23:00.':
         return 'A reserva deve estar dentro do hor\u00e1rio de funcionamento, das 07:00 \u00e0s 23:00.';
       case 'Reservation duration must be 60, 90 or 120 minutes.':

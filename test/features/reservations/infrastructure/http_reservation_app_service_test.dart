@@ -126,7 +126,7 @@ void main() {
         isA<StateError>().having(
           (StateError error) => error.message.toString(),
           'message',
-          'Já existe uma reserva ativa para esse horário.',
+          'J\u00e1 existe uma reserva ativa para esse hor\u00e1rio.',
         ),
       ),
     );
@@ -145,7 +145,7 @@ void main() {
         isA<StateError>().having(
           (StateError error) => error.message.toString(),
           'message',
-          'Não foi possível conectar ao backend local. Verifique o servidor e a rede interna.',
+          'N\u00e3o foi poss\u00edvel conectar ao backend local. Verifique o servidor e a rede interna.',
         ),
       ),
     );

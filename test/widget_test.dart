@@ -32,7 +32,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(authAppService.lastUsername, 'operador.demo');
-    expect(find.text('Aluguel de Quadras de Tênis'), findsOneWidget);
+    expect(find.text('Aluguel de quadras de tenis'), findsOneWidget);
 
     await tester.tap(find.text('Sair'));
     await tester.pumpAndSettle();

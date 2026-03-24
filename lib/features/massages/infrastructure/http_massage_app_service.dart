@@ -19,6 +19,52 @@ final class HttpMassageAppService implements MassageAppService {
   final ApiClient _apiClient;
 
   @override
+  Future<MassageProviderDetailReport> getProviderDetailReport(
+    int providerId, {
+    required String dateFrom,
+    required String dateTo,
+  }) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get(
+        'massages/reports/providers/$providerId/details?${Uri(queryParameters: <String, String>{"dateFrom": dateFrom, "dateTo": dateTo}).query}',
+        headers: _jsonHeaders,
+      ),
+    );
+    if (!response.isSuccess) {
+      throw StateError(_extractApiErrorMessage(response));
+    }
+    return MassageProviderDetailReport.fromJson(_asMap(_tryDecode(response.body)));
+  }
+
+  @override
+  Future<List<MassageProviderSummary>> listProviderSummaryReport({
+    required String dateFrom,
+    required String dateTo,
+  }) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get(
+        'massages/reports/providers/summary?${Uri(queryParameters: <String, String>{"dateFrom": dateFrom, "dateTo": dateTo}).query}',
+        headers: _jsonHeaders,
+      ),
+    );
+    if (!response.isSuccess) {
+      throw StateError(_extractApiErrorMessage(response));
+    }
+
+    final Object? decoded = _tryDecode(response.body);
+    if (decoded is! List) {
+      throw StateError(
+        'Formato invalido da lista de resumo de massagens retornada pelo backend local.',
+      );
+    }
+    return decoded
+        .map<MassageProviderSummary>(
+          (Object? item) => MassageProviderSummary.fromJson(_asMap(item)),
+        )
+        .toList();
+  }
+
+  @override
   Future<MassageProvider> createProvider(
     CreateMassageProviderModel input,
   ) async {
@@ -376,6 +422,9 @@ final class HttpMassageAppService implements MassageAppService {
   }
 
   static bool _looksLikeTherapistMap(Map<String, dynamic> map) {
+    if (map.containsKey('specialty') || map.containsKey('contact')) {
+      return false;
+    }
     return map.containsKey('id') &&
         (map.containsKey('name') ||
             map.containsKey('active') ||

@@ -38,7 +38,7 @@ final class HttpAuthAppService implements AuthAppService {
 
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! Map) {
-      throw StateError('Formato inválido ao autenticar no backend local.');
+      throw StateError('Formato inv\u00e1lido ao autenticar no backend local.');
     }
 
     try {
@@ -50,7 +50,7 @@ final class HttpAuthAppService implements AuthAppService {
       );
     } on FormatException catch (error) {
       throw StateError(
-        'Formato inválido ao autenticar no backend local: ${error.message}',
+        'Formato inv\u00e1lido ao autenticar no backend local: ${error.message}',
       );
     }
   }
@@ -62,7 +62,7 @@ final class HttpAuthAppService implements AuthAppService {
       return await request();
     } on SocketException {
       throw StateError(
-        'Não foi possível conectar ao backend local. Verifique o servidor e a rede interna.',
+        'N\u00e3o foi poss\u00edvel conectar ao backend local. Verifique o servidor e a rede interna.',
       );
     } on TimeoutException {
       throw StateError('Tempo esgotado ao conectar ao backend local.');
@@ -71,7 +71,7 @@ final class HttpAuthAppService implements AuthAppService {
         'Erro HTTP de transporte ao autenticar no backend local.',
       );
     } on FormatException catch (error) {
-      throw StateError('Resposta inválida do backend local: ${error.message}');
+      throw StateError('Resposta inv\u00e1lida do backend local: ${error.message}');
     }
   }
 

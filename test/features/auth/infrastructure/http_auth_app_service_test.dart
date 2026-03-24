@@ -57,7 +57,7 @@ void main() {
         isA<StateError>().having(
           (StateError error) => error.message.toString(),
           'message',
-          'Usuário ou senha inválidos.',
+          'Usu\u00e1rio ou senha inv\u00e1lidos.',
         ),
       ),
     );
@@ -81,7 +81,7 @@ void main() {
         isA<StateError>().having(
           (StateError error) => error.message.toString(),
           'message',
-          'Formato inválido ao autenticar no backend local: accessToken is required',
+          'Formato inv\u00e1lido ao autenticar no backend local: accessToken is required',
         ),
       ),
     );
@@ -99,7 +99,7 @@ void main() {
         isA<StateError>().having(
           (StateError error) => error.message.toString(),
           'message',
-          'Não foi possível conectar ao backend local. Verifique o servidor e a rede interna.',
+          'N\u00e3o foi poss\u00edvel conectar ao backend local. Verifique o servidor e a rede interna.',
         ),
       ),
     );

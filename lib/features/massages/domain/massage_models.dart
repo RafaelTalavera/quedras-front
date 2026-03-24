@@ -104,6 +104,170 @@ class MassageProvider {
   }
 }
 
+class MassageProviderSummary {
+  const MassageProviderSummary({
+    required this.providerId,
+    required this.providerName,
+    required this.providerActive,
+    required this.therapistsCount,
+    required this.scheduledCount,
+    required this.cancelledCount,
+    required this.attendedCount,
+    required this.paidCount,
+    required this.pendingCount,
+    required this.grossAmount,
+    required this.paidAmount,
+    required this.pendingAmount,
+    required this.lastBookingAt,
+  });
+
+  final int providerId;
+  final String providerName;
+  final bool providerActive;
+  final int therapistsCount;
+  final int scheduledCount;
+  final int cancelledCount;
+  final int attendedCount;
+  final int paidCount;
+  final int pendingCount;
+  final double grossAmount;
+  final double paidAmount;
+  final double pendingAmount;
+  final DateTime? lastBookingAt;
+
+  factory MassageProviderSummary.fromJson(Map<String, dynamic> json) {
+    return MassageProviderSummary(
+      providerId: _readInt(json, 'providerId') ?? 0,
+      providerName: _readString(json, 'providerName') ?? 'Prestador',
+      providerActive: json['providerActive'] as bool? ?? false,
+      therapistsCount: _readInt(json, 'therapistsCount') ?? 0,
+      scheduledCount: _readInt(json, 'scheduledCount') ?? 0,
+      cancelledCount: _readInt(json, 'cancelledCount') ?? 0,
+      attendedCount: _readInt(json, 'attendedCount') ?? 0,
+      paidCount: _readInt(json, 'paidCount') ?? 0,
+      pendingCount: _readInt(json, 'pendingCount') ?? 0,
+      grossAmount: (json['grossAmount'] as num?)?.toDouble() ?? 0,
+      paidAmount: (json['paidAmount'] as num?)?.toDouble() ?? 0,
+      pendingAmount: (json['pendingAmount'] as num?)?.toDouble() ?? 0,
+      lastBookingAt: MassageBooking._tryParseDateTime(
+        json['lastBookingAt'] as String?,
+      ),
+    );
+  }
+}
+
+class MassageProviderReportItem {
+  const MassageProviderReportItem({
+    required this.bookingId,
+    required this.bookingDate,
+    required this.startTime,
+    required this.clientName,
+    required this.guestReference,
+    required this.treatment,
+    required this.therapistId,
+    required this.therapistName,
+    required this.amount,
+    required this.paid,
+    required this.paymentMethod,
+    required this.paymentDate,
+    required this.paymentNotes,
+    required this.status,
+    required this.cancellationNotes,
+  });
+
+  final int bookingId;
+  final DateTime bookingDate;
+  final String startTime;
+  final String clientName;
+  final String guestReference;
+  final String treatment;
+  final int therapistId;
+  final String therapistName;
+  final double amount;
+  final bool paid;
+  final MassagePaymentMethod? paymentMethod;
+  final DateTime? paymentDate;
+  final String? paymentNotes;
+  final MassageBookingStatus status;
+  final String? cancellationNotes;
+
+  factory MassageProviderReportItem.fromJson(Map<String, dynamic> json) {
+    return MassageProviderReportItem(
+      bookingId: _readInt(json, 'bookingId') ?? 0,
+      bookingDate: DateTime.parse(json['bookingDate'] as String),
+      startTime: MassageBooking._normalizeTime(
+        json['startTime'] as String? ?? '00:00:00',
+      ),
+      clientName: _readString(json, 'clientName') ?? '',
+      guestReference: _readString(json, 'guestReference') ?? '',
+      treatment: _readString(json, 'treatment') ?? '',
+      therapistId: _readInt(json, 'therapistId') ?? 0,
+      therapistName: _readString(json, 'therapistName') ?? 'Masajista',
+      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      paid: json['paid'] as bool? ?? false,
+      paymentMethod: MassagePaymentMethod.tryParse(
+        json['paymentMethod'] as String?,
+      ),
+      paymentDate: MassageBooking._tryParseDate(json['paymentDate'] as String?),
+      paymentNotes: MassageBooking._normalizeNullable(
+        json['paymentNotes'] as String?,
+      ),
+      status: MassageBookingStatus.tryParse(json['status'] as String?),
+      cancellationNotes: MassageBooking._normalizeNullable(
+        json['cancellationNotes'] as String?,
+      ),
+    );
+  }
+
+  DateTime get startAt {
+    final List<String> parts = startTime.split(':');
+    return DateTime(
+      bookingDate.year,
+      bookingDate.month,
+      bookingDate.day,
+      int.parse(parts[0]),
+      int.parse(parts[1]),
+    );
+  }
+}
+
+class MassageProviderDetailReport {
+  const MassageProviderDetailReport({
+    required this.providerId,
+    required this.providerName,
+    required this.providerActive,
+    required this.summary,
+    required this.items,
+  });
+
+  final int providerId;
+  final String providerName;
+  final bool providerActive;
+  final MassageProviderSummary summary;
+  final List<MassageProviderReportItem> items;
+
+  factory MassageProviderDetailReport.fromJson(Map<String, dynamic> json) {
+    final Object? itemsRaw = json['items'];
+    return MassageProviderDetailReport(
+      providerId: _readInt(json, 'providerId') ?? 0,
+      providerName: _readString(json, 'providerName') ?? 'Prestador',
+      providerActive: json['providerActive'] as bool? ?? false,
+      summary: MassageProviderSummary.fromJson(
+        _asMapOrNull(json['summary']) ?? const <String, dynamic>{},
+      ),
+      items: itemsRaw is List
+          ? itemsRaw
+                .map<MassageProviderReportItem>(
+                  (Object? item) => MassageProviderReportItem.fromJson(
+                    _asMapOrNull(item) ?? const <String, dynamic>{},
+                  ),
+                )
+                .toList()
+          : const <MassageProviderReportItem>[],
+    );
+  }
+}
+
 class MassageTherapist {
   const MassageTherapist({
     required this.id,

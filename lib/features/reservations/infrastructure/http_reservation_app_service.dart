@@ -36,7 +36,7 @@ final class HttpReservationAppService implements ReservationAppService {
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! List) {
       throw StateError(
-        'Formato inválido da lista de reservas retornada pelo backend local.',
+        'Formato inv\u00e1lido da lista de reservas retornada pelo backend local.',
       );
     }
 
@@ -101,14 +101,14 @@ final class HttpReservationAppService implements ReservationAppService {
       return await request();
     } on SocketException {
       throw StateError(
-        'Não foi possível conectar ao backend local. Verifique o servidor e a rede interna.',
+        'N\u00e3o foi poss\u00edvel conectar ao backend local. Verifique o servidor e a rede interna.',
       );
     } on TimeoutException {
       throw StateError('Tempo esgotado ao conectar ao backend local.');
     } on HttpException {
       throw StateError('Erro HTTP de transporte ao consultar o backend local.');
     } on FormatException catch (error) {
-      throw StateError('Resposta inválida do backend local: ${error.message}');
+      throw StateError('Resposta inv\u00e1lida do backend local: ${error.message}');
     }
   }
 

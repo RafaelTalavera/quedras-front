@@ -6,6 +6,52 @@ import 'package:costanorte/features/massages/infrastructure/http_massage_app_ser
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('HttpMassageAppService lista resumo y detalle por prestador', () async {
+    final _FakeApiClient client = _FakeApiClient()
+      ..enqueue(
+        const ApiResponse(
+          statusCode: 200,
+          body:
+              '[{"providerId":1,"providerName":"Danuska","providerActive":true,"therapistsCount":1,"scheduledCount":2,"cancelledCount":1,"attendedCount":2,"paidCount":1,"pendingCount":1,"grossAmount":330.0,"paidAmount":180.0,"pendingAmount":150.0,"lastBookingAt":"2026-03-20T11:00:00Z"}]',
+        ),
+      )
+      ..enqueue(
+        const ApiResponse(
+          statusCode: 200,
+          body:
+              '{"providerId":1,"providerName":"Danuska","providerActive":true,"summary":{"providerId":1,"providerName":"Danuska","providerActive":true,"therapistsCount":1,"scheduledCount":2,"cancelledCount":1,"attendedCount":2,"paidCount":1,"pendingCount":1,"grossAmount":330.0,"paidAmount":180.0,"pendingAmount":150.0,"lastBookingAt":"2026-03-20T11:00:00Z"},"items":[{"bookingId":10,"bookingDate":"2026-03-20","startTime":"17:00:00","clientName":"Ana","guestReference":"Apto 101","treatment":"Relaxante","therapistId":101,"therapistName":"Danuska","amount":200.0,"paid":false,"paymentMethod":null,"paymentDate":null,"paymentNotes":null,"status":"SCHEDULED","cancellationNotes":null}]}',
+        ),
+      );
+    final HttpMassageAppService service = HttpMassageAppService(
+      apiClient: client,
+    );
+
+    final List<MassageProviderSummary> summary =
+        await service.listProviderSummaryReport(
+          dateFrom: '2026-03-01',
+          dateTo: '2026-03-31',
+        );
+    final MassageProviderDetailReport detail = await service
+        .getProviderDetailReport(
+          1,
+          dateFrom: '2026-03-01',
+          dateTo: '2026-03-31',
+        );
+
+    expect(summary.single.providerName, 'Danuska');
+    expect(summary.single.pendingAmount, 150);
+    expect(detail.providerId, 1);
+    expect(detail.items.single.clientName, 'Ana');
+    expect(
+      client.calls.first.path,
+      'massages/reports/providers/summary?dateFrom=2026-03-01&dateTo=2026-03-31',
+    );
+    expect(
+      client.calls.last.path,
+      'massages/reports/providers/1/details?dateFrom=2026-03-01&dateTo=2026-03-31',
+    );
+  });
+
   test('HttpMassageAppService lista prestadores y bookings', () async {
     final _FakeApiClient client = _FakeApiClient()
       ..enqueue(
