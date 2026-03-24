@@ -22,7 +22,9 @@ void main() {
               '[{"id":10,"bookingDate":"2026-03-20","startTime":"17:00:00","clientName":"Ana","guestReference":"Apto 101","treatment":"Relaxante","amount":200.0,"providerId":1,"providerName":"Danuska","providerActive":true,"paid":false,"paymentMethod":null,"paymentDate":null,"paymentNotes":null}]',
         ),
       );
-    final HttpMassageAppService service = HttpMassageAppService(apiClient: client);
+    final HttpMassageAppService service = HttpMassageAppService(
+      apiClient: client,
+    );
 
     final List<MassageProvider> providers = await service.listProviders();
     final List<MassageBooking> bookings = await service.listBookings(
@@ -39,113 +41,118 @@ void main() {
     );
   });
 
-  test('HttpMassageAppService crea, actualiza, cancela booking y actualiza pago', () async {
-    final _FakeApiClient client = _FakeApiClient()
-      ..enqueue(
-        ApiResponse(
-          statusCode: 201,
-          body: _bookingJson(
-            paid: true,
-            paymentMethod: 'CARD',
-            paymentNotes: 'Pago no balcao',
+  test(
+    'HttpMassageAppService crea, actualiza, cancela booking y actualiza pago',
+    () async {
+      final _FakeApiClient client = _FakeApiClient()
+        ..enqueue(
+          ApiResponse(
+            statusCode: 201,
+            body: _bookingJson(
+              paid: true,
+              paymentMethod: 'CARD',
+              paymentNotes: 'Pago no balcao',
+            ),
           ),
-        ),
-      )
-      ..enqueue(
-        ApiResponse(
-          statusCode: 200,
-          body: _bookingJson(
-            paid: false,
-            paymentMethod: null,
-            paymentNotes: null,
+        )
+        ..enqueue(
+          ApiResponse(
+            statusCode: 200,
+            body: _bookingJson(
+              paid: false,
+              paymentMethod: null,
+              paymentNotes: null,
+            ),
           ),
-        ),
-      )
-      ..enqueue(
-        ApiResponse(
-          statusCode: 200,
-          body: _bookingJson(
-            status: 'CANCELLED',
-            paid: false,
-            paymentMethod: null,
-            paymentNotes: null,
-            cancellationNotes: 'Cliente desistiu',
-            cancelledBy: 'operador.demo',
+        )
+        ..enqueue(
+          ApiResponse(
+            statusCode: 200,
+            body: _bookingJson(
+              status: 'CANCELLED',
+              paid: false,
+              paymentMethod: null,
+              paymentNotes: null,
+              cancellationNotes: 'Cliente desistiu',
+              cancelledBy: 'operador.demo',
+            ),
           ),
-        ),
-      )
-      ..enqueue(
-        ApiResponse(
-          statusCode: 200,
-          body: _bookingJson(
-            paid: true,
-            paymentMethod: 'PIX',
-            paymentNotes: 'Pago depois',
+        )
+        ..enqueue(
+          ApiResponse(
+            statusCode: 200,
+            body: _bookingJson(
+              paid: true,
+              paymentMethod: 'PIX',
+              paymentNotes: 'Pago depois',
+            ),
           ),
+        );
+      final HttpMassageAppService service = HttpMassageAppService(
+        apiClient: client,
+      );
+
+      final MassageBooking created = await service.createBooking(
+        const CreateMassageBookingModel(
+          bookingDate: '2026-03-20',
+          startTime: '17:00:00',
+          clientName: 'Ana',
+          guestReference: 'Apto 101',
+          treatment: 'Relaxante',
+          amount: 200,
+          providerId: 1,
+          therapistId: 101,
+          paid: true,
+          paymentMethod: MassagePaymentMethod.card,
+          paymentDate: '2026-03-20',
+          paymentNotes: 'Pago no balcao',
         ),
       );
-    final HttpMassageAppService service = HttpMassageAppService(apiClient: client);
+      final MassageBooking updated = await service.updateBooking(
+        10,
+        const UpdateMassageBookingModel(
+          bookingDate: '2026-03-20',
+          startTime: '17:00:00',
+          clientName: 'Ana',
+          guestReference: 'Apto 101',
+          treatment: 'Relaxante',
+          amount: 200,
+          providerId: 1,
+          therapistId: 101,
+          paid: false,
+          paymentMethod: null,
+          paymentDate: null,
+          paymentNotes: null,
+        ),
+      );
+      final MassageBooking cancelled = await service.cancelBooking(
+        10,
+        const CancelMassageBookingModel(cancellationNotes: 'Cliente desistiu'),
+      );
+      final MassageBooking paymentUpdated = await service.updatePayment(
+        10,
+        const UpdateMassagePaymentModel(
+          paymentMethod: MassagePaymentMethod.pix,
+          paymentDate: '2026-03-20',
+          paymentNotes: 'Pago depois',
+        ),
+      );
 
-    final MassageBooking created = await service.createBooking(
-      const CreateMassageBookingModel(
-        bookingDate: '2026-03-20',
-        startTime: '17:00:00',
-        clientName: 'Ana',
-        guestReference: 'Apto 101',
-        treatment: 'Relaxante',
-        amount: 200,
-        providerId: 1,
-        therapistId: 101,
-        paid: true,
-        paymentMethod: MassagePaymentMethod.card,
-        paymentDate: '2026-03-20',
-        paymentNotes: 'Pago no balcao',
-      ),
-    );
-    final MassageBooking updated = await service.updateBooking(
-      10,
-      const UpdateMassageBookingModel(
-        bookingDate: '2026-03-20',
-        startTime: '17:00:00',
-        clientName: 'Ana',
-        guestReference: 'Apto 101',
-        treatment: 'Relaxante',
-        amount: 200,
-        providerId: 1,
-        therapistId: 101,
-        paid: false,
-        paymentMethod: null,
-        paymentDate: null,
-        paymentNotes: null,
-      ),
-    );
-    final MassageBooking cancelled = await service.cancelBooking(
-      10,
-      const CancelMassageBookingModel(cancellationNotes: 'Cliente desistiu'),
-    );
-    final MassageBooking paymentUpdated = await service.updatePayment(
-      10,
-      const UpdateMassagePaymentModel(
-        paymentMethod: MassagePaymentMethod.pix,
-        paymentDate: '2026-03-20',
-        paymentNotes: 'Pago depois',
-      ),
-    );
-
-    expect(created.paymentMethod, MassagePaymentMethod.card);
-    expect(updated.paid, isFalse);
-    expect(cancelled.status, MassageBookingStatus.cancelled);
-    expect(cancelled.cancellationNotes, 'Cliente desistiu');
-    expect(paymentUpdated.paymentMethod, MassagePaymentMethod.pix);
-    expect(client.calls.first.method, 'POST');
-    expect(client.calls[1].path, 'massages/bookings/10');
-    expect(client.calls[2].path, 'massages/bookings/10/cancel');
-    expect(client.calls.last.path, 'massages/bookings/10/payment');
-    expect(
-      client.calls.last.body,
-      '{"paymentMethod":"PIX","paymentDate":"2026-03-20","paymentNotes":"Pago depois"}',
-    );
-  });
+      expect(created.paymentMethod, MassagePaymentMethod.card);
+      expect(updated.paid, isFalse);
+      expect(cancelled.status, MassageBookingStatus.cancelled);
+      expect(cancelled.cancellationNotes, 'Cliente desistiu');
+      expect(paymentUpdated.paymentMethod, MassagePaymentMethod.pix);
+      expect(client.calls.first.method, 'POST');
+      expect(client.calls[1].path, 'massages/bookings/10');
+      expect(client.calls[2].path, 'massages/bookings/10/cancel');
+      expect(client.calls.last.path, 'massages/bookings/10/payment');
+      expect(
+        client.calls.last.body,
+        '{"paymentMethod":"PIX","paymentDate":"2026-03-20","paymentNotes":"Pago depois"}',
+      );
+    },
+  );
 
   test('HttpMassageAppService traduce errores y red local', () async {
     final _FakeApiClient apiErrorClient = _FakeApiClient()
@@ -188,6 +195,55 @@ void main() {
       ),
     );
   });
+
+  test('HttpMassageAppService crea masajista con respuesta directa', () async {
+    final _FakeApiClient client = _FakeApiClient()
+      ..enqueue(
+        const ApiResponse(
+          statusCode: 201,
+          body: '{"id":101,"name":"Bruna","active":true}',
+        ),
+      );
+    final HttpMassageAppService service = HttpMassageAppService(
+      apiClient: client,
+    );
+
+    final MassageTherapist created = await service.createTherapist(
+      1,
+      const CreateMassageTherapistModel(name: 'Bruna'),
+    );
+
+    expect(created.id, 101);
+    expect(created.name, 'Bruna');
+    expect(client.calls.single.path, 'massages/providers/1/therapists');
+    expect(client.calls.single.body, '{"name":"Bruna"}');
+  });
+
+  test(
+    'HttpMassageAppService crea masajista con respuesta de proveedor embebido',
+    () async {
+      final _FakeApiClient client = _FakeApiClient()
+        ..enqueue(
+          const ApiResponse(
+            statusCode: 201,
+            body:
+                '{"id":1,"name":"Danuska","specialty":"Relaxante","contact":"Interno","active":true,"therapists":[{"id":100,"name":"Ana","active":true},{"id":101,"name":"Bruna","active":true}]}',
+          ),
+        );
+      final HttpMassageAppService service = HttpMassageAppService(
+        apiClient: client,
+      );
+
+      final MassageTherapist created = await service.createTherapist(
+        1,
+        const CreateMassageTherapistModel(name: 'Bruna'),
+      );
+
+      expect(created.id, 101);
+      expect(created.name, 'Bruna');
+      expect(created.active, isTrue);
+    },
+  );
 }
 
 String _bookingJson({
@@ -241,7 +297,11 @@ final class _FakeApiClient implements ApiClient {
     return _consume('PUT', path, body: body);
   }
 
-  Future<ApiResponse> _consume(String method, String path, {String? body}) async {
+  Future<ApiResponse> _consume(
+    String method,
+    String path, {
+    String? body,
+  }) async {
     calls.add(_Call(method: method, path: path, body: body));
     final Object? queuedError = nextError;
     if (queuedError != null) {

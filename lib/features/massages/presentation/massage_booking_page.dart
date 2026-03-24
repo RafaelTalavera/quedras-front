@@ -2449,6 +2449,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   final TextEditingController _contactController = TextEditingController();
   final TextEditingController _therapistNameController =
       TextEditingController();
+  final FocusNode _therapistNameFocusNode = FocusNode();
 
   late List<MassageProvider> _providers;
   int? _selectedProviderId;
@@ -2489,6 +2490,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     _specialtyController.dispose();
     _contactController.dispose();
     _therapistNameController.dispose();
+    _therapistNameFocusNode.dispose();
     super.dispose();
   }
 
@@ -2509,13 +2511,19 @@ class _ProviderDialogState extends State<_ProviderDialog> {
             'Cadastre fornecedores aqui para disponibiliza-los no combo da agenda.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _saving ? null : _prepareNewProvider,
+            icon: const Icon(Icons.add_circle_outline_rounded),
+            label: const Text('Agregar novo prestador'),
+          ),
           const SizedBox(height: 18),
           Expanded(
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 Expanded(
-                  flex: 6,
+                  flex: 4,
                   child: ListView.separated(
                     itemCount: _providers.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 12),
@@ -2637,47 +2645,50 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                                   ),
                                 ),
                                 const SizedBox(height: 16),
+                                FilledButton.icon(
+                                  onPressed: _saving ? null : _saveProvider,
+                                  icon: Icon(
+                                    _selectedProvider == null
+                                        ? Icons.playlist_add_rounded
+                                        : Icons.save_rounded,
+                                  ),
+                                  label: Text(
+                                    _saving
+                                        ? 'Salvando...'
+                                        : _selectedProvider == null
+                                        ? 'Adicionar'
+                                        : 'Salvar mudancas',
+                                  ),
+                                ),
+                                const SizedBox(height: 24),
                                 Row(
                                   children: <Widget>[
                                     Expanded(
-                                      child: FilledButton.icon(
-                                        onPressed: _saving
-                                            ? null
-                                            : _saveProvider,
-                                        icon: Icon(
-                                          _selectedProvider == null
-                                              ? Icons.playlist_add_rounded
-                                              : Icons.save_rounded,
-                                        ),
-                                        label: Text(
-                                          _saving
-                                              ? 'Salvando...'
-                                              : _selectedProvider == null
-                                              ? 'Adicionar'
-                                              : 'Salvar mudancas',
-                                        ),
+                                      child: Text(
+                                        _selectedProvider == null
+                                            ? 'Selecione um prestador'
+                                            : 'Masajistas do prestador',
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleLarge,
                                       ),
                                     ),
-                                    if (_selectedProvider != null) ...<Widget>[
-                                      const SizedBox(width: 12),
+                                    if (_selectedProvider != null)
                                       OutlinedButton.icon(
                                         onPressed: _saving
                                             ? null
-                                            : _prepareNewProvider,
+                                            : () {
+                                                _therapistNameController
+                                                    .clear();
+                                                _therapistNameFocusNode
+                                                    .requestFocus();
+                                              },
                                         icon: const Icon(
-                                          Icons.add_circle_outline_rounded,
+                                          Icons.person_add_alt_1_rounded,
                                         ),
-                                        label: const Text('Novo'),
+                                        label: const Text('Novo masajista'),
                                       ),
-                                    ],
                                   ],
-                                ),
-                                const SizedBox(height: 24),
-                                Text(
-                                  _selectedProvider == null
-                                      ? 'Selecione um prestador'
-                                      : 'Masajistas do prestador',
-                                  style: Theme.of(context).textTheme.titleLarge,
                                 ),
                                 const SizedBox(height: 12),
                                 if (_selectedProvider == null)
@@ -2775,6 +2786,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                                   const SizedBox(height: 12),
                                   TextField(
                                     controller: _therapistNameController,
+                                    focusNode: _therapistNameFocusNode,
                                     decoration: const InputDecoration(
                                       labelText: 'Novo masajista',
                                     ),
@@ -2788,7 +2800,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                                     label: Text(
                                       _saving
                                           ? 'Salvando...'
-                                          : 'Adicionar masajista',
+                                          : 'Agregar masajista',
                                     ),
                                   ),
                                 ],

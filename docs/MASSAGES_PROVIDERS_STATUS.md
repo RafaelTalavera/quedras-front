@@ -53,5 +53,32 @@ Pantalla principal: `lib/features/massages/presentation/massage_booking_page.dar
 - `POST /massages/providers/{providerId}/therapists` debe crear masajista.
 - `PUT /massages/providers/{providerId}/therapists/{therapistId}` debe actualizar masajista.
 
-## Pendiente inmediato
-- Validar el contrato exacto del backend real para asegurar nombres de campos y estructura JSON final.
+## Estado real de backend
+- El backend no vive en este repo frontend.
+- El backend operativo vive en [quadras](/c:/Users/Public/Documents/Proyectos/quadras).
+- Para este alcance de `prestadores -> masajistas`, ya se implemento backend en `quadras` con:
+  - entidad `MassageTherapist`
+  - endpoints `POST/PUT /api/v1/massages/providers/{providerId}/therapists`
+  - `therapistId` obligatorio en bookings
+  - conflicto de horario validado por masajista
+- Resultado: el pendiente principal ya no es implementacion de backend sino validacion punta a punta del contrato real entre ambos repos.
+
+## Validacion realizada
+- Se corrigio la migracion `V7` del backend para MySQL y se limpio el estado fallido de Flyway en entorno local.
+- El backend de [quadras](/c:/Users/Public/Documents/Proyectos/quadras) ya arranca correctamente con el dominio `prestador -> masajista`.
+- Se valido el flujo real punta a punta para:
+  - listar prestadores con masajistas embebidos
+  - agregar masajista dentro de un prestador
+  - usar `providerId + therapistId` en el circuito de atenciones
+
+## Pendiente imediato
+- Ejecutar una nueva pasada de regresion sobre agenda y edicion de atenciones para cubrir casos con masajistas inactivos e historico existente.
+
+## Regla de trabajo a partir de este punto
+- Todo cambio funcional de `Massagens` que modifique contrato de datos debe trabajarse en paralelo en:
+  - frontend `quedras-front`
+  - backend `quadras`
+- No se considera cerrado un cambio de `prestadores/masajistas` hasta validar:
+  - request real al backend
+  - response real del backend
+  - prueba manual punta a punta

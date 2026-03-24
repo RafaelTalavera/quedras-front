@@ -177,7 +177,10 @@ final class HttpMassageAppService implements MassageAppService {
     if (!response.isSuccess) {
       throw StateError(_extractApiErrorMessage(response));
     }
-    return MassageTherapist.fromJson(_asMap(_tryDecode(response.body)));
+    return _extractTherapistFromResponseBody(
+      response.body,
+      expectedName: input.name,
+    );
   }
 
   @override
@@ -196,7 +199,11 @@ final class HttpMassageAppService implements MassageAppService {
     if (!response.isSuccess) {
       throw StateError(_extractApiErrorMessage(response));
     }
-    return MassageTherapist.fromJson(_asMap(_tryDecode(response.body)));
+    return _extractTherapistFromResponseBody(
+      response.body,
+      expectedId: therapistId,
+      expectedName: input.name,
+    );
   }
 
   @override
@@ -284,5 +291,95 @@ final class HttpMassageAppService implements MassageAppService {
       (Object? key, Object? mapValue) =>
           MapEntry<String, dynamic>(key.toString(), mapValue),
     );
+  }
+
+  static MassageTherapist _extractTherapistFromResponseBody(
+    String rawBody, {
+    int? expectedId,
+    String? expectedName,
+  }) {
+    final Object? decoded = _tryDecode(rawBody);
+    if (decoded is Map) {
+      final Map<String, dynamic> asMap = _asMap(decoded);
+      if (_looksLikeTherapistMap(asMap)) {
+        return MassageTherapist.fromJson(asMap);
+      }
+
+      final Object? nestedTherapist = asMap['therapist'] ?? asMap['masseuse'];
+      if (nestedTherapist is Map) {
+        return MassageTherapist.fromJson(_asMap(nestedTherapist));
+      }
+
+      final Object? nestedList =
+          asMap['therapists'] ??
+          asMap['masseuses'] ??
+          asMap['massageTherapists'];
+      final MassageTherapist? matched = _extractTherapistFromList(
+        nestedList,
+        expectedId: expectedId,
+        expectedName: expectedName,
+      );
+      if (matched != null) {
+        return matched;
+      }
+    }
+
+    if (decoded is List) {
+      final MassageTherapist? matched = _extractTherapistFromList(
+        decoded,
+        expectedId: expectedId,
+        expectedName: expectedName,
+      );
+      if (matched != null) {
+        return matched;
+      }
+    }
+
+    throw const FormatException(
+      'Formato invalido da resposta do backend para masajista.',
+    );
+  }
+
+  static MassageTherapist? _extractTherapistFromList(
+    Object? rawList, {
+    int? expectedId,
+    String? expectedName,
+  }) {
+    if (rawList is! List || rawList.isEmpty) {
+      return null;
+    }
+    final List<MassageTherapist> therapists = rawList
+        .whereType<Map>()
+        .map<MassageTherapist>(
+          (Map item) => MassageTherapist.fromJson(_asMap(item)),
+        )
+        .toList();
+    if (therapists.isEmpty) {
+      return null;
+    }
+    if (expectedId != null) {
+      for (final MassageTherapist therapist in therapists) {
+        if (therapist.id == expectedId) {
+          return therapist;
+        }
+      }
+    }
+    if (expectedName != null) {
+      final String normalizedExpected = expectedName.trim().toLowerCase();
+      for (final MassageTherapist therapist in therapists) {
+        if (therapist.name.trim().toLowerCase() == normalizedExpected) {
+          return therapist;
+        }
+      }
+    }
+    return therapists.last;
+  }
+
+  static bool _looksLikeTherapistMap(Map<String, dynamic> map) {
+    return map.containsKey('id') &&
+        (map.containsKey('name') ||
+            map.containsKey('active') ||
+            map.containsKey('therapist') ||
+            map.containsKey('masseuse'));
   }
 }
