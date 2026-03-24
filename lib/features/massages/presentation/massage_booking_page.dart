@@ -53,6 +53,8 @@ class MassageBookingPage extends StatefulWidget {
 
 class _MassageBookingPageState extends State<MassageBookingPage> {
   final GlobalKey _summaryKey = GlobalKey();
+  final ScrollController _providerReportTableScrollController =
+      ScrollController();
 
   List<MassageProvider> _providers = <MassageProvider>[];
   List<MassageBooking> _bookings = <MassageBooking>[];
@@ -89,6 +91,12 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
     _selectedTherapistId = null;
     _selectedTime = _recommendedTimeFor(_selectedDate, null);
     _load();
+  }
+
+  @override
+  void dispose() {
+    _providerReportTableScrollController.dispose();
+    super.dispose();
   }
 
   List<MassageProvider> get _activeProviders =>
@@ -365,69 +373,111 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
       );
     }
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: CostaNorteBrand.line),
-      ),
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        child: DataTable(
-          columns: const <DataColumn>[
-            DataColumn(label: Text('Prestador')),
-            DataColumn(label: Text('Atencoes')),
-            DataColumn(label: Text('Canceladas')),
-            DataColumn(label: Text('Pagas')),
-            DataColumn(label: Text('Pendentes')),
-            DataColumn(label: Text('Cobrado')),
-            DataColumn(label: Text('Pendente R\$')),
-            DataColumn(label: Text('Ultimo')),
-            DataColumn(label: Text('Acoes')),
-          ],
-          rows: _providerSummaries.map((MassageProviderSummary summary) {
-            final bool selected = summary.providerId == _selectedSummaryProviderId;
-            return DataRow(
-              selected: selected,
-              onSelectChanged: (_) => _selectProviderSummary(summary.providerId),
-              cells: <DataCell>[
-                DataCell(
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: <Widget>[
-                      Text(summary.providerName),
-                      Text(
-                        summary.providerActive ? 'Ativo' : 'Inativo',
-                        style: Theme.of(context).textTheme.bodySmall,
-                      ),
-                    ],
-                  ),
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        return Container(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: CostaNorteBrand.line),
+          ),
+          child: Scrollbar(
+            controller: _providerReportTableScrollController,
+            thumbVisibility: true,
+            trackVisibility: true,
+            child: SingleChildScrollView(
+              controller: _providerReportTableScrollController,
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.only(bottom: 6),
+              child: ConstrainedBox(
+                // Keep the table readable on narrow layouts while preserving
+                // access to all provider report columns through horizontal scroll.
+                constraints: BoxConstraints(
+                  minWidth: constraints.maxWidth,
                 ),
-                DataCell(Text('${summary.attendedCount}')),
-                DataCell(Text('${summary.cancelledCount}')),
-                DataCell(Text('${summary.paidCount}')),
-                DataCell(Text('${summary.pendingCount}')),
-                DataCell(Text(_formatCurrencyLabel(summary.paidAmount))),
-                DataCell(Text(_formatCurrencyLabel(summary.pendingAmount))),
-                DataCell(
-                  Text(
-                    summary.lastBookingAt == null
-                        ? '-'
-                        : _formatShortDateLabel(summary.lastBookingAt!),
-                  ),
+                child: DataTable(
+                  columnSpacing: 16,
+                  horizontalMargin: 12,
+                  headingRowHeight: 56,
+                  dataRowMinHeight: 64,
+                  dataRowMaxHeight: 72,
+                  columns: <DataColumn>[
+                    DataColumn(label: _buildReportColumnLabel('Prestador')),
+                    DataColumn(label: _buildReportColumnLabel('Atencoes')),
+                    DataColumn(label: _buildReportColumnLabel('Canceladas')),
+                    DataColumn(label: _buildReportColumnLabel('Pagas')),
+                    DataColumn(label: _buildReportColumnLabel('Pendentes')),
+                    DataColumn(label: _buildReportColumnLabel('Cobrado')),
+                    DataColumn(label: _buildReportColumnLabel('Pendente R\$')),
+                    DataColumn(label: _buildReportColumnLabel('Ultimo')),
+                    DataColumn(label: _buildReportColumnLabel('Acoes')),
+                  ],
+                  rows: _providerSummaries.map((MassageProviderSummary summary) {
+                    final bool selected =
+                        summary.providerId == _selectedSummaryProviderId;
+                    return DataRow(
+                      selected: selected,
+                      onSelectChanged: (_) =>
+                          _selectProviderSummary(summary.providerId),
+                      cells: <DataCell>[
+                        DataCell(
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(minWidth: 140),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: <Widget>[
+                                Text(summary.providerName),
+                                Text(
+                                  summary.providerActive ? 'Ativo' : 'Inativo',
+                                  style: Theme.of(context).textTheme.bodySmall,
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        DataCell(Text('${summary.attendedCount}')),
+                        DataCell(Text('${summary.cancelledCount}')),
+                        DataCell(Text('${summary.paidCount}')),
+                        DataCell(Text('${summary.pendingCount}')),
+                        DataCell(Text(_formatCurrencyLabel(summary.paidAmount))),
+                        DataCell(
+                          Text(_formatCurrencyLabel(summary.pendingAmount)),
+                        ),
+                        DataCell(
+                          Text(
+                            summary.lastBookingAt == null
+                                ? '-'
+                                : _formatShortDateLabel(summary.lastBookingAt!),
+                          ),
+                        ),
+                        DataCell(
+                          TextButton(
+                            onPressed: _loadingReport
+                                ? null
+                                : () =>
+                                    _selectProviderSummary(summary.providerId),
+                            child: const Text('Ver detalhe'),
+                          ),
+                        ),
+                      ],
+                    );
+                  }).toList(),
                 ),
-                DataCell(
-                  TextButton(
-                    onPressed: _loadingReport
-                        ? null
-                        : () => _selectProviderSummary(summary.providerId),
-                    child: const Text('Ver detalhe'),
-                  ),
-                ),
-              ],
-            );
-          }).toList(),
-        ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildReportColumnLabel(String label) {
+    return SizedBox(
+      width: 88,
+      child: Text(
+        label,
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
       ),
     );
   }
