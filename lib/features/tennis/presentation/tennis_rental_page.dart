@@ -31,6 +31,40 @@ const List<String> _courtMonthLabels = <String>[
   'Dezembro',
 ];
 
+const List<String> _courtTimeSlots = <String>[
+  '07:00',
+  '07:30',
+  '08:00',
+  '08:30',
+  '09:00',
+  '09:30',
+  '10:00',
+  '10:30',
+  '11:00',
+  '11:30',
+  '12:00',
+  '12:30',
+  '13:00',
+  '13:30',
+  '14:00',
+  '14:30',
+  '15:00',
+  '15:30',
+  '16:00',
+  '16:30',
+  '17:00',
+  '17:30',
+  '18:00',
+  '18:30',
+  '19:00',
+  '19:30',
+  '20:00',
+  '20:30',
+  '21:00',
+  '21:30',
+  '22:00',
+];
+
 class TennisRentalPage extends StatefulWidget {
   const TennisRentalPage({required this.courtAppService, super.key});
 
@@ -55,16 +89,20 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
     _load();
   }
 
-  List<CourtBooking> get _monthBookings => _bookings.where((CourtBooking item) {
-    return item.bookingDate.year == _selectedDate.year &&
-        item.bookingDate.month == _selectedDate.month;
-  }).toList()
-    ..sort((CourtBooking a, CourtBooking b) => a.startTime.compareTo(b.startTime));
+  List<CourtBooking> get _monthBookings =>
+      _bookings.where((CourtBooking item) {
+        return item.bookingDate.year == _selectedDate.year &&
+            item.bookingDate.month == _selectedDate.month;
+      }).toList()..sort(
+        (CourtBooking a, CourtBooking b) => a.startTime.compareTo(b.startTime),
+      );
 
-  List<CourtBooking> get _dayBookings => _monthBookings.where((CourtBooking item) {
-    return _sameDay(item.bookingDate, _selectedDate);
-  }).toList()
-    ..sort((CourtBooking a, CourtBooking b) => a.startTime.compareTo(b.startTime));
+  List<CourtBooking> get _dayBookings =>
+      _monthBookings.where((CourtBooking item) {
+        return _sameDay(item.bookingDate, _selectedDate);
+      }).toList()..sort(
+        (CourtBooking a, CourtBooking b) => a.startTime.compareTo(b.startTime),
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -140,13 +178,23 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
       _errorMessage = null;
     });
     try {
-      final DateTime firstDay = DateTime(_selectedDate.year, _selectedDate.month, 1);
-      final DateTime lastDay = DateTime(_selectedDate.year, _selectedDate.month + 1, 0);
-      final List<CourtBooking> bookings = await widget.courtAppService.listBookings();
-      final CourtSummaryReport summary = await widget.courtAppService.getSummaryReport(
-        dateFrom: _formatDate(firstDay),
-        dateTo: _formatDate(lastDay),
+      final DateTime firstDay = DateTime(
+        _selectedDate.year,
+        _selectedDate.month,
+        1,
       );
+      final DateTime lastDay = DateTime(
+        _selectedDate.year,
+        _selectedDate.month + 1,
+        0,
+      );
+      final List<CourtBooking> bookings = await widget.courtAppService
+          .listBookings();
+      final CourtSummaryReport summary = await widget.courtAppService
+          .getSummaryReport(
+            dateFrom: _formatDate(firstDay),
+            dateTo: _formatDate(lastDay),
+          );
       if (!mounted) {
         return;
       }
@@ -167,88 +215,88 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
   }
 
   Widget _buildSelectedDayCard(BuildContext context) {
+    final List<CourtBooking> activeBookings = _dayBookings
+        .where(
+          (CourtBooking booking) =>
+              booking.status == CourtBookingStatus.scheduled,
+        )
+        .toList();
+    final int pendingPayments = activeBookings
+        .where((CourtBooking booking) => !booking.paid)
+        .length;
+    final double totalRevenue = activeBookings.fold<double>(
+      0,
+      (double total, CourtBooking booking) => total + booking.totalAmount,
+    );
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('Dia selecionado', style: Theme.of(context).textTheme.headlineSmall),
+            Text(
+              'Dia selecionado',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
             const SizedBox(height: 6),
-            Text(_fullDateLabel(_selectedDate), style: Theme.of(context).textTheme.bodyLarge),
-            const SizedBox(height: 16),
+            Text(
+              _fullDateLabel(_selectedDate),
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: <Widget>[
+                _DetailChip(
+                  label: 'Reservas',
+                  value: '${_dayBookings.length}',
+                  icon: Icons.event_available_rounded,
+                ),
+                _DetailChip(
+                  label: 'Pendentes',
+                  value: '$pendingPayments',
+                  icon: Icons.payments_outlined,
+                ),
+                _DetailChip(
+                  label: 'Receita',
+                  value: _formatCurrency(totalRevenue),
+                  icon: Icons.ssid_chart_rounded,
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
             if (_dayBookings.isEmpty)
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: const Color(0xFFFCFCFB),
-                  borderRadius: BorderRadius.circular(18),
+                  color: CostaNorteBrand.mist,
+                  borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: CostaNorteBrand.line),
                 ),
-                child: const Text('Nao ha reservas para este dia.'),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Agenda livre',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Nao ha reservas para este dia. Use o calendario abaixo para navegar ou lance uma nova reserva.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
               )
             else
-              ..._dayBookings.map((CourtBooking booking) {
-                return Padding(
+              ..._dayBookings.map(
+                (CourtBooking booking) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: CostaNorteBrand.line),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Row(
-                          children: <Widget>[
-                            Expanded(
-                              child: Text(
-                                booking.customerName,
-                                style: Theme.of(context).textTheme.titleMedium,
-                              ),
-                            ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(999),
-                                color: _statusColor(booking).withValues(alpha: 0.14),
-                              ),
-                              child: Text(
-                                _statusLabel(booking),
-                                style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                                  color: _statusColor(booking),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          '${booking.startTime.substring(0, 5)} - ${booking.endTime.substring(0, 5)} · ${booking.customerType.label} · ${booking.durationHours.toStringAsFixed(1)} h',
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Cancha: ${_formatCurrency(booking.courtAmount)} · Materiales: ${_formatCurrency(booking.materialsAmount)} · Total: ${_formatCurrency(booking.totalAmount)}',
-                        ),
-                        const SizedBox(height: 4),
-                        Text('Referencia: ${booking.customerReference}'),
-                        if (booking.materials.isNotEmpty) ...<Widget>[
-                          const SizedBox(height: 4),
-                          Text(
-                            booking.materials
-                                .map<String>((CourtBookingMaterial item) => '${item.materialLabel} x${item.quantity}')
-                                .join(' · '),
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                );
-              }),
+                  child: _CourtBookingTile(booking: booking),
+                ),
+              ),
           ],
         ),
       ),
@@ -264,130 +312,91 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
               children: <Widget>[
-                Expanded(
-                  child: Text(
-                    'Agenda mensal',
-                    style: Theme.of(context).textTheme.headlineSmall,
+                Text(
+                  'Agenda mensal',
+                  style: Theme.of(context).textTheme.headlineSmall,
+                ),
+                const Spacer(),
+                SizedBox(
+                  width: 260,
+                  child: DropdownButtonFormField<int>(
+                    value: _selectedDate.month - 1,
+                    decoration: const InputDecoration(
+                      labelText: 'Mes da agenda',
+                      prefixIcon: Icon(Icons.calendar_month_rounded),
+                    ),
+                    items: List<DropdownMenuItem<int>>.generate(
+                      _courtMonthLabels.length,
+                      (int index) => DropdownMenuItem<int>(
+                        value: index,
+                        child: Text(_courtMonthLabels[index]),
+                      ),
+                    ),
+                    onChanged: (int? value) {
+                      if (value == null) {
+                        return;
+                      }
+                      setState(() {
+                        _selectedDate = DateTime(
+                          _selectedDate.year,
+                          value + 1,
+                          1,
+                        );
+                      });
+                      _load();
+                    },
                   ),
-                ),
-                IconButton(
-                  onPressed: () {
-                    setState(() {
-                      _selectedDate = DateTime(_selectedDate.year, _selectedDate.month - 1, 1);
-                    });
-                    _load();
-                  },
-                  icon: const Icon(Icons.chevron_left_rounded),
-                ),
-                Text('${_courtMonthLabels[_selectedDate.month - 1]} ${_selectedDate.year}'),
-                IconButton(
-                  onPressed: () {
-                    setState(() {
-                      _selectedDate = DateTime(_selectedDate.year, _selectedDate.month + 1, 1);
-                    });
-                    _load();
-                  },
-                  icon: const Icon(Icons.chevron_right_rounded),
                 ),
               ],
             ),
-            const SizedBox(height: 16),
-            SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SizedBox(
-                width: 980,
-                child: Column(
-                  children: <Widget>[
-                    Row(
-                      children: _courtWeekLabels.map((String label) {
-                        return Expanded(
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 4),
-                            child: Text(
-                              label,
-                              textAlign: TextAlign.center,
-                              style: Theme.of(context).textTheme.labelLarge,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 10),
-                    GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: cells.length,
-                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 7,
-                        mainAxisSpacing: 8,
-                        crossAxisSpacing: 8,
-                        mainAxisExtent: 122,
+            const SizedBox(height: 10),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  children: _courtWeekLabels.map((String label) {
+                    return Expanded(
+                      child: Center(
+                        child: Text(
+                          label,
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(color: CostaNorteBrand.mutedInk),
+                        ),
                       ),
-                      itemBuilder: (BuildContext context, int index) {
-                        final _CalendarCell cell = cells[index];
-                        if (cell.date == null) {
-                          return Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(18),
-                              color: const Color(0xFFF7F7F5),
-                              border: Border.all(color: CostaNorteBrand.line),
-                            ),
-                          );
-                        }
-                        final List<CourtBooking> dayBookings = _monthBookings.where((CourtBooking item) {
-                          return _sameDay(item.bookingDate, cell.date!);
-                        }).toList();
-                        final bool selected = _sameDay(cell.date!, _selectedDate);
-                        return InkWell(
-                          borderRadius: BorderRadius.circular(18),
-                          onTap: () {
-                            setState(() {
-                              _selectedDate = cell.date!;
-                            });
-                          },
-                          child: Container(
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(18),
-                              color: selected ? CostaNorteBrand.foam : Colors.white,
-                              border: Border.all(
-                                color: selected ? CostaNorteBrand.royalBlue : CostaNorteBrand.line,
-                                width: selected ? 1.5 : 1,
-                              ),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: <Widget>[
-                                Text('${cell.date!.day}', style: Theme.of(context).textTheme.titleMedium),
-                                const SizedBox(height: 6),
-                                Text(
-                                  '${dayBookings.length} reservas',
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                                const SizedBox(height: 6),
-                                ...dayBookings.take(2).map((CourtBooking booking) {
-                                  return Padding(
-                                    padding: const EdgeInsets.only(bottom: 2),
-                                    child: Text(
-                                      '${booking.startTime.substring(0, 5)} ${booking.customerName}',
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: Theme.of(context).textTheme.bodySmall,
-                                    ),
-                                  );
-                                }),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                  ],
+                    );
+                  }).toList(),
                 ),
-              ),
+                const SizedBox(height: 10),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: cells.length,
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 7,
+                    mainAxisSpacing: 8,
+                    crossAxisSpacing: 8,
+                    mainAxisExtent: _agendaCellHeight(),
+                  ),
+                  itemBuilder: (BuildContext context, int index) {
+                    final _CalendarCell cell = cells[index];
+                    if (cell.date == null) {
+                      return const SizedBox.shrink();
+                    }
+                    return _CourtAgendaDayCard(
+                      date: cell.date!,
+                      bookings: _bookingsForDate(cell.date!),
+                      selected: _sameDay(cell.date!, _selectedDate),
+                      onTap: () {
+                        setState(() {
+                          _selectedDate = cell.date!;
+                        });
+                      },
+                    );
+                  },
+                ),
+              ],
             ),
           ],
         ),
@@ -397,33 +406,106 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
 
   Widget _buildSummaryCard(BuildContext context) {
     final CourtSummaryReport? summary = _summary;
+    final List<CourtBooking> activeMonthBookings = _monthBookings
+        .where(
+          (CourtBooking booking) =>
+              booking.status == CourtBookingStatus.scheduled,
+        )
+        .toList();
+    final double expectedRevenue = activeMonthBookings.fold<double>(
+      0,
+      (double total, CourtBooking booking) => total + booking.totalAmount,
+    );
+    final double materialsRevenue = activeMonthBookings.fold<double>(
+      0,
+      (double total, CourtBooking booking) => total + booking.materialsAmount,
+    );
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text('Resumo do mes', style: Theme.of(context).textTheme.headlineSmall),
-            const SizedBox(height: 14),
+            Text(
+              'Resumo do mes',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Consolidado operativo do mes selecionado, com mix de clientes e valores esperados.',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 18),
             if (summary == null)
               const Text('Resumo indisponivel.')
             else
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  _MetricChip(label: 'Ativas', value: '${summary.scheduledCount}'),
-                  _MetricChip(label: 'Canceladas', value: '${summary.cancelledCount}'),
-                  _MetricChip(label: 'Horas totais', value: summary.totalHours.toStringAsFixed(1)),
-                  _MetricChip(label: 'Hospedes', value: summary.guestHours.toStringAsFixed(1)),
-                  _MetricChip(label: 'VIP', value: summary.vipHours.toStringAsFixed(1)),
-                  _MetricChip(label: 'Externos', value: summary.externalHours.toStringAsFixed(1)),
-                  _MetricChip(
-                    label: 'Professor parceiro',
-                    value: summary.partnerCoachHours.toStringAsFixed(1),
+                  Wrap(
+                    spacing: 14,
+                    runSpacing: 14,
+                    children: <Widget>[
+                      _MetricCard(
+                        title: _courtMonthLabels[_selectedDate.month - 1],
+                        value: '${summary.scheduledCount} reservas ativas',
+                        caption: summary.cancelledCount == 0
+                            ? 'Sem cancelamentos no mes'
+                            : '${summary.cancelledCount} canceladas no historico',
+                        icon: Icons.calendar_view_month_rounded,
+                      ),
+                      _MetricCard(
+                        title: _formatCurrency(expectedRevenue),
+                        value: '${summary.pendingCount} pendentes',
+                        caption: 'Receita esperada com materiais incluidos',
+                        icon: Icons.payments_rounded,
+                      ),
+                      _MetricCard(
+                        title: '${summary.totalHours.toStringAsFixed(1)} h',
+                        value: '${summary.paidCount} pagas',
+                        caption: 'Carga horaria consolidada do periodo',
+                        icon: Icons.query_builder_rounded,
+                      ),
+                    ],
                   ),
-                  _MetricChip(label: 'Cobrado', value: _formatCurrency(summary.paidAmount)),
-                  _MetricChip(label: 'Pendente', value: _formatCurrency(summary.pendingAmount)),
+                  const SizedBox(height: 18),
+                  Wrap(
+                    spacing: 12,
+                    runSpacing: 12,
+                    children: <Widget>[
+                      _DetailChip(
+                        label: 'Hospedes',
+                        value: '${summary.guestHours.toStringAsFixed(1)} h',
+                        icon: Icons.king_bed_rounded,
+                      ),
+                      _DetailChip(
+                        label: 'VIP',
+                        value: '${summary.vipHours.toStringAsFixed(1)} h',
+                        icon: Icons.workspace_premium_rounded,
+                      ),
+                      _DetailChip(
+                        label: 'Externos',
+                        value: '${summary.externalHours.toStringAsFixed(1)} h',
+                        icon: Icons.public_rounded,
+                      ),
+                      _DetailChip(
+                        label: 'Prof. parceiro',
+                        value:
+                            '${summary.partnerCoachHours.toStringAsFixed(1)} h',
+                        icon: Icons.sports_rounded,
+                      ),
+                      _DetailChip(
+                        label: 'Materiais',
+                        value: _formatCurrency(materialsRevenue),
+                        icon: Icons.inventory_2_rounded,
+                      ),
+                      _DetailChip(
+                        label: 'Pendente',
+                        value: _formatCurrency(summary.pendingAmount),
+                        icon: Icons.warning_amber_rounded,
+                      ),
+                    ],
+                  ),
                 ],
               ),
           ],
@@ -433,14 +515,26 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
   }
 
   List<_CalendarCell> _buildCalendarCells() {
-    final DateTime firstDay = DateTime(_selectedDate.year, _selectedDate.month, 1);
-    final DateTime lastDay = DateTime(_selectedDate.year, _selectedDate.month + 1, 0);
+    final DateTime firstDay = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      1,
+    );
+    final DateTime lastDay = DateTime(
+      _selectedDate.year,
+      _selectedDate.month + 1,
+      0,
+    );
     final int leadingEmpty = firstDay.weekday - 1;
     final List<_CalendarCell> cells = <_CalendarCell>[
       for (int i = 0; i < leadingEmpty; i++) const _CalendarCell.empty(),
     ];
     for (int day = 1; day <= lastDay.day; day++) {
-      cells.add(_CalendarCell(date: DateTime(_selectedDate.year, _selectedDate.month, day)));
+      cells.add(
+        _CalendarCell(
+          date: DateTime(_selectedDate.year, _selectedDate.month, day),
+        ),
+      );
     }
     while (cells.length % 7 != 0) {
       cells.add(const _CalendarCell.empty());
@@ -448,11 +542,26 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
     return cells;
   }
 
+  List<CourtBooking> _bookingsForDate(DateTime date) {
+    return _monthBookings
+        .where((CourtBooking item) => _sameDay(item.bookingDate, date))
+        .toList()
+      ..sort(
+        (CourtBooking a, CourtBooking b) => a.startTime.compareTo(b.startTime),
+      );
+  }
+
+  double _agendaCellHeight() {
+    return 69;
+  }
+
   Future<void> _openCreateDialog() async {
-    final _CourtBookingFormResult? result = await showDialog<_CourtBookingFormResult>(
-      context: context,
-      builder: (BuildContext context) => _CourtBookingDialog(service: widget.courtAppService),
-    );
+    final _CourtBookingFormResult? result =
+        await showDialog<_CourtBookingFormResult>(
+          context: context,
+          builder: (BuildContext context) =>
+              _CourtBookingDialog(service: widget.courtAppService),
+        );
     if (result == null) {
       return;
     }
@@ -512,7 +621,9 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
   }
 
   Future<void> _openPaymentDialog() async {
-    final CourtBooking? booking = await _pickBooking('Selecione a reserva para informar o pagamento');
+    final CourtBooking? booking = await _pickBooking(
+      'Selecione a reserva para informar o pagamento',
+    );
     if (booking == null || !mounted) {
       return;
     }
@@ -566,7 +677,9 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
   }
 
   Future<void> _openCancelDialog() async {
-    final CourtBooking? booking = await _pickBooking('Selecione a reserva para cancelar');
+    final CourtBooking? booking = await _pickBooking(
+      'Selecione a reserva para cancelar',
+    );
     if (booking == null || !mounted) {
       return;
     }
@@ -640,7 +753,8 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
   Future<void> _openSettingsDialog() async {
     await showDialog<void>(
       context: context,
-      builder: (BuildContext context) => _CourtSettingsDialog(service: widget.courtAppService),
+      builder: (BuildContext context) =>
+          _CourtSettingsDialog(service: widget.courtAppService),
     );
     if (mounted) {
       _load();
@@ -664,7 +778,9 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
                     itemBuilder: (BuildContext context, int index) {
                       final CourtBooking booking = _dayBookings[index];
                       return ListTile(
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
                         tileColor: const Color(0xFFFCFCFB),
                         title: Text(booking.customerName),
                         subtitle: Text(
@@ -687,8 +803,92 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
   }
 }
 
-class _MetricChip extends StatelessWidget {
-  const _MetricChip({required this.label, required this.value});
+class _MetricCard extends StatelessWidget {
+  const _MetricCard({
+    required this.title,
+    required this.value,
+    required this.caption,
+    required this.icon,
+  });
+
+  final String title;
+  final String value;
+  final String caption;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: 250,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(22),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: <Color>[Colors.white, Color(0xFFF7FAFF)],
+        ),
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(14),
+              color: CostaNorteBrand.foam,
+            ),
+            child: Icon(icon, color: CostaNorteBrand.royalBlueDeep),
+          ),
+          const SizedBox(height: 14),
+          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 4),
+          Text(value, style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 6),
+          Text(caption, style: Theme.of(context).textTheme.bodySmall),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailChip extends StatelessWidget {
+  const _DetailChip({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: Colors.white,
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: <Widget>[
+          Icon(icon, size: 16, color: CostaNorteBrand.royalBlueDeep),
+          const SizedBox(width: 8),
+          Text('$label: ', style: Theme.of(context).textTheme.labelMedium),
+          Text(value, style: Theme.of(context).textTheme.labelLarge),
+        ],
+      ),
+    );
+  }
+}
+
+class _InfoPill extends StatelessWidget {
+  const _InfoPill({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -696,19 +896,237 @@ class _MetricChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: CostaNorteBrand.mist,
+      ),
+      child: Text(
+        '$label: $value',
+        style: Theme.of(context).textTheme.labelMedium,
+      ),
+    );
+  }
+}
+
+class _CourtBookingTile extends StatelessWidget {
+  const _CourtBookingTile({required this.booking});
+
+  final CourtBooking booking;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color accentColor = _statusColor(booking);
+    final String detailText = _statusDescription(booking);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(20),
         border: Border.all(color: CostaNorteBrand.line),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(label, style: Theme.of(context).textTheme.labelMedium),
-          const SizedBox(height: 4),
-          Text(value, style: Theme.of(context).textTheme.titleMedium),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  color: accentColor.withValues(alpha: 0.12),
+                ),
+                child: Icon(Icons.sports_tennis_rounded, color: accentColor),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      booking.customerName,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${booking.startTime.substring(0, 5)} - ${booking.endTime.substring(0, 5)} | ${booking.customerType.label} | ${booking.durationHours.toStringAsFixed(1)} h',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(999),
+                  color: accentColor.withValues(alpha: 0.12),
+                ),
+                child: Text(
+                  _statusLabel(booking),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.labelMedium?.copyWith(color: accentColor),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              _InfoPill(
+                label: 'Quadra',
+                value: _formatCurrency(booking.courtAmount),
+              ),
+              _InfoPill(
+                label: 'Materiais',
+                value: _formatCurrency(booking.materialsAmount),
+              ),
+              _InfoPill(
+                label: 'Total',
+                value: _formatCurrency(booking.totalAmount),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Referencia: ${booking.customerReference}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          if (booking.materials.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(
+              booking.materials
+                  .map<String>(
+                    (CourtBookingMaterial item) =>
+                        '${item.materialLabel} x${item.quantity}',
+                  )
+                  .join(' | '),
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
+          if (detailText.isNotEmpty) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(detailText, style: Theme.of(context).textTheme.bodySmall),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+class _CourtAgendaDayCard extends StatelessWidget {
+  const _CourtAgendaDayCard({
+    required this.date,
+    required this.bookings,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final DateTime date;
+  final List<CourtBooking> bookings;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool hasBookings = bookings.isNotEmpty;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: selected
+                ? CostaNorteBrand.goldDeep
+                : hasBookings
+                ? CostaNorteBrand.royalBlueDeep
+                : CostaNorteBrand.line,
+            width: selected ? 1.4 : 1,
+          ),
+          color: selected
+              ? const Color(0xFFFFF8E7)
+              : hasBookings
+              ? const Color(0xFFF2F7FF)
+              : Colors.white,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Icon(
+                  Icons.calendar_today_rounded,
+                  size: 14,
+                  color: CostaNorteBrand.mutedInk,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '${date.day}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: hasBookings ? CostaNorteBrand.royalBlueDeep : null,
+                      fontWeight: hasBookings ? FontWeight.w700 : null,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Row(
+              children: <Widget>[
+                Icon(
+                  Icons.sports_tennis_rounded,
+                  size: 14,
+                  color: hasBookings
+                      ? CostaNorteBrand.ink
+                      : CostaNorteBrand.mutedInk,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '${bookings.length}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: 11,
+                      color: hasBookings
+                          ? CostaNorteBrand.ink
+                          : CostaNorteBrand.mutedInk,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                if (bookings.any(
+                  (CourtBooking booking) =>
+                      booking.status == CourtBookingStatus.cancelled,
+                ))
+                  Text(
+                    'C',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: 10,
+                      color: CostaNorteBrand.error,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -751,6 +1169,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
     _referenceController = TextEditingController();
     _racketsController = TextEditingController(text: '0');
     _ballsController = TextEditingController(text: '0');
+    _syncEndTimeWithStart();
   }
 
   @override
@@ -778,19 +1197,25 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                   controller: _nameController,
                   decoration: const InputDecoration(labelText: 'Nombre'),
                   validator: (String? value) =>
-                      value == null || value.trim().isEmpty ? 'Informe el nombre' : null,
+                      value == null || value.trim().isEmpty
+                      ? 'Informe el nombre'
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _referenceController,
                   decoration: const InputDecoration(labelText: 'Referencia'),
                   validator: (String? value) =>
-                      value == null || value.trim().isEmpty ? 'Informe la referencia' : null,
+                      value == null || value.trim().isEmpty
+                      ? 'Informe la referencia'
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<CourtCustomerType>(
                   value: _customerType,
-                  decoration: const InputDecoration(labelText: 'Tipo de usuario'),
+                  decoration: const InputDecoration(
+                    labelText: 'Tipo de usuario',
+                  ),
                   items: CourtCustomerType.values.map((CourtCustomerType item) {
                     return DropdownMenuItem<CourtCustomerType>(
                       value: item,
@@ -817,19 +1242,61 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                     ),
                     const SizedBox(width: 12),
                     Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => _pickTime(start: true),
-                        child: Text('Inicio: ${_formatTimeOfDay(_startTime)}'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: () => _pickTime(start: false),
-                        child: Text('Fin: ${_formatTimeOfDay(_endTime)}'),
+                      child: DropdownButtonFormField<String>(
+                        value: _formatTimeOfDay(_startTime),
+                        decoration: const InputDecoration(
+                          labelText: 'Inicio',
+                          prefixIcon: Icon(Icons.schedule_rounded),
+                        ),
+                        items: _courtTimeSlots
+                            .map(
+                              (String slot) => DropdownMenuItem<String>(
+                                value: slot,
+                                child: Text(slot),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (String? value) {
+                          if (value == null) {
+                            return;
+                          }
+                          setState(() {
+                            _startTime = _parseTimeOfDay(value);
+                            _syncEndTimeWithStart();
+                          });
+                        },
                       ),
                     ),
                   ],
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: _formatTimeOfDay(_endTime),
+                  decoration: const InputDecoration(
+                    labelText: 'Fin',
+                    prefixIcon: Icon(Icons.east_rounded),
+                  ),
+                  items: _availableEndSlots
+                      .map(
+                        (String slot) => DropdownMenuItem<String>(
+                          value: slot,
+                          child: Text(slot),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (String? value) {
+                    if (value == null) {
+                      return;
+                    }
+                    setState(() {
+                      _endTime = _parseTimeOfDay(value);
+                    });
+                  },
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Por defecto la reserva dura 1 hora, pero puedes extender el horario final.',
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -838,7 +1305,9 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                       child: TextFormField(
                         controller: _racketsController,
                         keyboardType: TextInputType.number,
-                        decoration: const InputDecoration(labelText: 'Raquetas'),
+                        decoration: const InputDecoration(
+                          labelText: 'Raquetas',
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -865,8 +1334,12 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                 if (_paid)
                   DropdownButtonFormField<CourtPaymentMethod>(
                     value: _paymentMethod,
-                    decoration: const InputDecoration(labelText: 'Modalidad de pago'),
-                    items: CourtPaymentMethod.values.map((CourtPaymentMethod item) {
+                    decoration: const InputDecoration(
+                      labelText: 'Modalidad de pago',
+                    ),
+                    items: CourtPaymentMethod.values.map((
+                      CourtPaymentMethod item,
+                    ) {
                       return DropdownMenuItem<CourtPaymentMethod>(
                         value: item,
                         child: Text(item.label),
@@ -933,22 +1406,22 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
     });
   }
 
-  Future<void> _pickTime({required bool start}) async {
-    final TimeOfDay initialValue = start ? _startTime : _endTime;
-    final TimeOfDay? picked = await showTimePicker(
-      context: context,
-      initialTime: initialValue,
-    );
-    if (picked == null) {
+  List<String> get _availableEndSlots {
+    final int startMinutes = _timeOfDayToMinutes(_startTime);
+    return _courtTimeSlots.where((String slot) {
+      return _timeOfDayToMinutes(_parseTimeOfDay(slot)) > startMinutes;
+    }).toList();
+  }
+
+  void _syncEndTimeWithStart() {
+    final TimeOfDay defaultEndTime = _addMinutes(_startTime, 60);
+    final List<String> availableEndSlots = _availableEndSlots;
+    final String defaultEndLabel = _formatTimeOfDay(defaultEndTime);
+    if (availableEndSlots.contains(defaultEndLabel)) {
+      _endTime = defaultEndTime;
       return;
     }
-    setState(() {
-      if (start) {
-        _startTime = picked;
-      } else {
-        _endTime = picked;
-      }
-    });
+    _endTime = _parseTimeOfDay(availableEndSlots.first);
   }
 }
 
@@ -971,7 +1444,9 @@ class _PaymentDialogState extends State<_PaymentDialog> {
     super.initState();
     _method = widget.booking.paymentMethod ?? CourtPaymentMethod.pix;
     _date = widget.booking.paymentDate ?? DateTime.now();
-    _notesController = TextEditingController(text: widget.booking.paymentNotes ?? '');
+    _notesController = TextEditingController(
+      text: widget.booking.paymentNotes ?? '',
+    );
   }
 
   @override
@@ -1090,12 +1565,17 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
-                    Text('Tarifas', style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      'Tarifas',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 12),
                     ..._rates.map((CourtRateSetting rate) {
                       return ListTile(
                         contentPadding: EdgeInsets.zero,
-                        title: Text('${rate.customerType.label} · ${rate.pricingPeriod.label}'),
+                        title: Text(
+                          '${rate.customerType.label} · ${rate.pricingPeriod.label}',
+                        ),
                         subtitle: Text(_formatCurrency(rate.amount)),
                         trailing: IconButton(
                           onPressed: _saving ? null : () => _editRate(rate),
@@ -1104,7 +1584,10 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
                       );
                     }),
                     const SizedBox(height: 18),
-                    Text('Materiales', style: Theme.of(context).textTheme.titleMedium),
+                    Text(
+                      'Materiales',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
                     const SizedBox(height: 12),
                     ..._materials.map((CourtMaterialSetting material) {
                       return ListTile(
@@ -1112,7 +1595,9 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
                         title: Text(material.label),
                         subtitle: Text(_formatCurrency(material.unitPrice)),
                         trailing: IconButton(
-                          onPressed: _saving ? null : () => _editMaterial(material),
+                          onPressed: _saving
+                              ? null
+                              : () => _editMaterial(material),
                           icon: const Icon(Icons.edit_rounded),
                         ),
                       );
@@ -1132,7 +1617,8 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
 
   Future<void> _load() async {
     final List<CourtRateSetting> rates = await widget.service.listRates();
-    final List<CourtMaterialSetting> materials = await widget.service.listMaterials();
+    final List<CourtMaterialSetting> materials = await widget.service
+        .listMaterials();
     if (!mounted) {
       return;
     }
@@ -1154,7 +1640,9 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
         return StatefulBuilder(
           builder: (BuildContext context, StateSetter setStateDialog) {
             return AlertDialog(
-              title: Text('${rate.customerType.label} · ${rate.pricingPeriod.label}'),
+              title: Text(
+                '${rate.customerType.label} · ${rate.pricingPeriod.label}',
+              ),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
@@ -1218,7 +1706,9 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
   }
 
   Future<void> _editMaterial(CourtMaterialSetting material) async {
-    final TextEditingController labelController = TextEditingController(text: material.label);
+    final TextEditingController labelController = TextEditingController(
+      text: material.label,
+    );
     final TextEditingController priceController = TextEditingController(
       text: material.unitPrice.toStringAsFixed(0),
     );
@@ -1284,7 +1774,8 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
         material.id,
         UpdateCourtMaterialSettingModel(
           label: labelController.text.trim(),
-          unitPrice: double.tryParse(priceController.text.replaceAll(',', '.')) ?? 0,
+          unitPrice:
+              double.tryParse(priceController.text.replaceAll(',', '.')) ?? 0,
           chargeGuest: material.chargeGuest,
           chargeVip: material.chargeVip,
           chargeExternal: material.chargeExternal,
@@ -1377,6 +1868,23 @@ String _statusLabel(CourtBooking booking) {
   return booking.paid ? 'Pago' : 'Pendiente';
 }
 
+String _statusDescription(CourtBooking booking) {
+  if (booking.status == CourtBookingStatus.cancelled) {
+    return booking.cancellationNotes == null
+        ? 'Reserva cancelada.'
+        : 'Cancelada: ${booking.cancellationNotes}';
+  }
+  if (!booking.paid) {
+    return 'Pagamento pendente.';
+  }
+  final String methodLabel =
+      booking.paymentMethod?.label ?? 'meio nao informado';
+  final String dateLabel = booking.paymentDate == null
+      ? 'data nao informada'
+      : _formatShortDate(booking.paymentDate!);
+  return 'Pago em $dateLabel via $methodLabel.';
+}
+
 Color _statusColor(CourtBooking booking) {
   if (booking.status == CourtBookingStatus.cancelled) {
     return CostaNorteBrand.error;
@@ -1415,7 +1923,8 @@ bool _isBeforeToday(DateTime value) {
 }
 
 bool _isCourtBookingOverlapMessage(String message) {
-  return message == 'Ja existe uma reserva ativa para esse horario da quadra.' ||
+  return message ==
+          'Ja existe uma reserva ativa para esse horario da quadra.' ||
       message == 'Court booking overlaps with an existing active booking.' ||
       message == 'Ja existe uma reserva ativa para esse horario.';
 }
@@ -1424,6 +1933,24 @@ String _formatTimeOfDay(TimeOfDay value) {
   final String hour = value.hour.toString().padLeft(2, '0');
   final String minute = value.minute.toString().padLeft(2, '0');
   return '$hour:$minute';
+}
+
+TimeOfDay _parseTimeOfDay(String value) {
+  final List<String> parts = value.split(':');
+  return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+}
+
+TimeOfDay _addMinutes(TimeOfDay value, int minutesToAdd) {
+  final int totalMinutes = value.hour * 60 + value.minute + minutesToAdd;
+  final int normalizedMinutes = totalMinutes % (24 * 60);
+  return TimeOfDay(
+    hour: normalizedMinutes ~/ 60,
+    minute: normalizedMinutes % 60,
+  );
+}
+
+int _timeOfDayToMinutes(TimeOfDay value) {
+  return value.hour * 60 + value.minute;
 }
 
 String _fullDateLabel(DateTime date) {
