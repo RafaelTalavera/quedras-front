@@ -21,6 +21,7 @@
 - `Massagens` y `Quadras` quedan instanciadas una sola vez dentro del shell.
 - El cambio de seccion actualiza solo el indice activo.
 - `Tours` y `Configuracoes` tambien quedan dentro del mismo contenedor para mantener un patron unico.
+- `Massagens` y `Quadras` ya usan navegacion interna secundaria dentro de la propia pagina para saltar entre bloques operativos sin perder estado ni recargar la vista.
 
 ## Criterio de implementacion
 - Instanciar las paginas internas una sola vez en el estado del `ShellPage` cuando tengan carga propia o estado que convenga conservar.

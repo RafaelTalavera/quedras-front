@@ -1,5 +1,18 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-03-26 | Post Hito 12 | Sidebar desktop de Massagens con navegacion interna por bloques
+- Componente afectado: Frontend (`Shell` + `Massagens`) + documentacion UI
+- Archivos tocados:
+  - `lib/features/home/presentation/shell_page.dart`
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `docs/INTERNAL_NAVIGATION_STANDARD.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: extender a `Massagens` el mismo patron ya aplicado en `Quadras`, permitiendo acceso rapido desde el sidebar izquierdo a los bloques operativos principales de la pantalla.
+- Impacto funcional:
+  - `Massagens` ahora expone accesos directos a `Dia selecionado`, `Agenda mensal` y `Resumo do mes`
+  - el sidebar contextual se sincroniza con el scroll de la pantalla
+  - el shell preserva estado y posicion al navegar dentro del modulo sin recrear la vista
+
 ## 2026-03-26 | Post Hito 12 | Sidebar desktop de Quadras con navegacion interna y compactacion operativa
 - Componente afectado: Frontend (`Shell` + `Quadras`) + documentacion UI
 - Archivos tocados:

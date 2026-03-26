@@ -42,16 +42,47 @@ const List<String> _treatmentTypes = <String>[
   'Experiencia dupla',
 ];
 
+enum MassageBookingSection { selectedDay, monthlyAgenda, monthlySummary }
+
+class MassageBookingPageController {
+  _MassageBookingPageState? _state;
+
+  Future<void> scrollToSection(MassageBookingSection section) async {
+    await _state?._scrollToSection(section);
+  }
+
+  void _attach(_MassageBookingPageState state) {
+    _state = state;
+  }
+
+  void _detach(_MassageBookingPageState state) {
+    if (identical(_state, state)) {
+      _state = null;
+    }
+  }
+}
+
 class MassageBookingPage extends StatefulWidget {
-  const MassageBookingPage({required this.massageAppService, super.key});
+  const MassageBookingPage({
+    required this.massageAppService,
+    this.controller,
+    this.onSectionChanged,
+    super.key,
+  });
 
   final MassageAppService massageAppService;
+  final MassageBookingPageController? controller;
+  final ValueChanged<MassageBookingSection>? onSectionChanged;
 
   @override
   State<MassageBookingPage> createState() => _MassageBookingPageState();
 }
 
 class _MassageBookingPageState extends State<MassageBookingPage> {
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _selectedDaySectionKey = GlobalKey();
+  final GlobalKey _monthlyAgendaSectionKey = GlobalKey();
+  final GlobalKey _monthlySummarySectionKey = GlobalKey();
   final GlobalKey _summaryKey = GlobalKey();
   final ScrollController _providerReportTableScrollController =
       ScrollController();
@@ -73,6 +104,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
   String? _reportErrorMessage;
   int? _selectedSummaryProviderId;
   MassageProviderDetailReport? _selectedProviderDetail;
+  MassageBookingSection _currentSection = MassageBookingSection.selectedDay;
 
   String _selectedTreatment = _treatmentTypes.first;
   int? _selectedProviderId;
@@ -83,6 +115,8 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
   @override
   void initState() {
     super.initState();
+    widget.controller?._attach(this);
+    _scrollController.addListener(_handleScroll);
     _selectedDate = DateTime.now();
     _selectedMonth = _selectedDate.month - 1;
     _reportStartDate = DateTime(_selectedDate.year, _selectedDate.month, 1);
@@ -91,10 +125,28 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
     _selectedTherapistId = null;
     _selectedTime = _recommendedTimeFor(_selectedDate, null);
     _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _notifyCurrentSection();
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant MassageBookingPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?._detach(this);
+      widget.controller?._attach(this);
+    }
   }
 
   @override
   void dispose() {
+    widget.controller?._detach(this);
+    _scrollController
+      ..removeListener(_handleScroll)
+      ..dispose();
     _providerReportTableScrollController.dispose();
     super.dispose();
   }
@@ -149,6 +201,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
+      controller: _scrollController,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -203,15 +256,102 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
               ),
             )
           else ...<Widget>[
-            _buildDetailPanel(context),
+            KeyedSubtree(
+              key: _selectedDaySectionKey,
+              child: _buildDetailPanel(context),
+            ),
             const SizedBox(height: 18),
-            _buildAgendaPanel(context),
+            KeyedSubtree(
+              key: _monthlyAgendaSectionKey,
+              child: _buildAgendaPanel(context),
+            ),
             const SizedBox(height: 18),
-            _buildSummarySection(context),
+            KeyedSubtree(
+              key: _monthlySummarySectionKey,
+              child: _buildSummarySection(context),
+            ),
           ],
         ],
       ),
     );
+  }
+
+  void _handleScroll() {
+    _notifyCurrentSection();
+  }
+
+  Future<void> _scrollToSection(MassageBookingSection section) async {
+    final BuildContext? targetContext = _sectionKeyFor(section).currentContext;
+    if (targetContext == null) {
+      return;
+    }
+    await Scrollable.ensureVisible(
+      targetContext,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      alignment: 0.02,
+    );
+    _setCurrentSection(section);
+  }
+
+  GlobalKey _sectionKeyFor(MassageBookingSection section) {
+    switch (section) {
+      case MassageBookingSection.selectedDay:
+        return _selectedDaySectionKey;
+      case MassageBookingSection.monthlyAgenda:
+        return _monthlyAgendaSectionKey;
+      case MassageBookingSection.monthlySummary:
+        return _monthlySummarySectionKey;
+    }
+  }
+
+  void _notifyCurrentSection() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _setCurrentSection(_resolveCurrentSection());
+    });
+  }
+
+  MassageBookingSection _resolveCurrentSection() {
+    final Map<MassageBookingSection, GlobalKey> sectionKeys =
+        <MassageBookingSection, GlobalKey>{
+          MassageBookingSection.selectedDay: _selectedDaySectionKey,
+          MassageBookingSection.monthlyAgenda: _monthlyAgendaSectionKey,
+          MassageBookingSection.monthlySummary: _monthlySummarySectionKey,
+        };
+    const double anchorY = 180;
+    MassageBookingSection bestSection = _currentSection;
+    double? bestDistance;
+
+    for (final MapEntry<MassageBookingSection, GlobalKey> entry
+        in sectionKeys.entries) {
+      final BuildContext? sectionContext = entry.value.currentContext;
+      if (sectionContext == null) {
+        continue;
+      }
+      final RenderObject? renderObject = sectionContext.findRenderObject();
+      if (renderObject is! RenderBox) {
+        continue;
+      }
+      final double sectionTop = renderObject.localToGlobal(Offset.zero).dy;
+      final double distance = (sectionTop - anchorY).abs();
+      if (bestDistance == null || distance < bestDistance) {
+        bestDistance = distance;
+        bestSection = entry.key;
+      }
+    }
+
+    return bestSection;
+  }
+
+  void _setCurrentSection(MassageBookingSection section) {
+    if (_currentSection == section) {
+      return;
+    }
+    _currentSection = section;
+    widget.onSectionChanged?.call(section);
   }
 
   Future<void> _load() async {

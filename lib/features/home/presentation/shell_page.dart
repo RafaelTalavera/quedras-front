@@ -41,20 +41,26 @@ class ShellPage extends StatefulWidget {
 
 class _ShellPageState extends State<ShellPage> {
   late AppSection _selectedSection;
+  late final MassageBookingPageController _massageBookingPageController;
   late final TennisRentalPageController _tennisRentalPageController;
   late final Widget _massageBookingPage;
   late final Widget _tennisRentalPage;
   late final Widget _toursTravelPage;
   bool _redirectingToLogin = false;
+  MassageBookingSection _selectedMassageSection =
+      MassageBookingSection.selectedDay;
   TennisRentalSection _selectedTennisSection = TennisRentalSection.selectedDay;
 
   @override
   void initState() {
     super.initState();
     _selectedSection = widget.section;
+    _massageBookingPageController = MassageBookingPageController();
     _tennisRentalPageController = TennisRentalPageController();
     _massageBookingPage = MassageBookingPage(
       massageAppService: widget.massageAppService,
+      controller: _massageBookingPageController,
+      onSectionChanged: _handleMassageSectionChanged,
     );
     _tennisRentalPage = TennisRentalPage(
       courtAppService: widget.courtAppService,
@@ -132,6 +138,8 @@ class _ShellPageState extends State<ShellPage> {
                       section: _selectedSection,
                       session: session,
                       onSectionSelected: _goToSection,
+                      massageSection: _selectedMassageSection,
+                      onMassageSectionSelected: _goToMassageSection,
                       tennisSection: _selectedTennisSection,
                       onTennisSectionSelected: _goToTennisSection,
                       onLogout: _logout,
@@ -141,6 +149,8 @@ class _ShellPageState extends State<ShellPage> {
                       section: _selectedSection,
                       session: session,
                       onSectionSelected: _goToSection,
+                      massageSection: _selectedMassageSection,
+                      onMassageSectionSelected: _goToMassageSection,
                       tennisSection: _selectedTennisSection,
                       onTennisSectionSelected: _goToTennisSection,
                       onLogout: _logout,
@@ -195,6 +205,24 @@ class _ShellPageState extends State<ShellPage> {
     await _tennisRentalPageController.scrollToSection(section);
   }
 
+  Future<void> _goToMassageSection(MassageBookingSection section) async {
+    if (_selectedSection != AppSection.massageBooking) {
+      setState(() {
+        _selectedSection = AppSection.massageBooking;
+        _selectedMassageSection = section;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _massageBookingPageController.scrollToSection(section);
+      });
+      return;
+    }
+
+    setState(() {
+      _selectedMassageSection = section;
+    });
+    await _massageBookingPageController.scrollToSection(section);
+  }
+
   void _logout() {
     widget.sessionController.clearSession();
   }
@@ -205,6 +233,15 @@ class _ShellPageState extends State<ShellPage> {
     }
     setState(() {
       _selectedTennisSection = section;
+    });
+  }
+
+  void _handleMassageSectionChanged(MassageBookingSection section) {
+    if (!mounted || _selectedMassageSection == section) {
+      return;
+    }
+    setState(() {
+      _selectedMassageSection = section;
     });
   }
 
@@ -227,6 +264,8 @@ class _DesktopShell extends StatelessWidget {
     required this.section,
     required this.session,
     required this.onSectionSelected,
+    required this.massageSection,
+    required this.onMassageSectionSelected,
     required this.tennisSection,
     required this.onTennisSectionSelected,
     required this.onLogout,
@@ -236,6 +275,8 @@ class _DesktopShell extends StatelessWidget {
   final AppSection section;
   final AuthSession? session;
   final ValueChanged<AppSection> onSectionSelected;
+  final MassageBookingSection massageSection;
+  final ValueChanged<MassageBookingSection> onMassageSectionSelected;
   final TennisRentalSection tennisSection;
   final ValueChanged<TennisRentalSection> onTennisSectionSelected;
   final VoidCallback onLogout;
@@ -253,6 +294,8 @@ class _DesktopShell extends StatelessWidget {
               section: section,
               session: session,
               onSectionSelected: onSectionSelected,
+              massageSection: massageSection,
+              onMassageSectionSelected: onMassageSectionSelected,
               tennisSection: tennisSection,
               onTennisSectionSelected: onTennisSectionSelected,
               onLogout: onLogout,
@@ -276,6 +319,8 @@ class _CompactShell extends StatelessWidget {
     required this.section,
     required this.session,
     required this.onSectionSelected,
+    required this.massageSection,
+    required this.onMassageSectionSelected,
     required this.tennisSection,
     required this.onTennisSectionSelected,
     required this.onLogout,
@@ -285,6 +330,8 @@ class _CompactShell extends StatelessWidget {
   final AppSection section;
   final AuthSession? session;
   final ValueChanged<AppSection> onSectionSelected;
+  final MassageBookingSection massageSection;
+  final ValueChanged<MassageBookingSection> onMassageSectionSelected;
   final TennisRentalSection tennisSection;
   final ValueChanged<TennisRentalSection> onTennisSectionSelected;
   final VoidCallback onLogout;
@@ -300,6 +347,8 @@ class _CompactShell extends StatelessWidget {
             section: section,
             session: session,
             onSectionSelected: onSectionSelected,
+            massageSection: massageSection,
+            onMassageSectionSelected: onMassageSectionSelected,
             tennisSection: tennisSection,
             onTennisSectionSelected: onTennisSectionSelected,
             onLogout: onLogout,
@@ -357,6 +406,8 @@ class _NavigationPanel extends StatelessWidget {
     required this.section,
     required this.session,
     required this.onSectionSelected,
+    required this.massageSection,
+    required this.onMassageSectionSelected,
     required this.tennisSection,
     required this.onTennisSectionSelected,
     required this.onLogout,
@@ -365,6 +416,8 @@ class _NavigationPanel extends StatelessWidget {
   final AppSection section;
   final AuthSession? session;
   final ValueChanged<AppSection> onSectionSelected;
+  final MassageBookingSection massageSection;
+  final ValueChanged<MassageBookingSection> onMassageSectionSelected;
   final TennisRentalSection tennisSection;
   final ValueChanged<TennisRentalSection> onTennisSectionSelected;
   final VoidCallback onLogout;
@@ -410,6 +463,16 @@ class _NavigationPanel extends StatelessWidget {
                 showStatusPill: !tightSidebar,
               ),
             ),
+            if (section == AppSection.massageBooking)
+              Padding(
+                padding: EdgeInsets.fromLTRB(18, 0, 18, tightSidebar ? 12 : 14),
+                child: _MassageSectionMenu(
+                  selectedSection: massageSection,
+                  onSelected: onMassageSectionSelected,
+                  compact: compactHeader,
+                  showDescription: !tightSidebar,
+                ),
+              ),
             if (section == AppSection.tennisRental)
               Padding(
                 padding: EdgeInsets.fromLTRB(18, 0, 18, tightSidebar ? 12 : 14),
@@ -555,6 +618,8 @@ class _CompactTopBar extends StatelessWidget {
     required this.section,
     required this.session,
     required this.onSectionSelected,
+    required this.massageSection,
+    required this.onMassageSectionSelected,
     required this.tennisSection,
     required this.onTennisSectionSelected,
     required this.onLogout,
@@ -563,6 +628,8 @@ class _CompactTopBar extends StatelessWidget {
   final AppSection section;
   final AuthSession? session;
   final ValueChanged<AppSection> onSectionSelected;
+  final MassageBookingSection massageSection;
+  final ValueChanged<MassageBookingSection> onMassageSectionSelected;
   final TennisRentalSection tennisSection;
   final ValueChanged<TennisRentalSection> onTennisSectionSelected;
   final VoidCallback onLogout;
@@ -622,6 +689,123 @@ class _CompactTopBar extends StatelessWidget {
               compact: true,
             ),
           ],
+          if (section == AppSection.massageBooking) ...<Widget>[
+            const SizedBox(height: 10),
+            _MassageSectionMenu(
+              selectedSection: massageSection,
+              onSelected: onMassageSectionSelected,
+              compact: true,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _MassageSectionMenu extends StatelessWidget {
+  const _MassageSectionMenu({
+    required this.selectedSection,
+    required this.onSelected,
+    this.compact = false,
+    this.showDescription = true,
+  });
+
+  final MassageBookingSection selectedSection;
+  final ValueChanged<MassageBookingSection> onSelected;
+  final bool compact;
+  final bool showDescription;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final BorderRadius borderRadius = BorderRadius.circular(compact ? 18 : 20);
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 12 : 14),
+      decoration: BoxDecoration(
+        borderRadius: borderRadius,
+        color: CostaNorteBrand.mist,
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Menu de massagens',
+            style: textTheme.titleSmall?.copyWith(
+              color: CostaNorteBrand.royalBlueDeep,
+            ),
+          ),
+          if (showDescription) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(
+              'Acesso rapido a cada bloco da operacao.',
+              style: textTheme.bodySmall,
+            ),
+          ],
+          SizedBox(height: showDescription ? 12 : 10),
+          ...MassageBookingSection.values.map((MassageBookingSection item) {
+            final bool selected = item == selectedSection;
+            return Padding(
+              padding: EdgeInsets.only(bottom: compact ? 6 : 8),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => onSelected(item),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compact ? 10 : 12,
+                      vertical: compact ? 10 : 12,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      color: selected
+                          ? CostaNorteBrand.foam
+                          : Colors.white.withValues(alpha: 0.72),
+                      border: Border.all(
+                        color: selected
+                            ? CostaNorteBrand.royalBlue.withValues(alpha: 0.22)
+                            : CostaNorteBrand.line,
+                      ),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Icon(
+                          _iconForMassageSection(item),
+                          size: 18,
+                          color: selected
+                              ? CostaNorteBrand.royalBlueDeep
+                              : CostaNorteBrand.mutedInk,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _labelForMassageSection(item),
+                            style: textTheme.labelLarge?.copyWith(
+                              color: selected
+                                  ? CostaNorteBrand.royalBlueDeep
+                                  : CostaNorteBrand.ink,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_outward_rounded,
+                          size: 18,
+                          color: selected
+                              ? CostaNorteBrand.royalBlueDeep
+                              : CostaNorteBrand.mutedInk,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -907,6 +1091,17 @@ String _labelForSection(AppSection section) {
   }
 }
 
+String _labelForMassageSection(MassageBookingSection section) {
+  switch (section) {
+    case MassageBookingSection.selectedDay:
+      return 'Dia selecionado';
+    case MassageBookingSection.monthlyAgenda:
+      return 'Agenda mensal';
+    case MassageBookingSection.monthlySummary:
+      return 'Resumo do mes';
+  }
+}
+
 IconData _iconForSection(AppSection section) {
   switch (section) {
     case AppSection.massageBooking:
@@ -917,6 +1112,17 @@ IconData _iconForSection(AppSection section) {
       return Icons.explore_rounded;
     case AppSection.settings:
       return Icons.tune_rounded;
+  }
+}
+
+IconData _iconForMassageSection(MassageBookingSection section) {
+  switch (section) {
+    case MassageBookingSection.selectedDay:
+      return Icons.today_rounded;
+    case MassageBookingSection.monthlyAgenda:
+      return Icons.calendar_month_rounded;
+    case MassageBookingSection.monthlySummary:
+      return Icons.ssid_chart_rounded;
   }
 }
 
