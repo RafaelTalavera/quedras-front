@@ -456,70 +456,27 @@ class _ToursTravelPageState extends State<ToursTravelPage> {
                   .toList(),
             ),
             const SizedBox(height: 10),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: cells.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-                childAspectRatio: 1.08,
-              ),
-              itemBuilder: (BuildContext context, int index) {
-                final _DayCell cell = cells[index];
-                if (!cell.inMonth) return const SizedBox.shrink();
-                final int active = cell.bookings
-                    .where(
-                      (ToursBooking b) =>
-                          b.status == ToursBookingStatus.scheduled,
-                    )
-                    .length;
-                final int cancelled = cell.bookings.length - active;
-                return InkWell(
-                  borderRadius: BorderRadius.circular(18),
-                  onTap: () => setState(() => _selectedDate = cell.date),
-                  child: Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(18),
-                      color: _sameDay(cell.date, _selectedDate)
-                          ? CostaNorteBrand.foam
-                          : Colors.white,
-                      border: Border.all(
-                        color: _sameDay(cell.date, _selectedDate)
-                            ? CostaNorteBrand.royalBlue
-                            : CostaNorteBrand.line,
-                      ),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text(
-                          '${cell.date.day}',
-                          style: Theme.of(context).textTheme.titleMedium,
-                        ),
-                        const Spacer(),
-                        if (active > 0)
-                          Text(
-                            '$active ativos',
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(
-                                  color: CostaNorteBrand.royalBlueDeep,
-                                ),
-                          ),
-                        if (cancelled > 0)
-                          Text(
-                            '$cancelled cancel.',
-                            style: Theme.of(context).textTheme.labelMedium
-                                ?.copyWith(color: CostaNorteBrand.error),
-                          ),
-                      ],
-                    ),
+                GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: cells.length,
+                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 7,
+                    crossAxisSpacing: 8,
+                    mainAxisSpacing: 8,
+                    mainAxisExtent: 92,
                   ),
-                );
-              },
-            ),
+                  itemBuilder: (BuildContext context, int index) {
+                    final _DayCell cell = cells[index];
+                    if (!cell.inMonth) return const SizedBox.shrink();
+                    return _ToursAgendaDayCard(
+                      date: cell.date,
+                      bookings: cell.bookings,
+                      selected: _sameDay(cell.date, _selectedDate),
+                      onTap: () => setState(() => _selectedDate = cell.date),
+                    );
+                  },
+                ),
           ],
         ),
       ),
@@ -1125,6 +1082,151 @@ class _DayCell {
   final DateTime date;
   final List<ToursBooking> bookings;
   final bool inMonth;
+}
+
+class _ToursAgendaDayCard extends StatelessWidget {
+  const _ToursAgendaDayCard({
+    required this.date,
+    required this.bookings,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final DateTime date;
+  final List<ToursBooking> bookings;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool hasBookings = bookings.isNotEmpty;
+    final int toursCount = bookings
+        .where(
+          (ToursBooking booking) =>
+              booking.serviceType == ToursServiceType.tour &&
+              booking.status == ToursBookingStatus.scheduled,
+        )
+        .length;
+    final int travelCount = bookings
+        .where(
+          (ToursBooking booking) =>
+              booking.serviceType == ToursServiceType.travel &&
+              booking.status == ToursBookingStatus.scheduled,
+        )
+        .length;
+    final bool hasCancelled = bookings.any(
+      (ToursBooking booking) => booking.status == ToursBookingStatus.cancelled,
+    );
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: selected
+                ? CostaNorteBrand.goldDeep
+                : hasBookings
+                ? CostaNorteBrand.royalBlueDeep
+                : CostaNorteBrand.line,
+            width: selected ? 1.4 : 1,
+          ),
+          color: selected
+              ? const Color(0xFFFFF8E7)
+              : hasBookings
+              ? const Color(0xFFF2F7FF)
+              : Colors.white,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Icon(
+                  Icons.calendar_today_rounded,
+                  size: 14,
+                  color: CostaNorteBrand.mutedInk,
+                ),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    '${date.day}',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      color: hasBookings ? CostaNorteBrand.royalBlueDeep : null,
+                      fontWeight: hasBookings ? FontWeight.w700 : null,
+                    ),
+                  ),
+                ),
+                if (hasCancelled)
+                  Text(
+                    'C',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontSize: 10,
+                      color: CostaNorteBrand.error,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            _AgendaCountLine(
+              icon: Icons.explore_rounded,
+              count: toursCount,
+              active: toursCount > 0,
+            ),
+            const SizedBox(height: 4),
+            _AgendaCountLine(
+              icon: Icons.route_rounded,
+              count: travelCount,
+              active: travelCount > 0,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _AgendaCountLine extends StatelessWidget {
+  const _AgendaCountLine({
+    required this.icon,
+    required this.count,
+    required this.active,
+  });
+
+  final IconData icon;
+  final int count;
+  final bool active;
+
+  @override
+  Widget build(BuildContext context) {
+    final Color color = active
+        ? CostaNorteBrand.ink
+        : CostaNorteBrand.mutedInk;
+    return Row(
+      children: <Widget>[
+        Icon(icon, size: 14, color: color),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            '$count',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: 11,
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _BookingDialog extends StatefulWidget {

@@ -47,6 +47,10 @@
   - ver agenda diaria
   - ver agenda mensual
   - ver resumen por proveedor
+- La agenda mensual de `tours` debe seguir el mismo patron visual de `quadras`:
+  - tarjeta diaria compacta
+  - mismo criterio de seleccion y estados
+  - conteo separado con iconos para `tour` y `viagem`
 
 ## Contrato minimo esperado del backend
 
