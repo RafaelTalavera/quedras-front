@@ -7,6 +7,7 @@ import '../../features/courts/application/court_app_service.dart';
 import '../../features/home/presentation/shell_page.dart';
 import '../../features/massages/application/massage_app_service.dart';
 import '../../features/reservations/application/reservation_app_service.dart';
+import '../../features/tours/application/tours_app_service.dart';
 import 'app_routes.dart';
 
 final class AppRouter {
@@ -17,6 +18,7 @@ final class AppRouter {
     required MassageAppService massageAppService,
     required ReservationAppService reservationAppService,
     required CourtAppService courtAppService,
+    required ToursAppService toursAppService,
   }) {
     final String routeName = settings.name ?? AppRoutes.login;
     if (!sessionController.isAuthenticated) {
@@ -41,6 +43,7 @@ final class AppRouter {
         massageAppService: massageAppService,
         reservationAppService: reservationAppService,
         courtAppService: courtAppService,
+        toursAppService: toursAppService,
       ),
       settings: settings,
     );

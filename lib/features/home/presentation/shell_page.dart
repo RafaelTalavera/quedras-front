@@ -13,6 +13,7 @@ import '../../massages/presentation/massage_booking_page.dart';
 import '../../reservations/application/reservation_app_service.dart';
 import '../../settings/presentation/settings_page.dart';
 import '../../tennis/presentation/tennis_rental_page.dart';
+import '../../tours/application/tours_app_service.dart';
 import '../../tours/presentation/tours_travel_page.dart';
 
 const double _desktopSidebarWidth = 302;
@@ -26,6 +27,7 @@ class ShellPage extends StatefulWidget {
     required this.massageAppService,
     required this.reservationAppService,
     required this.courtAppService,
+    required this.toursAppService,
     super.key,
   });
 
@@ -34,6 +36,7 @@ class ShellPage extends StatefulWidget {
   final MassageAppService massageAppService;
   final ReservationAppService reservationAppService;
   final CourtAppService courtAppService;
+  final ToursAppService toursAppService;
 
   @override
   State<ShellPage> createState() => _ShellPageState();
@@ -43,6 +46,7 @@ class _ShellPageState extends State<ShellPage> {
   late AppSection _selectedSection;
   late final MassageBookingPageController _massageBookingPageController;
   late final TennisRentalPageController _tennisRentalPageController;
+  late final ToursTravelPageController _toursTravelPageController;
   late final Widget _massageBookingPage;
   late final Widget _tennisRentalPage;
   late final Widget _toursTravelPage;
@@ -50,6 +54,7 @@ class _ShellPageState extends State<ShellPage> {
   MassageBookingSection _selectedMassageSection =
       MassageBookingSection.selectedDay;
   TennisRentalSection _selectedTennisSection = TennisRentalSection.selectedDay;
+  ToursTravelSection _selectedToursSection = ToursTravelSection.selectedDay;
 
   @override
   void initState() {
@@ -57,6 +62,7 @@ class _ShellPageState extends State<ShellPage> {
     _selectedSection = widget.section;
     _massageBookingPageController = MassageBookingPageController();
     _tennisRentalPageController = TennisRentalPageController();
+    _toursTravelPageController = ToursTravelPageController();
     _massageBookingPage = MassageBookingPage(
       massageAppService: widget.massageAppService,
       controller: _massageBookingPageController,
@@ -67,7 +73,11 @@ class _ShellPageState extends State<ShellPage> {
       controller: _tennisRentalPageController,
       onSectionChanged: _handleTennisSectionChanged,
     );
-    _toursTravelPage = const SingleChildScrollView(child: ToursTravelPage());
+    _toursTravelPage = ToursTravelPage(
+      toursAppService: widget.toursAppService,
+      controller: _toursTravelPageController,
+      onSectionChanged: _handleToursSectionChanged,
+    );
     widget.sessionController.addListener(_handleSessionChanged);
   }
 
@@ -142,6 +152,8 @@ class _ShellPageState extends State<ShellPage> {
                       onMassageSectionSelected: _goToMassageSection,
                       tennisSection: _selectedTennisSection,
                       onTennisSectionSelected: _goToTennisSection,
+                      toursSection: _selectedToursSection,
+                      onToursSectionSelected: _goToToursSection,
                       onLogout: _logout,
                       content: content,
                     )
@@ -153,6 +165,8 @@ class _ShellPageState extends State<ShellPage> {
                       onMassageSectionSelected: _goToMassageSection,
                       tennisSection: _selectedTennisSection,
                       onTennisSectionSelected: _goToTennisSection,
+                      toursSection: _selectedToursSection,
+                      onToursSectionSelected: _goToToursSection,
                       onLogout: _logout,
                       content: content,
                     ),
@@ -223,6 +237,24 @@ class _ShellPageState extends State<ShellPage> {
     await _massageBookingPageController.scrollToSection(section);
   }
 
+  Future<void> _goToToursSection(ToursTravelSection section) async {
+    if (_selectedSection != AppSection.toursTravel) {
+      setState(() {
+        _selectedSection = AppSection.toursTravel;
+        _selectedToursSection = section;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _toursTravelPageController.scrollToSection(section);
+      });
+      return;
+    }
+
+    setState(() {
+      _selectedToursSection = section;
+    });
+    await _toursTravelPageController.scrollToSection(section);
+  }
+
   void _logout() {
     widget.sessionController.clearSession();
   }
@@ -242,6 +274,15 @@ class _ShellPageState extends State<ShellPage> {
     }
     setState(() {
       _selectedMassageSection = section;
+    });
+  }
+
+  void _handleToursSectionChanged(ToursTravelSection section) {
+    if (!mounted || _selectedToursSection == section) {
+      return;
+    }
+    setState(() {
+      _selectedToursSection = section;
     });
   }
 
@@ -268,6 +309,8 @@ class _DesktopShell extends StatelessWidget {
     required this.onMassageSectionSelected,
     required this.tennisSection,
     required this.onTennisSectionSelected,
+    required this.toursSection,
+    required this.onToursSectionSelected,
     required this.onLogout,
     required this.content,
   });
@@ -279,6 +322,8 @@ class _DesktopShell extends StatelessWidget {
   final ValueChanged<MassageBookingSection> onMassageSectionSelected;
   final TennisRentalSection tennisSection;
   final ValueChanged<TennisRentalSection> onTennisSectionSelected;
+  final ToursTravelSection toursSection;
+  final ValueChanged<ToursTravelSection> onToursSectionSelected;
   final VoidCallback onLogout;
   final Widget content;
 
@@ -298,6 +343,8 @@ class _DesktopShell extends StatelessWidget {
               onMassageSectionSelected: onMassageSectionSelected,
               tennisSection: tennisSection,
               onTennisSectionSelected: onTennisSectionSelected,
+              toursSection: toursSection,
+              onToursSectionSelected: onToursSectionSelected,
               onLogout: onLogout,
             ),
           ),
@@ -323,6 +370,8 @@ class _CompactShell extends StatelessWidget {
     required this.onMassageSectionSelected,
     required this.tennisSection,
     required this.onTennisSectionSelected,
+    required this.toursSection,
+    required this.onToursSectionSelected,
     required this.onLogout,
     required this.content,
   });
@@ -334,6 +383,8 @@ class _CompactShell extends StatelessWidget {
   final ValueChanged<MassageBookingSection> onMassageSectionSelected;
   final TennisRentalSection tennisSection;
   final ValueChanged<TennisRentalSection> onTennisSectionSelected;
+  final ToursTravelSection toursSection;
+  final ValueChanged<ToursTravelSection> onToursSectionSelected;
   final VoidCallback onLogout;
   final Widget content;
 
@@ -351,6 +402,8 @@ class _CompactShell extends StatelessWidget {
             onMassageSectionSelected: onMassageSectionSelected,
             tennisSection: tennisSection,
             onTennisSectionSelected: onTennisSectionSelected,
+            toursSection: toursSection,
+            onToursSectionSelected: onToursSectionSelected,
             onLogout: onLogout,
           ),
           const SizedBox(height: 12),
@@ -410,6 +463,8 @@ class _NavigationPanel extends StatelessWidget {
     required this.onMassageSectionSelected,
     required this.tennisSection,
     required this.onTennisSectionSelected,
+    required this.toursSection,
+    required this.onToursSectionSelected,
     required this.onLogout,
   });
 
@@ -420,6 +475,8 @@ class _NavigationPanel extends StatelessWidget {
   final ValueChanged<MassageBookingSection> onMassageSectionSelected;
   final TennisRentalSection tennisSection;
   final ValueChanged<TennisRentalSection> onTennisSectionSelected;
+  final ToursTravelSection toursSection;
+  final ValueChanged<ToursTravelSection> onToursSectionSelected;
   final VoidCallback onLogout;
 
   @override
@@ -479,6 +536,16 @@ class _NavigationPanel extends StatelessWidget {
                 child: _TennisSectionMenu(
                   selectedSection: tennisSection,
                   onSelected: onTennisSectionSelected,
+                  compact: compactHeader,
+                  showDescription: !tightSidebar,
+                ),
+              ),
+            if (section == AppSection.toursTravel)
+              Padding(
+                padding: EdgeInsets.fromLTRB(18, 0, 18, tightSidebar ? 12 : 14),
+                child: _ToursSectionMenu(
+                  selectedSection: toursSection,
+                  onSelected: onToursSectionSelected,
                   compact: compactHeader,
                   showDescription: !tightSidebar,
                 ),
@@ -622,6 +689,8 @@ class _CompactTopBar extends StatelessWidget {
     required this.onMassageSectionSelected,
     required this.tennisSection,
     required this.onTennisSectionSelected,
+    required this.toursSection,
+    required this.onToursSectionSelected,
     required this.onLogout,
   });
 
@@ -632,6 +701,8 @@ class _CompactTopBar extends StatelessWidget {
   final ValueChanged<MassageBookingSection> onMassageSectionSelected;
   final TennisRentalSection tennisSection;
   final ValueChanged<TennisRentalSection> onTennisSectionSelected;
+  final ToursTravelSection toursSection;
+  final ValueChanged<ToursTravelSection> onToursSectionSelected;
   final VoidCallback onLogout;
 
   @override
@@ -694,6 +765,14 @@ class _CompactTopBar extends StatelessWidget {
             _MassageSectionMenu(
               selectedSection: massageSection,
               onSelected: onMassageSectionSelected,
+              compact: true,
+            ),
+          ],
+          if (section == AppSection.toursTravel) ...<Widget>[
+            const SizedBox(height: 10),
+            _ToursSectionMenu(
+              selectedSection: toursSection,
+              onSelected: onToursSectionSelected,
               compact: true,
             ),
           ],
@@ -894,6 +973,115 @@ class _TennisSectionMenu extends StatelessWidget {
                         Expanded(
                           child: Text(
                             _labelForTennisSection(item),
+                            style: textTheme.labelLarge?.copyWith(
+                              color: selected
+                                  ? CostaNorteBrand.royalBlueDeep
+                                  : CostaNorteBrand.ink,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_outward_rounded,
+                          size: 18,
+                          color: selected
+                              ? CostaNorteBrand.royalBlueDeep
+                              : CostaNorteBrand.mutedInk,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
+class _ToursSectionMenu extends StatelessWidget {
+  const _ToursSectionMenu({
+    required this.selectedSection,
+    required this.onSelected,
+    this.compact = false,
+    this.showDescription = true,
+  });
+
+  final ToursTravelSection selectedSection;
+  final ValueChanged<ToursTravelSection> onSelected;
+  final bool compact;
+  final bool showDescription;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final BorderRadius borderRadius = BorderRadius.circular(compact ? 18 : 20);
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 12 : 14),
+      decoration: BoxDecoration(
+        borderRadius: borderRadius,
+        color: CostaNorteBrand.mist,
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Menu de tours',
+            style: textTheme.titleSmall?.copyWith(
+              color: CostaNorteBrand.royalBlueDeep,
+            ),
+          ),
+          if (showDescription) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(
+              'Acesso rapido a cada bloco da operacao.',
+              style: textTheme.bodySmall,
+            ),
+          ],
+          SizedBox(height: showDescription ? 12 : 10),
+          ...ToursTravelSection.values.map((ToursTravelSection item) {
+            final bool selected = item == selectedSection;
+            return Padding(
+              padding: EdgeInsets.only(bottom: compact ? 6 : 8),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => onSelected(item),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compact ? 10 : 12,
+                      vertical: compact ? 10 : 12,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      color: selected
+                          ? CostaNorteBrand.foam
+                          : Colors.white.withValues(alpha: 0.72),
+                      border: Border.all(
+                        color: selected
+                            ? CostaNorteBrand.royalBlue.withValues(alpha: 0.22)
+                            : CostaNorteBrand.line,
+                      ),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Icon(
+                          _iconForToursSection(item),
+                          size: 18,
+                          color: selected
+                              ? CostaNorteBrand.royalBlueDeep
+                              : CostaNorteBrand.mutedInk,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _labelForToursSection(item),
                             style: textTheme.labelLarge?.copyWith(
                               color: selected
                                   ? CostaNorteBrand.royalBlueDeep
@@ -1144,6 +1332,28 @@ IconData _iconForTennisSection(TennisRentalSection section) {
     case TennisRentalSection.monthlyAgenda:
       return Icons.calendar_month_rounded;
     case TennisRentalSection.summary:
+      return Icons.analytics_rounded;
+  }
+}
+
+String _labelForToursSection(ToursTravelSection section) {
+  switch (section) {
+    case ToursTravelSection.selectedDay:
+      return 'Dia selecionado';
+    case ToursTravelSection.monthlyAgenda:
+      return 'Agenda mensal';
+    case ToursTravelSection.summary:
+      return 'Resumo do periodo';
+  }
+}
+
+IconData _iconForToursSection(ToursTravelSection section) {
+  switch (section) {
+    case ToursTravelSection.selectedDay:
+      return Icons.today_rounded;
+    case ToursTravelSection.monthlyAgenda:
+      return Icons.calendar_month_rounded;
+    case ToursTravelSection.summary:
       return Icons.analytics_rounded;
   }
 }

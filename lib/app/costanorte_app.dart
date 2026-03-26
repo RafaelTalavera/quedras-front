@@ -14,6 +14,8 @@ import '../features/massages/application/massage_app_service.dart';
 import '../features/massages/infrastructure/http_massage_app_service.dart';
 import '../features/reservations/application/reservation_app_service.dart';
 import '../features/reservations/infrastructure/http_reservation_app_service.dart';
+import '../features/tours/application/tours_app_service.dart';
+import '../features/tours/infrastructure/http_tours_app_service.dart';
 import 'router/app_router.dart';
 import 'router/app_routes.dart';
 
@@ -26,12 +28,14 @@ class CostaNorteApp extends StatefulWidget {
     MassageAppService? massageAppService,
     ReservationAppService? reservationAppService,
     CourtAppService? courtAppService,
+    ToursAppService? toursAppService,
   }) : _apiClient = apiClient,
        _authAppService = authAppService,
        _sessionController = sessionController,
        _massageAppService = massageAppService,
        _reservationAppService = reservationAppService,
-       _courtAppService = courtAppService;
+       _courtAppService = courtAppService,
+       _toursAppService = toursAppService;
 
   final ApiClient? _apiClient;
   final AuthAppService? _authAppService;
@@ -39,6 +43,7 @@ class CostaNorteApp extends StatefulWidget {
   final MassageAppService? _massageAppService;
   final ReservationAppService? _reservationAppService;
   final CourtAppService? _courtAppService;
+  final ToursAppService? _toursAppService;
 
   @override
   State<CostaNorteApp> createState() => _CostaNorteAppState();
@@ -52,6 +57,7 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
   late final MassageAppService _massageAppService;
   late final ReservationAppService _reservationAppService;
   late final CourtAppService _courtAppService;
+  late final ToursAppService _toursAppService;
 
   @override
   void initState() {
@@ -75,6 +81,9 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
     _courtAppService =
         widget._courtAppService ??
         HttpCourtAppService(apiClient: _authorizedApiClient);
+    _toursAppService =
+        widget._toursAppService ??
+        HttpToursAppService(apiClient: _authorizedApiClient);
   }
 
   @override
@@ -91,6 +100,7 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
         massageAppService: _massageAppService,
         reservationAppService: _reservationAppService,
         courtAppService: _courtAppService,
+        toursAppService: _toursAppService,
       ),
     );
   }
