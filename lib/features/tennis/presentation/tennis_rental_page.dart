@@ -83,6 +83,7 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
   bool _saving = false;
   String? _errorMessage;
   String? _summaryErrorMessage;
+  String? _selectedSummaryDetailKey;
   List<CourtBooking> _bookings = <CourtBooking>[];
   CourtSummaryReport? _summary;
 
@@ -198,6 +199,7 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
       setState(() {
         _bookings = bookings;
         _summary = summary;
+        _selectedSummaryDetailKey = null;
         _loading = false;
         _loadingSummary = false;
       });
@@ -229,6 +231,7 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
       }
       setState(() {
         _summary = summary;
+        _selectedSummaryDetailKey = null;
         _loadingSummary = false;
       });
     } catch (error) {
@@ -512,6 +515,8 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
     final CourtSummaryReport? summary = _summary;
     final List<_PartnerCoachSummaryRow> partnerCoachRows =
         _buildPartnerCoachSummaryRows();
+    final List<CourtBooking> reportBookings = _reportBookings;
+    final List<CourtBooking> activeReportBookings = _activeReportBookings;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -519,7 +524,7 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text(
-              'Resumo do mes',
+              'Resumo do periodo',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
             const SizedBox(height: 18),
@@ -569,6 +574,8 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
                     runSpacing: 14,
                     children: <Widget>[
                       _MetricCard(
+                        selected:
+                            _selectedSummaryDetailKey == 'metric:overview',
                         title: _formatReportRangeLabel(
                           _reportStartDate,
                           _reportEndDate,
@@ -578,26 +585,63 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
                             ? 'Sem cancelamentos no periodo'
                             : '${summary.cancelledCount} canceladas no historico',
                         icon: Icons.calendar_view_month_rounded,
+                        onTap: () => _openSummaryDetail(
+                          key: 'metric:overview',
+                          title: 'Reservas ativas do periodo',
+                          description:
+                              'Lista de reservas ativas dentro do periodo consultado.',
+                          bookings: activeReportBookings,
+                        ),
                       ),
                       _MetricCard(
+                        selected: _selectedSummaryDetailKey == 'metric:revenue',
                         title: _formatCurrency(summary.expectedAmount),
                         value: _formatCurrency(summary.paidAmount),
                         caption:
                             '${summary.pendingCount} pendentes e ${_paymentRateLabel(summary)} de conversao',
                         icon: Icons.payments_rounded,
+                        onTap: () => _openSummaryDetail(
+                          key: 'metric:revenue',
+                          title: 'Receita do periodo',
+                          description:
+                              'Reservas ativas do periodo com foco em valores pagos e pendentes.',
+                          bookings: activeReportBookings,
+                        ),
                       ),
                       _MetricCard(
+                        selected: _selectedSummaryDetailKey == 'metric:hours',
                         title: '${summary.totalHours.toStringAsFixed(1)} h',
                         value: _formatCurrency(summary.averageTicket),
                         caption:
                             'Carga horaria total e ticket medio do periodo',
                         icon: Icons.query_builder_rounded,
+                        onTap: () => _openSummaryDetail(
+                          key: 'metric:hours',
+                          title: 'Carga horaria do periodo',
+                          description:
+                              'Reservas ativas que compoem a carga horaria total do periodo.',
+                          bookings: activeReportBookings,
+                        ),
                       ),
                       _MetricCard(
+                        selected:
+                            _selectedSummaryDetailKey == 'metric:materials',
                         title: _formatCurrency(summary.materialsAmount),
                         value: _formatCurrency(summary.courtAmount),
                         caption: 'Materiais vendidos e receita base de quadra',
                         icon: Icons.inventory_2_rounded,
+                        onTap: () => _openSummaryDetail(
+                          key: 'metric:materials',
+                          title: 'Materiais e receita base',
+                          description:
+                              'Reservas ativas com materiais ou cobranca de quadra no periodo.',
+                          bookings: activeReportBookings.where((
+                            CourtBooking booking,
+                          ) {
+                            return booking.materialsAmount > 0 ||
+                                booking.courtAmount > 0;
+                          }).toList(),
+                        ),
                       ),
                     ],
                   ),
@@ -607,62 +651,159 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
                     runSpacing: 12,
                     children: <Widget>[
                       _DetailChip(
+                        selected: _selectedSummaryDetailKey == 'chip:guest',
                         label: 'Hospedes',
                         value: '${summary.guestHours.toStringAsFixed(1)} h',
                         icon: Icons.king_bed_rounded,
+                        onTap: () => _openSummaryDetail(
+                          key: 'chip:guest',
+                          title: 'Detalhe de hospedes',
+                          description:
+                              'Reservas ativas de hospedes dentro do periodo consultado.',
+                          bookings: _filterReportBookingsByCustomerType(
+                            CourtCustomerType.guest,
+                          ),
+                        ),
                       ),
                       _DetailChip(
+                        selected: _selectedSummaryDetailKey == 'chip:vip',
                         label: 'VIP',
                         value: '${summary.vipHours.toStringAsFixed(1)} h',
                         icon: Icons.workspace_premium_rounded,
+                        onTap: () => _openSummaryDetail(
+                          key: 'chip:vip',
+                          title: 'Detalhe de clientes VIP',
+                          description:
+                              'Reservas ativas de clientes VIP dentro do periodo consultado.',
+                          bookings: _filterReportBookingsByCustomerType(
+                            CourtCustomerType.vip,
+                          ),
+                        ),
                       ),
                       _DetailChip(
+                        selected: _selectedSummaryDetailKey == 'chip:external',
                         label: 'Externos',
                         value: '${summary.externalHours.toStringAsFixed(1)} h',
                         icon: Icons.public_rounded,
+                        onTap: () => _openSummaryDetail(
+                          key: 'chip:external',
+                          title: 'Detalhe de clientes externos',
+                          description:
+                              'Reservas ativas de clientes externos dentro do periodo consultado.',
+                          bookings: _filterReportBookingsByCustomerType(
+                            CourtCustomerType.external,
+                          ),
+                        ),
                       ),
                       _DetailChip(
+                        selected:
+                            _selectedSummaryDetailKey == 'chip:partner-coach',
                         label: 'Prof. parceiro',
                         value:
                             '${summary.partnerCoachHours.toStringAsFixed(1)} h',
                         icon: Icons.sports_rounded,
+                        onTap: () => _openSummaryDetail(
+                          key: 'chip:partner-coach',
+                          title: 'Detalhe de professores parceiros',
+                          description:
+                              'Reservas ativas de professores parceiros dentro do periodo consultado.',
+                          bookings: _filterReportBookingsByCustomerType(
+                            CourtCustomerType.partnerCoach,
+                          ),
+                        ),
                       ),
                       _DetailChip(
+                        selected: _selectedSummaryDetailKey == 'chip:materials',
                         label: 'Materiais',
                         value: _formatCurrency(summary.materialsAmount),
                         icon: Icons.inventory_2_rounded,
+                        onTap: () => _openSummaryDetail(
+                          key: 'chip:materials',
+                          title: 'Detalhe de materiais',
+                          description:
+                              'Reservas ativas com venda de materiais no periodo consultado.',
+                          bookings: activeReportBookings.where((
+                            CourtBooking booking,
+                          ) {
+                            return booking.materialsAmount > 0;
+                          }).toList(),
+                        ),
                       ),
                       _DetailChip(
+                        selected: _selectedSummaryDetailKey == 'chip:pending',
                         label: 'Pendente',
                         value: _formatCurrency(summary.pendingAmount),
                         icon: Icons.warning_amber_rounded,
+                        onTap: () => _openSummaryDetail(
+                          key: 'chip:pending',
+                          title: 'Detalhe de pendencias',
+                          description:
+                              'Reservas ativas com pagamento pendente no periodo consultado.',
+                          bookings: activeReportBookings.where((
+                            CourtBooking booking,
+                          ) {
+                            return !booking.paid;
+                          }).toList(),
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 20),
                   _buildSummaryBreakdownSection(
                     context,
+                    selectionPrefix: 'customer-type',
                     title: 'Resumo por tipo de cliente',
                     description:
                         'Distribuicao de reservas, horas e receita conforme o perfil operacional da quadra.',
                     items: summary.customerTypeBreakdown,
+                    detailTitleBuilder: (CourtSummaryBreakdown item) =>
+                        'Detalhe de ${item.label}',
+                    detailDescriptionBuilder: (CourtSummaryBreakdown item) =>
+                        'Reservas ativas do tipo ${item.label.toLowerCase()} no periodo consultado.',
+                    bookingsBuilder: (CourtSummaryBreakdown item) =>
+                        _filterReportBookingsByCustomerType(
+                          _customerTypeFromBreakdownCode(item.code),
+                        ),
                   ),
                   const SizedBox(height: 18),
                   _buildSummaryBreakdownSection(
                     context,
+                    selectionPrefix: 'pricing-period',
                     title: 'Resumo por periodo tarifario',
                     description:
                         'Comparativo entre operacao diurna e noturna para apoiar regras de preco e ocupacao.',
                     items: summary.pricingPeriodBreakdown,
+                    detailTitleBuilder: (CourtSummaryBreakdown item) =>
+                        'Detalhe de ${item.label}',
+                    detailDescriptionBuilder: (CourtSummaryBreakdown item) =>
+                        'Reservas ativas do periodo tarifario ${item.label.toLowerCase()} no periodo consultado.',
+                    bookingsBuilder: (CourtSummaryBreakdown item) =>
+                        _activeReportBookings.where((CourtBooking booking) {
+                          return booking.pricingPeriod ==
+                              _pricingPeriodFromBreakdownCode(item.code);
+                        }).toList(),
                   ),
                   const SizedBox(height: 18),
                   _buildSummaryBreakdownSection(
                     context,
+                    selectionPrefix: 'payment-method',
                     title: 'Cobrado por meio de pagamento',
                     description:
                         'Valores efetivamente pagos por canal de recebimento no periodo consultado.',
                     items: summary.paymentMethodBreakdown,
                     hidePendingColumn: true,
+                    detailTitleBuilder: (CourtSummaryBreakdown item) =>
+                        'Detalhe de ${item.label}',
+                    detailDescriptionBuilder: (CourtSummaryBreakdown item) =>
+                        'Reservas pagas por ${item.label.toLowerCase()} no periodo consultado.',
+                    bookingsBuilder: (CourtSummaryBreakdown item) =>
+                        reportBookings.where((CourtBooking booking) {
+                          return booking.status ==
+                                  CourtBookingStatus.scheduled &&
+                              booking.paid &&
+                              booking.paymentMethod ==
+                                  _paymentMethodFromBreakdownCode(item.code);
+                        }).toList(),
                   ),
                   const SizedBox(height: 18),
                   _buildPartnerCoachBreakdownSection(context, partnerCoachRows),
@@ -676,9 +817,15 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
 
   Widget _buildSummaryBreakdownSection(
     BuildContext context, {
+    required String selectionPrefix,
     required String title,
     required String description,
     required List<CourtSummaryBreakdown> items,
+    required String Function(CourtSummaryBreakdown item) detailTitleBuilder,
+    required String Function(CourtSummaryBreakdown item)
+    detailDescriptionBuilder,
+    required List<CourtBooking> Function(CourtSummaryBreakdown item)
+    bookingsBuilder,
     bool hidePendingColumn = false,
   }) {
     return Container(
@@ -713,7 +860,15 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
                 const DataColumn(label: Text('Total')),
               ],
               rows: items.map((CourtSummaryBreakdown item) {
+                final String selectionKey = '$selectionPrefix:${item.code}';
                 return DataRow(
+                  selected: _selectedSummaryDetailKey == selectionKey,
+                  onSelectChanged: (_) => _openSummaryDetail(
+                    key: selectionKey,
+                    title: detailTitleBuilder(item),
+                    description: detailDescriptionBuilder(item),
+                    bookings: bookingsBuilder(item),
+                  ),
                   cells: <DataCell>[
                     DataCell(
                       ConstrainedBox(
@@ -785,7 +940,23 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
                   DataColumn(label: Text('Total')),
                 ],
                 rows: items.map((_PartnerCoachSummaryRow item) {
+                  final String selectionKey = 'partner-coach:${item.name}';
                   return DataRow(
+                    selected: _selectedSummaryDetailKey == selectionKey,
+                    onSelectChanged: (_) => _openSummaryDetail(
+                      key: selectionKey,
+                      title: 'Detalhe de ${item.name}',
+                      description:
+                          'Reservas ativas do professor parceiro ${item.name} no periodo consultado.',
+                      bookings: _activeReportBookings.where((
+                        CourtBooking booking,
+                      ) {
+                        return booking.customerType ==
+                                CourtCustomerType.partnerCoach &&
+                            booking.customerName.trim().toLowerCase() ==
+                                item.name.trim().toLowerCase();
+                      }).toList(),
+                    ),
                     cells: <DataCell>[
                       DataCell(
                         ConstrainedBox(
@@ -848,6 +1019,115 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
     final DateTime normalized = DateTime(date.year, date.month, date.day);
     return !normalized.isBefore(_reportStartDate) &&
         !normalized.isAfter(_reportEndDate);
+  }
+
+  List<CourtBooking> get _reportBookings {
+    final List<CourtBooking> items = _bookings.where((CourtBooking booking) {
+      return _isWithinReportPeriod(booking.bookingDate);
+    }).toList()..sort(_compareBookingsByDateTime);
+    return items;
+  }
+
+  List<CourtBooking> get _activeReportBookings {
+    return _reportBookings.where((CourtBooking booking) {
+      return booking.status == CourtBookingStatus.scheduled;
+    }).toList();
+  }
+
+  List<CourtBooking> _filterReportBookingsByCustomerType(
+    CourtCustomerType type,
+  ) {
+    return _activeReportBookings.where((CourtBooking booking) {
+      return booking.customerType == type;
+    }).toList();
+  }
+
+  Future<void> _openSummaryDetail({
+    required String key,
+    required String title,
+    required String description,
+    required List<CourtBooking> bookings,
+  }) async {
+    final List<CourtBooking> normalized = <CourtBooking>[...bookings]
+      ..sort(_compareBookingsByDateTime);
+    setState(() {
+      _selectedSummaryDetailKey = key;
+    });
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        final double totalHours = normalized.fold<double>(
+          0,
+          (double total, CourtBooking booking) => total + booking.durationHours,
+        );
+        final double totalAmount = normalized.fold<double>(
+          0,
+          (double total, CourtBooking booking) => total + booking.totalAmount,
+        );
+        return AlertDialog(
+          title: Text(title),
+          content: SizedBox(
+            width: 860,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    description,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: <Widget>[
+                      _DetailChip(
+                        label: 'Reservas',
+                        value: '${normalized.length}',
+                        icon: Icons.event_note_rounded,
+                      ),
+                      _DetailChip(
+                        label: 'Horas',
+                        value: '${totalHours.toStringAsFixed(1)} h',
+                        icon: Icons.query_builder_rounded,
+                      ),
+                      _DetailChip(
+                        label: 'Total',
+                        value: _formatCurrency(totalAmount),
+                        icon: Icons.payments_rounded,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if (normalized.isEmpty)
+                    const Text('Nenhuma reserva encontrada para este detalhe.')
+                  else
+                    ...normalized.map(
+                      (CourtBooking booking) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _CourtBookingTile(booking: booking),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Fechar'),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _selectedSummaryDetailKey = null;
+    });
   }
 
   List<_CalendarCell> _buildCalendarCells() {
@@ -1145,46 +1425,71 @@ class _MetricCard extends StatelessWidget {
     required this.value,
     required this.caption,
     required this.icon,
+    this.selected = false,
+    this.onTap,
   });
 
   final String title;
   final String value;
   final String caption;
   final IconData icon;
+  final bool selected;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: 250,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(22),
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: <Color>[Colors.white, Color(0xFFF7FAFF)],
-        ),
-        border: Border.all(color: CostaNorteBrand.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(14),
-              color: CostaNorteBrand.foam,
+        child: Container(
+          width: 250,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[Colors.white, Color(0xFFF7FAFF)],
             ),
-            child: Icon(icon, color: CostaNorteBrand.royalBlueDeep),
+            border: Border.all(
+              color: selected
+                  ? CostaNorteBrand.royalBlueDeep
+                  : CostaNorteBrand.line,
+              width: selected ? 1.4 : 1,
+            ),
           ),
-          const SizedBox(height: 14),
-          Text(title, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 4),
-          Text(value, style: Theme.of(context).textTheme.labelLarge),
-          const SizedBox(height: 6),
-          Text(caption, style: Theme.of(context).textTheme.bodySmall),
-        ],
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: CostaNorteBrand.foam,
+                ),
+                child: Icon(icon, color: CostaNorteBrand.royalBlueDeep),
+              ),
+              const SizedBox(height: 14),
+              Text(title, style: Theme.of(context).textTheme.titleLarge),
+              const SizedBox(height: 4),
+              Text(value, style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: 6),
+              Text(caption, style: Theme.of(context).textTheme.bodySmall),
+              if (onTap != null) ...<Widget>[
+                const SizedBox(height: 10),
+                Text(
+                  selected ? 'Ocultar detalhe' : 'Ver detalhe',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: CostaNorteBrand.royalBlueDeep,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -1195,29 +1500,45 @@ class _DetailChip extends StatelessWidget {
     required this.label,
     required this.value,
     required this.icon,
+    this.selected = false,
+    this.onTap,
   });
 
   final String label;
   final String value;
   final IconData icon;
+  final bool selected;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(999),
-        color: Colors.white,
-        border: Border.all(color: CostaNorteBrand.line),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(icon, size: 16, color: CostaNorteBrand.royalBlueDeep),
-          const SizedBox(width: 8),
-          Text('$label: ', style: Theme.of(context).textTheme.labelMedium),
-          Text(value, style: Theme.of(context).textTheme.labelLarge),
-        ],
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            color: selected ? CostaNorteBrand.foam : Colors.white,
+            border: Border.all(
+              color: selected
+                  ? CostaNorteBrand.royalBlueDeep
+                  : CostaNorteBrand.line,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(icon, size: 16, color: CostaNorteBrand.royalBlueDeep),
+              const SizedBox(width: 8),
+              Text('$label: ', style: Theme.of(context).textTheme.labelMedium),
+              Text(value, style: Theme.of(context).textTheme.labelLarge),
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -2712,6 +3033,26 @@ String _paymentRateLabel(CourtSummaryReport summary) {
   }
   final double rate = (summary.paidCount / summary.scheduledCount) * 100;
   return '${rate.toStringAsFixed(0)}%';
+}
+
+int _compareBookingsByDateTime(CourtBooking a, CourtBooking b) {
+  final int dateComparison = a.bookingDate.compareTo(b.bookingDate);
+  if (dateComparison != 0) {
+    return dateComparison;
+  }
+  return a.startTime.compareTo(b.startTime);
+}
+
+CourtCustomerType _customerTypeFromBreakdownCode(String code) {
+  return CourtCustomerType.tryParse(code);
+}
+
+CourtPricingPeriod _pricingPeriodFromBreakdownCode(String code) {
+  return CourtPricingPeriod.tryParse(code);
+}
+
+CourtPaymentMethod? _paymentMethodFromBreakdownCode(String code) {
+  return CourtPaymentMethod.tryParse(code);
 }
 
 String _formatDate(DateTime value) {
