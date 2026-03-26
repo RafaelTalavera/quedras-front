@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/config/app_runtime_config.dart';
 import '../../../core/feedback/app_alerts.dart';
+import '../../../core/sync/auto_refresh_controller.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/brand_section_hero.dart';
 import '../application/tours_app_service.dart';
@@ -58,11 +60,13 @@ class ToursTravelPage extends StatefulWidget {
   State<ToursTravelPage> createState() => _ToursTravelPageState();
 }
 
-class _ToursTravelPageState extends State<ToursTravelPage> {
+class _ToursTravelPageState extends State<ToursTravelPage>
+    with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _dayKey = GlobalKey();
   final GlobalKey _agendaKey = GlobalKey();
   final GlobalKey _summaryKey = GlobalKey();
+  late final AutoRefreshController _autoRefreshController;
   List<ToursProvider> _providers = <ToursProvider>[];
   List<ToursBooking> _bookings = <ToursBooking>[];
   List<ToursProviderSummary> _summaries = <ToursProviderSummary>[];
@@ -70,6 +74,7 @@ class _ToursTravelPageState extends State<ToursTravelPage> {
   late DateTime _reportStart;
   late DateTime _reportEnd;
   bool _loading = true;
+  bool _refreshingData = false;
   bool _saving = false;
   bool _loadingSummary = false;
   String? _error;
@@ -99,11 +104,18 @@ class _ToursTravelPageState extends State<ToursTravelPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.controller?._attach(this);
     _scrollController.addListener(_handleScroll);
     _selectedDate = _today();
     _reportStart = DateTime(_selectedDate.year, _selectedDate.month, 1);
     _reportEnd = DateTime(_selectedDate.year, _selectedDate.month + 1, 0);
+    _autoRefreshController = AutoRefreshController(
+      interval: AppRuntimeConfig.operationalRefreshInterval,
+      onRefresh: () => _load(showLoading: false),
+      canRefresh: _canAutoRefresh,
+    );
+    _autoRefreshController.start();
     _load();
   }
 
@@ -118,9 +130,19 @@ class _ToursTravelPageState extends State<ToursTravelPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _autoRefreshController.dispose();
     widget.controller?._detach(this);
     _scrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _autoRefreshController.handleLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _load(showLoading: false);
+    }
   }
 
   Future<void> _scrollToSection(ToursTravelSection section) async {
@@ -172,9 +194,14 @@ class _ToursTravelPageState extends State<ToursTravelPage> {
     widget.onSectionChanged?.call(section);
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool showLoading = true}) async {
+    if (!mounted) return;
     setState(() {
-      _loading = true;
+      if (showLoading) {
+        _loading = true;
+      } else {
+        _refreshingData = true;
+      }
       _error = null;
     });
     try {
@@ -193,14 +220,34 @@ class _ToursTravelPageState extends State<ToursTravelPage> {
         _bookings = bookings;
         _summaries = summaries;
         _loading = false;
+        _refreshingData = false;
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _loading = false;
+        _refreshingData = false;
         _error = error.toString().replaceFirst('Bad state: ', '');
       });
     }
+  }
+
+  bool get _canRefreshPage =>
+      !_loading && !_refreshingData && !_loadingSummary && !_saving;
+
+  bool _canAutoRefresh() {
+    final ModalRoute<dynamic>? route = ModalRoute.of(context);
+    return mounted &&
+        !_loading &&
+        !_refreshingData &&
+        !_loadingSummary &&
+        !_saving &&
+        (route?.isCurrent ?? true);
+  }
+
+  Future<void> _refreshPage() async {
+    if (!_canRefreshPage) return;
+    await _load(showLoading: false);
   }
 
   Future<void> _reloadSummary() async {
@@ -276,6 +323,11 @@ class _ToursTravelPageState extends State<ToursTravelPage> {
                   onPressed: _saving ? null : _manageProvider,
                   icon: const Icon(Icons.business_rounded),
                   label: const Text('Fornecedores'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _canRefreshPage ? _refreshPage : null,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: Text(_refreshingData ? 'Atualizando...' : 'Atualizar'),
                 ),
               ],
             ),
@@ -456,27 +508,27 @@ class _ToursTravelPageState extends State<ToursTravelPage> {
                   .toList(),
             ),
             const SizedBox(height: 10),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: cells.length,
-                  gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 7,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    mainAxisExtent: 92,
-                  ),
-                  itemBuilder: (BuildContext context, int index) {
-                    final _DayCell cell = cells[index];
-                    if (!cell.inMonth) return const SizedBox.shrink();
-                    return _ToursAgendaDayCard(
-                      date: cell.date,
-                      bookings: cell.bookings,
-                      selected: _sameDay(cell.date, _selectedDate),
-                      onTap: () => setState(() => _selectedDate = cell.date),
-                    );
-                  },
-                ),
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: cells.length,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 7,
+                crossAxisSpacing: 8,
+                mainAxisSpacing: 8,
+                mainAxisExtent: 92,
+              ),
+              itemBuilder: (BuildContext context, int index) {
+                final _DayCell cell = cells[index];
+                if (!cell.inMonth) return const SizedBox.shrink();
+                return _ToursAgendaDayCard(
+                  date: cell.date,
+                  bookings: cell.bookings,
+                  selected: _sameDay(cell.date, _selectedDate),
+                  onTap: () => setState(() => _selectedDate = cell.date),
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -1205,9 +1257,7 @@ class _AgendaCountLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final Color color = active
-        ? CostaNorteBrand.ink
-        : CostaNorteBrand.mutedInk;
+    final Color color = active ? CostaNorteBrand.ink : CostaNorteBrand.mutedInk;
     return Row(
       children: <Widget>[
         Icon(icon, size: 14, color: color),
@@ -1257,9 +1307,8 @@ class _BookingDialogState extends State<_BookingDialog> {
   bool _paid = false;
   ToursPaymentMethod? _paymentMethod;
 
-  ToursProvider get _selectedProvider => widget.providers.firstWhere(
-    (ToursProvider p) => p.id == _providerId,
-  );
+  ToursProvider get _selectedProvider =>
+      widget.providers.firstWhere((ToursProvider p) => p.id == _providerId);
 
   List<ToursProviderOffering> get _availableOfferings {
     final ToursBooking? booking = widget.booking;
@@ -1268,12 +1317,10 @@ class _BookingDialogState extends State<_BookingDialog> {
         return true;
       }
       return booking != null && booking.providerOfferingId == item.id;
-    }).toList()
-      ..sort(
-        (ToursProviderOffering a, ToursProviderOffering b) => a.name
-            .toLowerCase()
-            .compareTo(b.name.toLowerCase()),
-      );
+    }).toList()..sort(
+      (ToursProviderOffering a, ToursProviderOffering b) =>
+          a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+    );
   }
 
   @override
@@ -1906,7 +1953,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 value: _offeringActive,
-                onChanged: (bool value) => setState(() => _offeringActive = value),
+                onChanged: (bool value) =>
+                    setState(() => _offeringActive = value),
                 title: const Text('Item ativo'),
               ),
               Align(
@@ -2040,9 +2088,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         _offerings[_editingOfferingIndex!] = draft;
       }
       _offerings.sort(
-        (_ProviderOfferingDraft a, _ProviderOfferingDraft b) => a.name
-            .toLowerCase()
-            .compareTo(b.name.toLowerCase()),
+        (_ProviderOfferingDraft a, _ProviderOfferingDraft b) =>
+            a.name.toLowerCase().compareTo(b.name.toLowerCase()),
       );
       _clearOfferingEditor();
     });

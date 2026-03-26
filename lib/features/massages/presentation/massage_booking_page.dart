@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/config/app_runtime_config.dart';
 import '../../../core/feedback/app_alerts.dart';
+import '../../../core/sync/auto_refresh_controller.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/app_dialog_dimensions.dart';
 import '../../../core/widgets/app_dialog_shell.dart';
@@ -78,7 +80,8 @@ class MassageBookingPage extends StatefulWidget {
   State<MassageBookingPage> createState() => _MassageBookingPageState();
 }
 
-class _MassageBookingPageState extends State<MassageBookingPage> {
+class _MassageBookingPageState extends State<MassageBookingPage>
+    with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _selectedDaySectionKey = GlobalKey();
   final GlobalKey _monthlyAgendaSectionKey = GlobalKey();
@@ -87,6 +90,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
   final ScrollController _providerReportTableScrollController =
       ScrollController();
 
+  late final AutoRefreshController _autoRefreshController;
   List<MassageProvider> _providers = <MassageProvider>[];
   List<MassageBooking> _bookings = <MassageBooking>[];
   List<MassageProviderSummary> _providerSummaries = <MassageProviderSummary>[];
@@ -96,6 +100,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
   late DateTime _reportStartDate;
   late DateTime _reportEndDate;
   bool _loading = true;
+  bool _refreshingData = false;
   bool _loadingReport = false;
   bool _savingBooking = false;
   bool _savingProviders = false;
@@ -115,6 +120,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.controller?._attach(this);
     _scrollController.addListener(_handleScroll);
     _selectedDate = DateTime.now();
@@ -124,6 +130,12 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
     _selectedProviderId = null;
     _selectedTherapistId = null;
     _selectedTime = _recommendedTimeFor(_selectedDate, null);
+    _autoRefreshController = AutoRefreshController(
+      interval: AppRuntimeConfig.operationalRefreshInterval,
+      onRefresh: () => _load(showLoading: false),
+      canRefresh: _canAutoRefresh,
+    );
+    _autoRefreshController.start();
     _load();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -143,12 +155,22 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _autoRefreshController.dispose();
     widget.controller?._detach(this);
     _scrollController
       ..removeListener(_handleScroll)
       ..dispose();
     _providerReportTableScrollController.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _autoRefreshController.handleLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _load(showLoading: false);
+    }
   }
 
   List<MassageProvider> get _activeProviders =>
@@ -251,6 +273,11 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
                   onPressed: _savingProviders ? null : _openProviderDialog,
                   icon: const Icon(Icons.groups_2_rounded),
                   label: Text(_savingProviders ? 'Salvando...' : 'Prestadores'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _canRefreshPage ? _refreshPage : null,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: Text(_refreshingData ? 'Atualizando...' : 'Atualizar'),
                 ),
               ],
             ),
@@ -366,9 +393,16 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
     widget.onSectionChanged?.call(section);
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool showLoading = true}) async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
-      _loading = true;
+      if (showLoading) {
+        _loading = true;
+      } else {
+        _refreshingData = true;
+      }
       _errorMessage = null;
     });
     try {
@@ -398,6 +432,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
           _selectedTherapistId,
         );
         _loading = false;
+        _refreshingData = false;
       });
     } catch (error) {
       if (!mounted) {
@@ -405,9 +440,35 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
       }
       setState(() {
         _loading = false;
+        _refreshingData = false;
         _errorMessage = error.toString().replaceFirst('Bad state: ', '');
       });
     }
+  }
+
+  bool get _canRefreshPage =>
+      !_loading &&
+      !_refreshingData &&
+      !_savingBooking &&
+      !_savingProviders &&
+      !_loadingReport;
+
+  bool _canAutoRefresh() {
+    final ModalRoute<dynamic>? route = ModalRoute.of(context);
+    return mounted &&
+        !_loading &&
+        !_refreshingData &&
+        !_savingBooking &&
+        !_savingProviders &&
+        !_loadingReport &&
+        (route?.isCurrent ?? true);
+  }
+
+  Future<void> _refreshPage() async {
+    if (!_canRefreshPage) {
+      return;
+    }
+    await _load(showLoading: false);
   }
 
   Widget _buildSummarySection(BuildContext context) {

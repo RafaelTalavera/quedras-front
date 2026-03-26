@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/config/app_runtime_config.dart';
 import '../../../core/feedback/app_alerts.dart';
+import '../../../core/sync/auto_refresh_controller.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/brand_section_hero.dart';
 import '../../courts/application/court_app_service.dart';
@@ -101,15 +103,18 @@ class TennisRentalPage extends StatefulWidget {
   State<TennisRentalPage> createState() => _TennisRentalPageState();
 }
 
-class _TennisRentalPageState extends State<TennisRentalPage> {
+class _TennisRentalPageState extends State<TennisRentalPage>
+    with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _selectedDaySectionKey = GlobalKey();
   final GlobalKey _monthlyAgendaSectionKey = GlobalKey();
   final GlobalKey _summarySectionKey = GlobalKey();
+  late final AutoRefreshController _autoRefreshController;
   late DateTime _selectedDate;
   late DateTime _reportStartDate;
   late DateTime _reportEndDate;
   bool _loading = true;
+  bool _refreshingData = false;
   bool _loadingSummary = false;
   bool _saving = false;
   String? _errorMessage;
@@ -122,11 +127,18 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     widget.controller?._attach(this);
     _scrollController.addListener(_handleScroll);
     _selectedDate = DateTime.now();
     _reportStartDate = DateTime(_selectedDate.year, _selectedDate.month, 1);
     _reportEndDate = DateTime(_selectedDate.year, _selectedDate.month + 1, 0);
+    _autoRefreshController = AutoRefreshController(
+      interval: AppRuntimeConfig.operationalRefreshInterval,
+      onRefresh: () => _load(showLoading: false),
+      canRefresh: _canAutoRefresh,
+    );
+    _autoRefreshController.start();
     _load();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
@@ -146,11 +158,21 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _autoRefreshController.dispose();
     widget.controller?._detach(this);
     _scrollController
       ..removeListener(_handleScroll)
       ..dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    _autoRefreshController.handleLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      _load(showLoading: false);
+    }
   }
 
   List<CourtBooking> get _monthBookings =>
@@ -209,6 +231,11 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
                   onPressed: _saving ? null : _openSettingsDialog,
                   icon: const Icon(Icons.tune_rounded),
                   label: const Text('Tarifas y materiales'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _canRefreshPage ? _refreshPage : null,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: Text(_refreshingData ? 'Atualizando...' : 'Atualizar'),
                 ),
               ],
             ),
@@ -324,9 +351,16 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
     widget.onSectionChanged?.call(section);
   }
 
-  Future<void> _load() async {
+  Future<void> _load({bool showLoading = true}) async {
+    if (!mounted) {
+      return;
+    }
     setState(() {
-      _loading = true;
+      if (showLoading) {
+        _loading = true;
+      } else {
+        _refreshingData = true;
+      }
       _errorMessage = null;
       _summaryErrorMessage = null;
     });
@@ -346,6 +380,7 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
         _summary = summary;
         _selectedSummaryDetailKey = null;
         _loading = false;
+        _refreshingData = false;
         _loadingSummary = false;
       });
     } catch (error) {
@@ -354,10 +389,31 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
       }
       setState(() {
         _loading = false;
+        _refreshingData = false;
         _loadingSummary = false;
         _errorMessage = error.toString().replaceFirst('Bad state: ', '');
       });
     }
+  }
+
+  bool get _canRefreshPage =>
+      !_loading && !_refreshingData && !_loadingSummary && !_saving;
+
+  bool _canAutoRefresh() {
+    final ModalRoute<dynamic>? route = ModalRoute.of(context);
+    return mounted &&
+        !_loading &&
+        !_refreshingData &&
+        !_loadingSummary &&
+        !_saving &&
+        (route?.isCurrent ?? true);
+  }
+
+  Future<void> _refreshPage() async {
+    if (!_canRefreshPage) {
+      return;
+    }
+    await _load(showLoading: false);
   }
 
   Future<void> _reloadSummary() async {

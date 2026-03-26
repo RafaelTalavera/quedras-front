@@ -200,10 +200,16 @@ void main() {
 
       expect(find.text('Resumo por prestador'), findsOneWidget);
       expect(find.text('Danuska'), findsWidgets);
-      expect(find.text('Ver detalhe'), findsOneWidget);
+      expect(find.text('Ver detalhe'), findsWidgets);
 
-      await tester.ensureVisible(find.text('Ver detalhe'));
-      await tester.tap(find.text('Ver detalhe'));
+      final Finder detailButton = find.widgetWithText(
+        TextButton,
+        'Ver detalhe',
+      );
+      expect(detailButton, findsWidgets);
+
+      await tester.ensureVisible(detailButton.first);
+      await tester.tap(detailButton.first);
       await tester.pumpAndSettle();
 
       expect(find.text('Detalhe de Danuska'), findsOneWidget);
