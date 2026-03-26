@@ -214,6 +214,37 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
     }
   }
 
+  Future<void> _pickSelectedDate() async {
+    final DateTime initialDate = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+    );
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(initialDate.year - 1, 1, 1),
+      lastDate: DateTime(initialDate.year + 1, 12, 31),
+    );
+    if (picked == null) {
+      return;
+    }
+    await _setSelectedDate(picked);
+  }
+
+  Future<void> _setSelectedDate(DateTime date) async {
+    final DateTime normalizedDate = DateTime(date.year, date.month, date.day);
+    final bool monthChanged =
+        normalizedDate.year != _selectedDate.year ||
+        normalizedDate.month != _selectedDate.month;
+    setState(() {
+      _selectedDate = normalizedDate;
+    });
+    if (monthChanged) {
+      await _load();
+    }
+  }
+
   Widget _buildSelectedDayCard(BuildContext context) {
     final List<CourtBooking> activeBookings = _dayBookings
         .where(
@@ -234,14 +265,32 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              'Dia selecionado',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              _fullDateLabel(_selectedDate),
-              style: Theme.of(context).textTheme.bodyLarge,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Dia selecionado',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _fullDateLabel(_selectedDate),
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: _saving ? null : _pickSelectedDate,
+                  icon: const Icon(Icons.edit_calendar_rounded),
+                  label: const Text('Alterar dia'),
+                ),
+              ],
             ),
             const SizedBox(height: 18),
             Wrap(
@@ -338,14 +387,9 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
                       if (value == null) {
                         return;
                       }
-                      setState(() {
-                        _selectedDate = DateTime(
-                          _selectedDate.year,
-                          value + 1,
-                          1,
-                        );
-                      });
-                      _load();
+                      _setSelectedDate(
+                        DateTime(_selectedDate.year, value + 1, 1),
+                      );
                     },
                   ),
                 ),
@@ -388,11 +432,7 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
                       date: cell.date!,
                       bookings: _bookingsForDate(cell.date!),
                       selected: _sameDay(cell.date!, _selectedDate),
-                      onTap: () {
-                        setState(() {
-                          _selectedDate = cell.date!;
-                        });
-                      },
+                      onTap: () => _setSelectedDate(cell.date!),
                     );
                   },
                 ),

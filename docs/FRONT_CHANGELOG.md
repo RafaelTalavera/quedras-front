@@ -1,5 +1,13 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-03-26 | Post Hito 12 | Selector directo de fecha en el detalle diario de Quadras
+- Componente afectado: Frontend (`Quadras`) + documentacion funcional
+- Archivos tocados:
+  - `lib/features/tennis/presentation/tennis_rental_page.dart`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Permitir que el operador cambie la fecha directamente desde la tarjeta `Dia selecionado`, sin depender solo del calendario mensual para consultar reservas de otro dia.
+- Impacto funcional: La tarjeta diaria ahora incluye `Alterar dia`, abre selector de fecha y mantiene sincronizada la agenda; si el operador cambia a otro mes, tambien se refresca el resumen mensual asociado.
+
 ## 2026-03-26 | Post Hito 12 | Quadras con catalogo persistido y gestion operativa de profesores parceros
 - Componente afectado: Frontend (`Quadras`) + integracion compartida con backend
 - Archivos tocados:
