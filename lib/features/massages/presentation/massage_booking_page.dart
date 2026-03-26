@@ -102,8 +102,8 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
   int? _processingBookingId;
   String? _errorMessage;
   String? _reportErrorMessage;
+  String? _selectedSummaryDetailKey;
   int? _selectedSummaryProviderId;
-  MassageProviderDetailReport? _selectedProviderDetail;
   MassageBookingSection _currentSection = MassageBookingSection.selectedDay;
 
   String _selectedTreatment = _treatmentTypes.first;
@@ -183,17 +183,29 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
     return therapists;
   }
 
-  List<MassageBooking> get _monthBookings =>
+  List<MassageBooking> get _dayBookings =>
       _bookings.where((MassageBooking booking) {
-        return booking.startAt.year == _selectedDate.year &&
-            booking.startAt.month == _selectedMonth + 1;
+        return _sameDay(booking.startAt, _selectedDate);
       }).toList()..sort(
         (MassageBooking a, MassageBooking b) => a.startAt.compareTo(b.startAt),
       );
 
-  List<MassageBooking> get _dayBookings =>
+  List<MassageBooking> get _reportBookings =>
       _bookings.where((MassageBooking booking) {
-        return _sameDay(booking.startAt, _selectedDate);
+        final DateTime bookingDate = DateTime(
+          booking.startAt.year,
+          booking.startAt.month,
+          booking.startAt.day,
+        );
+        return !bookingDate.isBefore(_reportStartDate) &&
+            !bookingDate.isAfter(_reportEndDate);
+      }).toList()..sort(
+        (MassageBooking a, MassageBooking b) => a.startAt.compareTo(b.startAt),
+      );
+
+  List<MassageBooking> get _scheduledReportBookings =>
+      _reportBookings.where((MassageBooking booking) {
+        return booking.status == MassageBookingStatus.scheduled;
       }).toList()..sort(
         (MassageBooking a, MassageBooking b) => a.startAt.compareTo(b.startAt),
       );
@@ -364,8 +376,9 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
           .listProviders();
       final List<MassageBooking> bookings = await widget.massageAppService
           .listBookings();
-      final List<MassageProviderSummary> providerSummaries =
-          await widget.massageAppService.listProviderSummaryReport(
+      final List<MassageProviderSummary> providerSummaries = await widget
+          .massageAppService
+          .listProviderSummaryReport(
             dateFrom: _formatDateApi(_reportStartDate),
             dateTo: _formatDateApi(_reportEndDate),
           );
@@ -376,8 +389,8 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
         _providers = providers;
         _bookings = bookings;
         _providerSummaries = providerSummaries;
+        _selectedSummaryDetailKey = null;
         _selectedSummaryProviderId = null;
-        _selectedProviderDetail = null;
         _reportErrorMessage = null;
         _syncSelectedProviderAndTherapist();
         _selectedTime = _recommendedTimeFor(
@@ -407,17 +420,52 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text(
-                'Resumo do mes',
+                'Resumo do periodo',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 6),
               Text(
-                'Consolidado do volume, prestadores ativos e receita prevista do mes selecionado.',
+                'Consolidado de atendimentos, cobranca e prestadores para o intervalo consultado.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
               const SizedBox(height: 18),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: <Widget>[
+                  OutlinedButton.icon(
+                    onPressed: _loadingReport ? null : _pickReportStartDate,
+                    icon: const Icon(Icons.date_range_rounded),
+                    label: Text(
+                      'Inicio: ${_formatShortDateLabel(_reportStartDate)}',
+                    ),
+                  ),
+                  OutlinedButton.icon(
+                    onPressed: _loadingReport ? null : _pickReportEndDate,
+                    icon: const Icon(Icons.event_rounded),
+                    label: Text(
+                      'Fim: ${_formatShortDateLabel(_reportEndDate)}',
+                    ),
+                  ),
+                  FilledButton.icon(
+                    onPressed: _loadingReport ? null : _reloadProviderReport,
+                    icon: const Icon(Icons.refresh_rounded),
+                    label: Text(_loadingReport ? 'Buscando...' : 'Buscar'),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              if (_reportErrorMessage != null) ...<Widget>[
+                Text(
+                  _reportErrorMessage!,
+                  style: TextStyle(color: Colors.red.shade700),
+                ),
+                const SizedBox(height: 12),
+              ],
               _buildSummaryStrip(context),
-              const SizedBox(height: 22),
+              const SizedBox(height: 18),
+              _buildSummaryChips(context),
+              const SizedBox(height: 20),
               _buildProviderReportSection(context),
             ],
           ),
@@ -427,66 +475,30 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
   }
 
   Widget _buildProviderReportSection(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Row(
-          children: <Widget>[
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    'Resumo por prestador',
-                    style: Theme.of(context).textTheme.titleLarge,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Tabela de atencoes e cobrancas por prestador para o periodo consultado.',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            FilledButton.icon(
-              onPressed: _loadingReport ? null : _reloadProviderReport,
-              icon: const Icon(Icons.refresh_rounded),
-              label: Text(_loadingReport ? 'Buscando...' : 'Buscar'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 14),
-        Wrap(
-          spacing: 12,
-          runSpacing: 12,
-          children: <Widget>[
-            OutlinedButton.icon(
-              onPressed: _loadingReport ? null : _pickReportStartDate,
-              icon: const Icon(Icons.date_range_rounded),
-              label: Text(
-                'Inicio: ${_formatShortDateLabel(_reportStartDate)}',
-              ),
-            ),
-            OutlinedButton.icon(
-              onPressed: _loadingReport ? null : _pickReportEndDate,
-              icon: const Icon(Icons.event_rounded),
-              label: Text('Fim: ${_formatShortDateLabel(_reportEndDate)}'),
-            ),
-          ],
-        ),
-        const SizedBox(height: 16),
-        if (_reportErrorMessage != null) ...<Widget>[
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCFCFB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
           Text(
-            _reportErrorMessage!,
-            style: TextStyle(color: Colors.red.shade700),
+            'Resumo por prestador',
+            style: Theme.of(context).textTheme.titleLarge,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 4),
+          Text(
+            'Comparativo de atencoes, cobranca e pendencias por prestador no periodo consultado.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          _buildProviderReportTable(context),
         ],
-        _buildProviderReportTable(context),
-        const SizedBox(height: 16),
-        _buildProviderReportDetail(context),
-      ],
+      ),
     );
   }
 
@@ -531,9 +543,7 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
               child: ConstrainedBox(
                 // Keep the table readable on narrow layouts while preserving
                 // access to all provider report columns through horizontal scroll.
-                constraints: BoxConstraints(
-                  minWidth: constraints.maxWidth,
-                ),
+                constraints: BoxConstraints(minWidth: constraints.maxWidth),
                 child: DataTable(
                   columnSpacing: 16,
                   horizontalMargin: 12,
@@ -551,7 +561,9 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
                     DataColumn(label: _buildReportColumnLabel('Ultimo')),
                     DataColumn(label: _buildReportColumnLabel('Acoes')),
                   ],
-                  rows: _providerSummaries.map((MassageProviderSummary summary) {
+                  rows: _providerSummaries.map((
+                    MassageProviderSummary summary,
+                  ) {
                     final bool selected =
                         summary.providerId == _selectedSummaryProviderId;
                     return DataRow(
@@ -579,7 +591,9 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
                         DataCell(Text('${summary.cancelledCount}')),
                         DataCell(Text('${summary.paidCount}')),
                         DataCell(Text('${summary.pendingCount}')),
-                        DataCell(Text(_formatCurrencyLabel(summary.paidAmount))),
+                        DataCell(
+                          Text(_formatCurrencyLabel(summary.paidAmount)),
+                        ),
                         DataCell(
                           Text(_formatCurrencyLabel(summary.pendingAmount)),
                         ),
@@ -594,8 +608,9 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
                           TextButton(
                             onPressed: _loadingReport
                                 ? null
-                                : () =>
-                                    _selectProviderSummary(summary.providerId),
+                                : () => _selectProviderSummary(
+                                    summary.providerId,
+                                  ),
                             child: const Text('Ver detalhe'),
                           ),
                         ),
@@ -614,38 +629,14 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
   Widget _buildReportColumnLabel(String label) {
     return SizedBox(
       width: 88,
-      child: Text(
-        label,
-        maxLines: 2,
-        overflow: TextOverflow.ellipsis,
-      ),
+      child: Text(label, maxLines: 2, overflow: TextOverflow.ellipsis),
     );
   }
 
-  Widget _buildProviderReportDetail(BuildContext context) {
-    if (_loadingReport && _selectedSummaryProviderId != null) {
-      return const Padding(
-        padding: EdgeInsets.symmetric(vertical: 12),
-        child: LinearProgressIndicator(),
-      );
-    }
-
-    final MassageProviderDetailReport? detail = _selectedProviderDetail;
-    if (detail == null) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: CostaNorteBrand.line),
-          color: const Color(0xFFFCFCFB),
-        ),
-        child: const Text(
-          'Selecione um prestador na tabela para ver o detalhe do periodo.',
-        ),
-      );
-    }
-
+  Widget _buildProviderReportDialogContent(
+    BuildContext context,
+    MassageProviderDetailReport detail,
+  ) {
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -658,11 +649,6 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Text(
-            'Detalhe de ${detail.providerName}',
-            style: Theme.of(context).textTheme.titleLarge,
-          ),
-          const SizedBox(height: 6),
-          Text(
             '${_formatShortDateLabel(_reportStartDate)} a ${_formatShortDateLabel(_reportEndDate)}',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
@@ -671,15 +657,25 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
             spacing: 10,
             runSpacing: 10,
             children: <Widget>[
-              _buildDetailChip('Atencoes', '${detail.summary.attendedCount}'),
-              _buildDetailChip('Pagas', '${detail.summary.paidCount}'),
+              _buildDetailChip(
+                'Atencoes',
+                '${detail.summary.attendedCount}',
+                icon: Icons.spa_outlined,
+              ),
+              _buildDetailChip(
+                'Pagas',
+                '${detail.summary.paidCount}',
+                icon: Icons.check_circle_outline_rounded,
+              ),
               _buildDetailChip(
                 'Cobrado',
                 _formatCurrencyLabel(detail.summary.paidAmount),
+                icon: Icons.payments_rounded,
               ),
               _buildDetailChip(
                 'Pendente',
                 _formatCurrencyLabel(detail.summary.pendingAmount),
+                icon: Icons.warning_amber_rounded,
               ),
             ],
           ),
@@ -732,66 +728,203 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
     );
   }
 
-  Widget _buildDetailChip(String label, String value) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: Colors.white,
-        border: Border.all(color: CostaNorteBrand.line),
-      ),
-      child: Text('$label: $value'),
+  Widget _buildDetailChip(
+    String label,
+    String value, {
+    required IconData icon,
+  }) {
+    return _DetailChip(label: label, value: value, icon: icon);
+  }
+
+  Widget _buildSummaryChips(BuildContext context) {
+    final List<MassageBooking> reportBookings = _reportBookings;
+    final List<MassageBooking> scheduledBookings = _scheduledReportBookings;
+    final List<MassageBooking> paidBookings = scheduledBookings
+        .where((MassageBooking booking) => booking.paid)
+        .toList();
+    final List<MassageBooking> pendingBookings = scheduledBookings
+        .where((MassageBooking booking) => !booking.paid)
+        .toList();
+    final List<MassageBooking> cancelledBookings = reportBookings.where((
+      MassageBooking booking,
+    ) {
+      return booking.status == MassageBookingStatus.cancelled;
+    }).toList();
+    final Set<int> providerIds = scheduledBookings
+        .map((MassageBooking booking) => booking.providerId)
+        .toSet();
+    final Set<int> therapistIds = scheduledBookings
+        .map((MassageBooking booking) => booking.therapistId)
+        .toSet();
+    final double averageTicket = paidBookings.isEmpty
+        ? 0
+        : paidBookings.fold<double>(
+                0,
+                (double total, MassageBooking booking) =>
+                    total + booking.amount,
+              ) /
+              paidBookings.length;
+
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: <Widget>[
+        _DetailChip(
+          label: 'Pagas',
+          value: '${paidBookings.length}',
+          icon: Icons.check_circle_outline_rounded,
+          selected: _selectedSummaryDetailKey == 'chip:paid',
+          onTap: () => _openSummaryDetail(
+            key: 'chip:paid',
+            title: 'Atendimentos pagos',
+            description:
+                'Atendimentos agendados com pagamento confirmado no periodo consultado.',
+            bookings: paidBookings,
+          ),
+        ),
+        _DetailChip(
+          label: 'Pendentes',
+          value: '${pendingBookings.length}',
+          icon: Icons.warning_amber_rounded,
+          selected: _selectedSummaryDetailKey == 'chip:pending',
+          onTap: () => _openSummaryDetail(
+            key: 'chip:pending',
+            title: 'Atendimentos pendentes',
+            description:
+                'Atendimentos agendados com cobranca em aberto no periodo consultado.',
+            bookings: pendingBookings,
+          ),
+        ),
+        _DetailChip(
+          label: 'Cancelados',
+          value: '${cancelledBookings.length}',
+          icon: Icons.cancel_schedule_send_rounded,
+          selected: _selectedSummaryDetailKey == 'chip:cancelled',
+          onTap: () => _openSummaryDetail(
+            key: 'chip:cancelled',
+            title: 'Atendimentos cancelados',
+            description:
+                'Historico de cancelamentos dentro do periodo consultado.',
+            bookings: cancelledBookings,
+          ),
+        ),
+        _DetailChip(
+          label: 'Prestadores',
+          value: '${providerIds.length}',
+          icon: Icons.groups_2_rounded,
+        ),
+        _DetailChip(
+          label: 'Masajistas',
+          value: '${therapistIds.length}',
+          icon: Icons.person_outline_rounded,
+        ),
+        _DetailChip(
+          label: 'Ticket medio',
+          value: _formatCurrencyLabel(averageTicket),
+          icon: Icons.receipt_long_rounded,
+        ),
+      ],
     );
   }
 
   Widget _buildSummaryStrip(BuildContext context) {
-    final List<MassageBooking> activeBookings = _monthBookings
-        .where(
-          (MassageBooking booking) =>
-              booking.status == MassageBookingStatus.scheduled,
-        )
+    final List<MassageBooking> reportBookings = _reportBookings;
+    final List<MassageBooking> activeBookings = _scheduledReportBookings;
+    final List<MassageBooking> paidBookings = activeBookings
+        .where((MassageBooking booking) => booking.paid)
         .toList();
-    final int pendingPayments = activeBookings
+    final List<MassageBooking> pendingBookings = activeBookings
         .where((MassageBooking booking) => !booking.paid)
-        .length;
+        .toList();
+    final List<MassageBooking> cancelledBookings = reportBookings.where((
+      MassageBooking booking,
+    ) {
+      return booking.status == MassageBookingStatus.cancelled;
+    }).toList();
     final double totalRevenue = activeBookings.fold<double>(
       0,
       (double total, MassageBooking booking) => total + booking.amount,
     );
-    final int cancelledBookings = _monthBookings.length - activeBookings.length;
-    final int activeTherapists = _activeProviders.fold<int>(
+    final double paidAmount = paidBookings.fold<double>(
       0,
-      (int total, MassageProvider provider) =>
-          total +
-          provider.therapists.where((MassageTherapist t) => t.active).length,
+      (double total, MassageBooking booking) => total + booking.amount,
     );
+    final double pendingAmount = pendingBookings.fold<double>(
+      0,
+      (double total, MassageBooking booking) => total + booking.amount,
+    );
+    final int activeProviders = activeBookings
+        .map((MassageBooking booking) => booking.providerId)
+        .toSet()
+        .length;
+    final int activeTherapists = activeBookings
+        .map((MassageBooking booking) => booking.therapistId)
+        .toSet()
+        .length;
 
     return Wrap(
       spacing: 14,
       runSpacing: 14,
       children: <Widget>[
         _MetricCard(
-          title: _monthLabels[_selectedMonth],
+          title:
+              '${_formatShortDateLabel(_reportStartDate)} a ${_formatShortDateLabel(_reportEndDate)}',
           value: '${activeBookings.length} ativos',
-          caption: cancelledBookings == 0
-              ? 'Volume ativo no mes selecionado'
-              : '$cancelledBookings cancelados no historico do mes',
+          caption: cancelledBookings.isEmpty
+              ? 'Sem cancelamentos no periodo'
+              : '${cancelledBookings.length} cancelados no historico',
           icon: Icons.calendar_view_month_rounded,
+          selected: _selectedSummaryDetailKey == 'metric:overview',
+          onTap: () => _openSummaryDetail(
+            key: 'metric:overview',
+            title: 'Atendimentos ativos do periodo',
+            description:
+                'Lista de atendimentos agendados dentro do intervalo consultado.',
+            bookings: activeBookings,
+          ),
         ),
         _MetricCard(
-          title: '${_activeProviders.length} prestadores',
-          value: '$activeTherapists masajistas ativos',
+          title: _formatCurrencyLabel(totalRevenue),
+          value: _formatCurrencyLabel(paidAmount),
           caption:
-              'Somente prestadores e masajistas ativos aparecem na selecao',
-          icon: Icons.groups_2_rounded,
+              '${pendingBookings.length} pendentes e ${_formatCurrencyLabel(pendingAmount)} em aberto',
+          icon: Icons.payments_rounded,
+          selected: _selectedSummaryDetailKey == 'metric:revenue',
+          onTap: () => _openSummaryDetail(
+            key: 'metric:revenue',
+            title: 'Receita do periodo',
+            description:
+                'Atendimentos agendados com foco em valores cobrados e pendentes no periodo consultado.',
+            bookings: activeBookings,
+          ),
         ),
         _MetricCard(
-          title: 'R\$ ${totalRevenue.toStringAsFixed(0)}',
-          value: pendingPayments == 0
-              ? 'Sem pendencias'
-              : '$pendingPayments pendentes',
-          caption: 'Receita prevista para o mes',
-          icon: Icons.payments_outlined,
+          title: '${paidBookings.length} pagos',
+          value: '${pendingBookings.length} pendentes',
+          caption: 'Conversao de pagamento no periodo consultado',
+          icon: Icons.receipt_long_rounded,
+          selected: _selectedSummaryDetailKey == 'metric:payments',
+          onTap: () => _openSummaryDetail(
+            key: 'metric:payments',
+            title: 'Pagamentos do periodo',
+            description:
+                'Atendimentos agendados para acompanhar status de pagamento no periodo consultado.',
+            bookings: activeBookings,
+          ),
+        ),
+        _MetricCard(
+          title: '$activeProviders prestadores',
+          value: '$activeTherapists masajistas',
+          caption: 'Equipe envolvida no atendimento do periodo',
+          icon: Icons.groups_2_rounded,
+          selected: _selectedSummaryDetailKey == 'metric:providers',
+          onTap: () => _openSummaryDetail(
+            key: 'metric:providers',
+            title: 'Equipe envolvida no periodo',
+            description:
+                'Atendimentos agendados distribuidos entre prestadores e masajistas do periodo consultado.',
+            bookings: activeBookings,
+          ),
         ),
       ],
     );
@@ -1105,11 +1238,11 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
       return;
     }
 
-      setState(() {
-        _providers = updatedProviders;
-        _syncSelectedProviderAndTherapist();
-        _savingProviders = false;
-      });
+    setState(() {
+      _providers = updatedProviders;
+      _syncSelectedProviderAndTherapist();
+      _savingProviders = false;
+    });
     await _reloadProviderReport();
   }
 
@@ -1526,27 +1659,24 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
     setState(() {
       _loadingReport = true;
       _reportErrorMessage = null;
+      _selectedSummaryDetailKey = null;
     });
 
     try {
-      final List<MassageProviderSummary> summaries =
-          await widget.massageAppService.listProviderSummaryReport(
+      final List<MassageProviderSummary> summaries = await widget
+          .massageAppService
+          .listProviderSummaryReport(
             dateFrom: _formatDateApi(_reportStartDate),
             dateTo: _formatDateApi(_reportEndDate),
           );
 
-      MassageProviderDetailReport? detail;
       int? selectedProviderId = _selectedSummaryProviderId;
       if (selectedProviderId != null &&
           summaries.any(
             (MassageProviderSummary item) =>
                 item.providerId == selectedProviderId,
           )) {
-        detail = await widget.massageAppService.getProviderDetailReport(
-          selectedProviderId,
-          dateFrom: _formatDateApi(_reportStartDate),
-          dateTo: _formatDateApi(_reportEndDate),
-        );
+        selectedProviderId = selectedProviderId;
       } else {
         selectedProviderId = null;
       }
@@ -1557,7 +1687,6 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
       setState(() {
         _providerSummaries = summaries;
         _selectedSummaryProviderId = selectedProviderId;
-        _selectedProviderDetail = detail;
         _loadingReport = false;
       });
     } catch (error) {
@@ -1589,19 +1718,43 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
         return;
       }
       setState(() {
-        _selectedProviderDetail = detail;
         _loadingReport = false;
       });
+      await _openProviderReportDetailDialog(detail);
     } catch (error) {
       if (!mounted) {
         return;
       }
       setState(() {
-        _selectedProviderDetail = null;
         _loadingReport = false;
         _reportErrorMessage = error.toString().replaceFirst('Bad state: ', '');
       });
     }
+  }
+
+  Future<void> _openProviderReportDetailDialog(
+    MassageProviderDetailReport detail,
+  ) async {
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text('Detalhe de ${detail.providerName}'),
+          content: SizedBox(
+            width: 860,
+            child: SingleChildScrollView(
+              child: _buildProviderReportDialogContent(context, detail),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Fechar'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Future<void> _pickReportStartDate() async {
@@ -1637,6 +1790,108 @@ class _MassageBookingPageState extends State<MassageBookingPage> {
       if (_reportEndDate.isBefore(_reportStartDate)) {
         _reportStartDate = _reportEndDate;
       }
+    });
+  }
+
+  Future<void> _openSummaryDetail({
+    required String key,
+    required String title,
+    required String description,
+    required List<MassageBooking> bookings,
+  }) async {
+    final List<MassageBooking> normalized = <MassageBooking>[...bookings]
+      ..sort((MassageBooking a, MassageBooking b) {
+        return a.startAt.compareTo(b.startAt);
+      });
+    final List<MassageBooking> scheduledBookings = normalized.where((
+      MassageBooking booking,
+    ) {
+      return booking.status == MassageBookingStatus.scheduled;
+    }).toList();
+    final double totalAmount = scheduledBookings.fold<double>(
+      0,
+      (double total, MassageBooking booking) => total + booking.amount,
+    );
+    final int pendingCount = scheduledBookings.where((MassageBooking booking) {
+      return !booking.paid;
+    }).length;
+
+    setState(() {
+      _selectedSummaryDetailKey = key;
+    });
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          title: Text(title),
+          content: SizedBox(
+            width: 860,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    description,
+                    style: Theme.of(context).textTheme.bodyMedium,
+                  ),
+                  const SizedBox(height: 14),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: <Widget>[
+                      _DetailChip(
+                        label: 'Atendimentos',
+                        value: '${normalized.length}',
+                        icon: Icons.spa_outlined,
+                      ),
+                      _DetailChip(
+                        label: 'Pendentes',
+                        value: '$pendingCount',
+                        icon: Icons.warning_amber_rounded,
+                      ),
+                      _DetailChip(
+                        label: 'Valor',
+                        value: _formatCurrencyLabel(totalAmount),
+                        icon: Icons.payments_rounded,
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if (normalized.isEmpty)
+                    const Text(
+                      'Nenhum atendimento encontrado para este detalhe.',
+                    )
+                  else
+                    ...normalized.map(
+                      (MassageBooking booking) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _BookingTile(
+                          booking: booking,
+                          provider: booking.providerName,
+                          therapist: booking.therapistName,
+                          processing: false,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Fechar'),
+            ),
+          ],
+        );
+      },
+    );
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _selectedSummaryDetailKey = null;
     });
   }
 
@@ -1904,30 +2159,130 @@ class _MetricCard extends StatelessWidget {
     required this.value,
     required this.caption,
     required this.icon,
+    this.selected = false,
+    this.onTap,
   });
 
   final String title;
   final String value;
   final String caption;
   final IconData icon;
+  final bool selected;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      width: 280,
-      child: Card(
-        child: Padding(
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(22),
+        child: Container(
+          width: 250,
           padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(22),
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: <Color>[Colors.white, Color(0xFFF7FAFF)],
+            ),
+            border: Border.all(
+              color: selected
+                  ? CostaNorteBrand.royalBlueDeep
+                  : CostaNorteBrand.line,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Icon(icon, color: CostaNorteBrand.royalBlueDeep),
-              const SizedBox(height: 12),
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: CostaNorteBrand.foam,
+                ),
+                child: Icon(icon, color: CostaNorteBrand.royalBlueDeep),
+              ),
+              const SizedBox(height: 14),
               Text(title, style: Theme.of(context).textTheme.titleLarge),
               const SizedBox(height: 4),
-              Text(value, style: Theme.of(context).textTheme.bodyLarge),
-              const SizedBox(height: 8),
+              Text(value, style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(height: 6),
               Text(caption, style: Theme.of(context).textTheme.bodySmall),
+              if (onTap != null) ...<Widget>[
+                const SizedBox(height: 10),
+                Text(
+                  selected ? 'Ocultar detalhe' : 'Ver detalhe',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                    color: CostaNorteBrand.royalBlueDeep,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DetailChip extends StatelessWidget {
+  const _DetailChip({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.selected = false,
+    this.onTap,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(999),
+            color: selected ? CostaNorteBrand.foam : Colors.white,
+            border: Border.all(
+              color: selected
+                  ? CostaNorteBrand.royalBlueDeep
+                  : CostaNorteBrand.line,
+              width: selected ? 1.4 : 1,
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Icon(
+                icon,
+                size: 18,
+                color: selected
+                    ? CostaNorteBrand.royalBlueDeep
+                    : CostaNorteBrand.mutedInk,
+              ),
+              const SizedBox(width: 8),
+              Text(label, style: Theme.of(context).textTheme.labelLarge),
+              const SizedBox(width: 8),
+              Text(
+                value,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: CostaNorteBrand.ink,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ],
           ),
         ),
