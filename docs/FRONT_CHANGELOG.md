@@ -1,5 +1,18 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-03-26 | Post Hito 12 | Estandar visual del resumen de Massagens y detalle de prestador en modal
+- Componente afectado: Frontend (`Massagens`) + documentacion funcional
+- Archivos tocados:
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `docs/MASSAGES_SUMMARY_REPORT_PLAN.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: alinear `Massagens` con el estandar visual ya consolidado en `Quadras` para los bloques de resumen y mover el detalle por prestador a una ventana emergente mas limpia para operacion diaria.
+- Impacto funcional:
+  - el bloque de resumen pasa a `Resumo do periodo` con rango visible, accion de recarga y KPI cards interactivas
+  - se agregan chips secundarios para cortes rapidos de pagos, pendientes, cancelaciones y volumen operativo
+  - `Resumo por prestador` conserva la tabla comparativa pero ya no incrusta el detalle debajo
+  - al seleccionar un prestador o presionar `Ver detalhe`, el detalle se abre en una ventana modal sin ensuciar el layout principal
+
 ## 2026-03-26 | Post Hito 12 | Sidebar desktop de Massagens con navegacion interna por bloques
 - Componente afectado: Frontend (`Shell` + `Massagens`) + documentacion UI
 - Archivos tocados:

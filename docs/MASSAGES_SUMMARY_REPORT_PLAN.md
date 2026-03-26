@@ -22,6 +22,12 @@ Estado: `Implementado y visible en el sistema`
   - consultar la tabla por prestador
   - seleccionar una fila
   - ver el detalle del prestador seleccionado
+  - abrir ese detalle en una ventana modal
+- La pantalla ya fue alineada visualmente con el patron de `Quadras` para resumen ejecutivo:
+  - `Resumo do periodo` con rango y recarga visibles
+  - cards KPI interactivas
+  - chips secundarios para filtros de lectura rapida
+  - tabla de `Resumo por prestador` contenida como breakdown del resumen
 - El frontend ya consume los endpoints reales de reporte:
   - `GET /api/v1/massages/reports/providers/summary`
   - `GET /api/v1/massages/reports/providers/{providerId}/details`
@@ -227,14 +233,14 @@ Respuesta propuesta:
 - Implementar esos metodos en `HttpMassageAppService`.
 
 ### UI recomendada
-- Mantener la card actual `Resumo do mes` como resumen ejecutivo corto.
-- Debajo, agregar un bloque nuevo de reporte, por ejemplo:
+- Mantener la parte superior como resumen ejecutivo corto, ahora consolidado en `Resumo do periodo`.
+- Debajo, conservar el bloque de reporte:
   - `Resumo por prestador`
 - Ese bloque debe incluir:
   - filtro de rango `data inicial / data final`
   - boton `Buscar`
   - tabla
-  - panel de detalle del prestador seleccionado
+  - detalle del prestador en ventana modal, no inline
 
 ### Tabla propuesta
 Columnas recomendadas:
@@ -251,7 +257,8 @@ Columnas recomendadas:
 Comportamiento:
 - click en la fila selecciona el prestador
 - la fila activa queda destacada
-- no reemplazar el panel `Dia selecionado`; agregar una zona propia de detalle para no romper el flujo actual
+- no reemplazar el panel `Dia selecionado`
+- el detalle debe abrir en modal para no romper el flujo actual ni estirar la pantalla principal
 
 ### Panel de detalle
 - Mostrar encabezado con:
@@ -268,6 +275,9 @@ Comportamiento:
   - valor
   - estado
   - pago
+- Implementacion actual:
+  - el detalle del prestador ya se abre en `AlertDialog`
+  - la tabla conserva la fila seleccionada como referencia visual mientras se carga o consulta el detalle
 
 ### Reglas UX
 - No remover la agenda mensual actual.
@@ -308,6 +318,8 @@ Comportamiento:
 - Riesgo semantico: hoy no existe estado `ATTENDED`; por eso `atenciones` debe definirse explicitamente.
 - Riesgo de performance: si se usa solo `listBookings()` para todo, el frontend puede degradarse.
 - Riesgo UX: si el detalle se incrusta sobre el panel diario actual, la pantalla va a quedar ambigua.
+- Mitigacion aplicada:
+  - el detalle por prestador se movio a una ventana modal para separar reporte y operacion diaria.
 
 Decisiones pendientes:
 - confirmar si `atenciones` significa:
@@ -321,5 +333,5 @@ Decisiones pendientes:
 ## Criterio de cierre
 - El backend expone un resumen por prestador y un detalle por prestador con rango de fechas.
 - El frontend muestra tabla de resumen con montos y cantidades consistentes.
-- El operador puede seleccionar un prestador y ver su detalle sin perder la agenda actual.
+- El operador puede seleccionar un prestador y ver su detalle en modal sin perder la agenda actual.
 - La documentacion de ambos repos queda actualizada con contrato, pruebas y validacion manual.
