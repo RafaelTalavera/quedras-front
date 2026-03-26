@@ -37,6 +37,70 @@ final class HttpCourtAppService implements CourtAppService {
   }
 
   @override
+  Future<List<CourtPartnerCoach>> listPartnerCoaches({
+    bool activeOnly = true,
+  }) async {
+    final String query = Uri(
+      queryParameters: <String, String>{'activeOnly': '$activeOnly'},
+    ).query;
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get(
+        'courts/partner-coaches?$query',
+        headers: _jsonHeaders,
+      ),
+    );
+    if (!response.isSuccess) {
+      throw StateError(_extractApiErrorMessage(response));
+    }
+    final Object? decoded = _tryDecode(response.body);
+    if (decoded is! List) {
+      throw StateError(
+        'Formato invalido da lista de professores parceiros de quadras.',
+      );
+    }
+    return decoded
+        .map<CourtPartnerCoach>(
+          (Object? item) => CourtPartnerCoach.fromJson(_asMap(item)),
+        )
+        .toList();
+  }
+
+  @override
+  Future<CourtPartnerCoach> createPartnerCoach(
+    CreateCourtPartnerCoachModel input,
+  ) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.post(
+        'courts/partner-coaches',
+        headers: _jsonHeaders,
+        body: jsonEncode(input.toJson()),
+      ),
+    );
+    if (!response.isSuccess) {
+      throw StateError(_extractApiErrorMessage(response));
+    }
+    return CourtPartnerCoach.fromJson(_asMap(_tryDecode(response.body)));
+  }
+
+  @override
+  Future<CourtPartnerCoach> updatePartnerCoach(
+    int partnerCoachId,
+    UpdateCourtPartnerCoachModel input,
+  ) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.put(
+        'courts/partner-coaches/$partnerCoachId',
+        headers: _jsonHeaders,
+        body: jsonEncode(input.toJson()),
+      ),
+    );
+    if (!response.isSuccess) {
+      throw StateError(_extractApiErrorMessage(response));
+    }
+    return CourtPartnerCoach.fromJson(_asMap(_tryDecode(response.body)));
+  }
+
+  @override
   Future<CourtRateSetting> updateRate(
     int rateId,
     UpdateCourtRateSettingModel input,

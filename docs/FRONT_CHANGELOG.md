@@ -1,5 +1,31 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-03-26 | Post Hito 12 | Quadras con catalogo persistido y gestion operativa de profesores parceros
+- Componente afectado: Frontend (`Quadras`) + integracion compartida con backend
+- Archivos tocados:
+  - `lib/features/tennis/presentation/tennis_rental_page.dart`
+  - `lib/features/courts/application/court_app_service.dart`
+  - `lib/features/courts/domain/court_models.dart`
+  - `lib/features/courts/infrastructure/http_court_app_service.dart`
+  - `lib/core/localization/pt_br_error_translator.dart`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: cerrar el flujo cross-repo para que `Professor parceiro` no dependa de nombres hardcodeados y pueda administrarse desde el panel operativo.
+- Impacto funcional:
+  - `Nova reserva de quadra` ahora carga profesores parceros desde backend y solo permite seleccionar nombres activos del catalogo
+  - el formulario prioriza `Tipo de usuario` y adapta `Nombre` a selector cerrado cuando aplica
+  - el dialogo `Tarifas, materiais e parceiros` ya permite listar, buscar, crear, editar y activar/inactivar profesores parceros
+  - los errores de validacion de backend para partner coaches se traducen en UI
+
+## 2026-03-25 | Post Hito 12 | Estandar documentado para navegacion interna sin remonte de secciones
+- Componente afectado: Frontend (`Shell`) + documentacion tecnica
+- Archivos tocados:
+  - `lib/features/home/presentation/shell_page.dart`
+  - `docs/INTERNAL_NAVIGATION_STANDARD.md`
+  - `README.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Dejar documentado el patron correcto para cambiar entre secciones internas sin recrear rutas ni pantallas pesadas, evitando la micro-latencia visible al operador.
+- Impacto funcional: El shell conserva las pantallas internas con `IndexedStack`, evita relanzar `initState` y fetch al pasar entre modulos y deja una regla explicita para futuras implementaciones.
+
 ## 2026-03-24 | Post Hito 12 | Quadras alineado al estandar de calendario y mejora del selector horario
 - Componente afectado: Frontend (`Quadras`) + documentacion UI
 - Archivos tocados:

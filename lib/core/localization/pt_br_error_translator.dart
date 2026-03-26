@@ -12,8 +12,8 @@ final class PtBrErrorTranslator {
       return 'Ocorreu um erro inesperado.';
     }
 
-    final RegExpMatch? reservationNotFoundMatch =
-        _reservationNotFoundPattern.firstMatch(message);
+    final RegExpMatch? reservationNotFoundMatch = _reservationNotFoundPattern
+        .firstMatch(message);
     if (reservationNotFoundMatch != null) {
       return 'Reserva ${reservationNotFoundMatch.group(1)} n\u00e3o encontrada.';
     }
@@ -41,6 +41,10 @@ final class PtBrErrorTranslator {
         return 'J\u00e1 existe uma reserva ativa para esse hor\u00e1rio.';
       case 'Court booking overlaps with an existing active booking.':
         return 'Ja existe uma reserva ativa para esse horario da quadra.';
+      case 'Partner coach name must match an active predefined coach.':
+        return 'Selecione um professor parceiro ativo previamente cadastrado.';
+      case 'Court partner coach name already exists.':
+        return 'Ja existe um professor parceiro com esse nome.';
       case 'Reservation must be within operating hours 07:00 to 23:00.':
         return 'A reserva deve estar dentro do hor\u00e1rio de funcionamento, das 07:00 \u00e0s 23:00.';
       case 'Reservation duration must be 60, 90 or 120 minutes.':

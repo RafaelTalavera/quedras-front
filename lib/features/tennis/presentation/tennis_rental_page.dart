@@ -406,20 +406,6 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
 
   Widget _buildSummaryCard(BuildContext context) {
     final CourtSummaryReport? summary = _summary;
-    final List<CourtBooking> activeMonthBookings = _monthBookings
-        .where(
-          (CourtBooking booking) =>
-              booking.status == CourtBookingStatus.scheduled,
-        )
-        .toList();
-    final double expectedRevenue = activeMonthBookings.fold<double>(
-      0,
-      (double total, CourtBooking booking) => total + booking.totalAmount,
-    );
-    final double materialsRevenue = activeMonthBookings.fold<double>(
-      0,
-      (double total, CourtBooking booking) => total + booking.materialsAmount,
-    );
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -455,16 +441,24 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
                         icon: Icons.calendar_view_month_rounded,
                       ),
                       _MetricCard(
-                        title: _formatCurrency(expectedRevenue),
-                        value: '${summary.pendingCount} pendentes',
-                        caption: 'Receita esperada com materiais incluidos',
+                        title: _formatCurrency(summary.expectedAmount),
+                        value: _formatCurrency(summary.paidAmount),
+                        caption:
+                            '${summary.pendingCount} pendentes e ${_paymentRateLabel(summary)} de conversao',
                         icon: Icons.payments_rounded,
                       ),
                       _MetricCard(
                         title: '${summary.totalHours.toStringAsFixed(1)} h',
-                        value: '${summary.paidCount} pagas',
-                        caption: 'Carga horaria consolidada do periodo',
+                        value: _formatCurrency(summary.averageTicket),
+                        caption:
+                            'Carga horaria total e ticket medio do periodo',
                         icon: Icons.query_builder_rounded,
+                      ),
+                      _MetricCard(
+                        title: _formatCurrency(summary.materialsAmount),
+                        value: _formatCurrency(summary.courtAmount),
+                        caption: 'Materiais vendidos e receita base de quadra',
+                        icon: Icons.inventory_2_rounded,
                       ),
                     ],
                   ),
@@ -496,7 +490,7 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
                       ),
                       _DetailChip(
                         label: 'Materiais',
-                        value: _formatCurrency(materialsRevenue),
+                        value: _formatCurrency(summary.materialsAmount),
                         icon: Icons.inventory_2_rounded,
                       ),
                       _DetailChip(
@@ -506,10 +500,100 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
                       ),
                     ],
                   ),
+                  const SizedBox(height: 20),
+                  _buildSummaryBreakdownSection(
+                    context,
+                    title: 'Resumo por tipo de cliente',
+                    description:
+                        'Distribuicao de reservas, horas e receita conforme o perfil operacional da quadra.',
+                    items: summary.customerTypeBreakdown,
+                  ),
+                  const SizedBox(height: 18),
+                  _buildSummaryBreakdownSection(
+                    context,
+                    title: 'Resumo por periodo tarifario',
+                    description:
+                        'Comparativo entre operacao diurna e noturna para apoiar regras de preco e ocupacao.',
+                    items: summary.pricingPeriodBreakdown,
+                  ),
+                  const SizedBox(height: 18),
+                  _buildSummaryBreakdownSection(
+                    context,
+                    title: 'Cobrado por meio de pagamento',
+                    description:
+                        'Valores efetivamente pagos por canal de recebimento no periodo consultado.',
+                    items: summary.paymentMethodBreakdown,
+                    hidePendingColumn: true,
+                  ),
                 ],
               ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildSummaryBreakdownSection(
+    BuildContext context, {
+    required String title,
+    required String description,
+    required List<CourtSummaryBreakdown> items,
+    bool hidePendingColumn = false,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCFCFB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 4),
+          Text(description, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 14),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              columnSpacing: 16,
+              horizontalMargin: 12,
+              columns: <DataColumn>[
+                const DataColumn(label: Text('Segmento')),
+                const DataColumn(label: Text('Reservas')),
+                const DataColumn(label: Text('Pagas')),
+                if (!hidePendingColumn)
+                  const DataColumn(label: Text('Pendentes')),
+                const DataColumn(label: Text('Horas')),
+                const DataColumn(label: Text('Quadra')),
+                const DataColumn(label: Text('Materiais')),
+                const DataColumn(label: Text('Total')),
+              ],
+              rows: items.map((CourtSummaryBreakdown item) {
+                return DataRow(
+                  cells: <DataCell>[
+                    DataCell(
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(minWidth: 150),
+                        child: Text(item.label),
+                      ),
+                    ),
+                    DataCell(Text('${item.scheduledCount}')),
+                    DataCell(Text('${item.paidCount}')),
+                    if (!hidePendingColumn)
+                      DataCell(Text('${item.pendingCount}')),
+                    DataCell(Text('${item.totalHours.toStringAsFixed(1)} h')),
+                    DataCell(Text(_formatCurrency(item.courtAmount))),
+                    DataCell(Text(_formatCurrency(item.materialsAmount))),
+                    DataCell(Text(_formatCurrency(item.totalAmount))),
+                  ],
+                );
+              }).toList(),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -1156,6 +1240,11 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
   late final TextEditingController _racketsController;
   late final TextEditingController _ballsController;
   CourtCustomerType _customerType = CourtCustomerType.guest;
+  List<CourtPartnerCoach> _partnerCoaches = const <CourtPartnerCoach>[];
+  bool _loadingPartnerCoaches = true;
+  String? _partnerCoachLoadError;
+  String? _selectedPartnerCoachName;
+  String _manualCustomerName = '';
   bool _paid = false;
   CourtPaymentMethod _paymentMethod = CourtPaymentMethod.pix;
   TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
@@ -1170,6 +1259,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
     _racketsController = TextEditingController(text: '0');
     _ballsController = TextEditingController(text: '0');
     _syncEndTimeWithStart();
+    _loadPartnerCoaches();
   }
 
   @override
@@ -1193,24 +1283,6 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
-                TextFormField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'Nombre'),
-                  validator: (String? value) =>
-                      value == null || value.trim().isEmpty
-                      ? 'Informe el nombre'
-                      : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _referenceController,
-                  decoration: const InputDecoration(labelText: 'Referencia'),
-                  validator: (String? value) =>
-                      value == null || value.trim().isEmpty
-                      ? 'Informe la referencia'
-                      : null,
-                ),
-                const SizedBox(height: 12),
                 DropdownButtonFormField<CourtCustomerType>(
                   value: _customerType,
                   decoration: const InputDecoration(
@@ -1227,9 +1299,33 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                       return;
                     }
                     setState(() {
-                      _customerType = value;
+                      _handleCustomerTypeChanged(value);
                     });
                   },
+                ),
+                const SizedBox(height: 12),
+                if (_customerType == CourtCustomerType.partnerCoach)
+                  _buildPartnerCoachField()
+                else
+                  TextFormField(
+                    controller: _nameController,
+                    decoration: const InputDecoration(labelText: 'Nombre'),
+                    onChanged: (String value) {
+                      _manualCustomerName = value;
+                    },
+                    validator: (String? value) =>
+                        value == null || value.trim().isEmpty
+                        ? 'Informe el nombre'
+                        : null,
+                  ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _referenceController,
+                  decoration: const InputDecoration(labelText: 'Referencia'),
+                  validator: (String? value) =>
+                      value == null || value.trim().isEmpty
+                      ? 'Informe la referencia'
+                      : null,
                 ),
                 const SizedBox(height: 12),
                 Row(
@@ -1365,6 +1461,16 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
         ),
         FilledButton(
           onPressed: () {
+            if (_customerType == CourtCustomerType.partnerCoach &&
+                _nameController.text.trim().isEmpty) {
+              AppAlerts.error(
+                context,
+                title: 'Professor parceiro',
+                message:
+                    'Nao foi possivel carregar a lista de professores parceiros ativos.',
+              );
+              return;
+            }
             if (!_formKey.currentState!.validate()) {
               return;
             }
@@ -1411,6 +1517,144 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
     return _courtTimeSlots.where((String slot) {
       return _timeOfDayToMinutes(_parseTimeOfDay(slot)) > startMinutes;
     }).toList();
+  }
+
+  Widget _buildPartnerCoachField() {
+    if (_loadingPartnerCoaches) {
+      return const InputDecorator(
+        decoration: InputDecoration(labelText: 'Nombre'),
+        child: SizedBox(
+          height: 24,
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: SizedBox(
+              width: 18,
+              height: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+          ),
+        ),
+      );
+    }
+    if (_partnerCoachLoadError != null) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          TextFormField(
+            enabled: false,
+            decoration: const InputDecoration(labelText: 'Nombre'),
+            initialValue: '',
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _partnerCoachLoadError!,
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: CostaNorteBrand.error),
+          ),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: TextButton(
+              onPressed: _loadPartnerCoaches,
+              child: const Text('Reintentar'),
+            ),
+          ),
+        ],
+      );
+    }
+    return DropdownButtonFormField<String>(
+      value: _selectedPartnerCoachName,
+      decoration: const InputDecoration(labelText: 'Nombre'),
+      items: _partnerCoaches
+          .map(
+            (CourtPartnerCoach coach) => DropdownMenuItem<String>(
+              value: coach.name,
+              child: Text(coach.name),
+            ),
+          )
+          .toList(),
+      validator: (String? value) => value == null || value.trim().isEmpty
+          ? 'Seleccione un profesor parceiro'
+          : null,
+      onChanged: (String? value) {
+        if (value == null) {
+          return;
+        }
+        setState(() {
+          _selectedPartnerCoachName = value;
+          _nameController.text = value;
+        });
+      },
+    );
+  }
+
+  Future<void> _loadPartnerCoaches() async {
+    setState(() {
+      _loadingPartnerCoaches = true;
+      _partnerCoachLoadError = null;
+    });
+    try {
+      final List<CourtPartnerCoach> coaches = await widget.service
+          .listPartnerCoaches();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _partnerCoaches = coaches;
+        if (_partnerCoaches.isEmpty) {
+          _selectedPartnerCoachName = null;
+          _nameController.clear();
+        } else {
+          final bool hasSelectedCoach = _partnerCoaches.any(
+            (CourtPartnerCoach coach) =>
+                coach.name == _selectedPartnerCoachName,
+          );
+          if (!hasSelectedCoach) {
+            _selectedPartnerCoachName = _partnerCoaches.first.name;
+          }
+          _selectedPartnerCoachName ??= _partnerCoaches.first.name;
+          _nameController.text = _selectedPartnerCoachName!;
+        }
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _partnerCoachLoadError = error.toString().replaceFirst(
+          'Bad state: ',
+          '',
+        );
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingPartnerCoaches = false;
+        });
+      }
+    }
+  }
+
+  void _handleCustomerTypeChanged(CourtCustomerType value) {
+    if (_customerType == value) {
+      return;
+    }
+    if (_customerType != CourtCustomerType.partnerCoach) {
+      _manualCustomerName = _nameController.text;
+    }
+    _customerType = value;
+    if (value == CourtCustomerType.partnerCoach) {
+      if (_partnerCoaches.isNotEmpty) {
+        _selectedPartnerCoachName ??= _partnerCoaches.first.name;
+        _nameController.text = _selectedPartnerCoachName!;
+      } else {
+        _selectedPartnerCoachName = null;
+        _nameController.clear();
+      }
+      return;
+    }
+    _nameController.text = _manualCustomerName;
   }
 
   void _syncEndTimeWithStart() {
@@ -1545,6 +1789,16 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
   bool _saving = false;
   List<CourtRateSetting> _rates = <CourtRateSetting>[];
   List<CourtMaterialSetting> _materials = <CourtMaterialSetting>[];
+  List<CourtPartnerCoach> _partnerCoaches = <CourtPartnerCoach>[];
+  final TextEditingController _partnerCoachSearchController =
+      TextEditingController();
+  String _partnerCoachSearch = '';
+
+  @override
+  void dispose() {
+    _partnerCoachSearchController.dispose();
+    super.dispose();
+  }
 
   @override
   void initState() {
@@ -1555,7 +1809,7 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Tarifas y materiales'),
+      title: const Text('Tarifas, materiais e parceiros'),
       content: SizedBox(
         width: 720,
         child: _loading
@@ -1602,6 +1856,64 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
                         ),
                       );
                     }),
+                    const SizedBox(height: 18),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            'Professores parceiros',
+                            style: Theme.of(context).textTheme.titleMedium,
+                          ),
+                        ),
+                        FilledButton.icon(
+                          onPressed: _saving ? null : _createPartnerCoach,
+                          icon: const Icon(Icons.person_add_alt_1_rounded),
+                          label: const Text('Novo parceiro'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _partnerCoachSearchController,
+                      onChanged: (String value) {
+                        setState(() {
+                          _partnerCoachSearch = value.trim().toLowerCase();
+                        });
+                      },
+                      decoration: const InputDecoration(
+                        labelText: 'Buscar profesor',
+                        prefixIcon: Icon(Icons.search_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    if (_filteredPartnerCoaches.isEmpty)
+                      Text(
+                        _partnerCoaches.isEmpty
+                            ? 'Nenhum professor parceiro cadastrado.'
+                            : 'Nenhum professor parceiro encontrado para a busca.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      )
+                    else
+                      ..._filteredPartnerCoaches.map((CourtPartnerCoach coach) {
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(coach.name),
+                          subtitle: Text(
+                            coach.active ? 'Ativo' : 'Inativo',
+                            style: TextStyle(
+                              color: coach.active
+                                  ? CostaNorteBrand.success
+                                  : CostaNorteBrand.mutedInk,
+                            ),
+                          ),
+                          trailing: IconButton(
+                            onPressed: _saving
+                                ? null
+                                : () => _editPartnerCoach(coach),
+                            icon: const Icon(Icons.edit_rounded),
+                          ),
+                        );
+                      }),
                   ],
                 ),
               ),
@@ -1619,14 +1931,26 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
     final List<CourtRateSetting> rates = await widget.service.listRates();
     final List<CourtMaterialSetting> materials = await widget.service
         .listMaterials();
+    final List<CourtPartnerCoach> partnerCoaches = await widget.service
+        .listPartnerCoaches(activeOnly: false);
     if (!mounted) {
       return;
     }
     setState(() {
       _rates = rates;
       _materials = materials;
+      _partnerCoaches = partnerCoaches;
       _loading = false;
     });
+  }
+
+  List<CourtPartnerCoach> get _filteredPartnerCoaches {
+    if (_partnerCoachSearch.isEmpty) {
+      return _partnerCoaches;
+    }
+    return _partnerCoaches.where((CourtPartnerCoach coach) {
+      return coach.name.toLowerCase().contains(_partnerCoachSearch);
+    }).toList();
   }
 
   Future<void> _editRate(CourtRateSetting rate) async {
@@ -1794,6 +2118,188 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
       }
     }
   }
+
+  Future<void> _createPartnerCoach() async {
+    final _PartnerCoachDraft? draft = await showDialog<_PartnerCoachDraft>(
+      context: context,
+      builder: (BuildContext context) =>
+          const _PartnerCoachEditorDialog(title: 'Novo professor parceiro'),
+    );
+    if (draft == null) {
+      return;
+    }
+    setState(() {
+      _saving = true;
+    });
+    try {
+      await widget.service.createPartnerCoach(
+        CreateCourtPartnerCoachModel(name: draft.name),
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.error(
+        context,
+        title: 'Professor parceiro',
+        message: error.toString().replaceFirst('Bad state: ', ''),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _editPartnerCoach(CourtPartnerCoach coach) async {
+    final _PartnerCoachDraft? draft = await showDialog<_PartnerCoachDraft>(
+      context: context,
+      builder: (BuildContext context) => _PartnerCoachEditorDialog(
+        title: 'Editar professor parceiro',
+        initialName: coach.name,
+        initialActive: coach.active,
+        showActiveToggle: true,
+      ),
+    );
+    if (draft == null) {
+      return;
+    }
+    setState(() {
+      _saving = true;
+    });
+    try {
+      await widget.service.updatePartnerCoach(
+        coach.id,
+        UpdateCourtPartnerCoachModel(name: draft.name, active: draft.active),
+      );
+      await _load();
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.error(
+        context,
+        title: 'Professor parceiro',
+        message: error.toString().replaceFirst('Bad state: ', ''),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+}
+
+class _PartnerCoachDraft {
+  const _PartnerCoachDraft({required this.name, required this.active});
+
+  final String name;
+  final bool active;
+}
+
+class _PartnerCoachEditorDialog extends StatefulWidget {
+  const _PartnerCoachEditorDialog({
+    required this.title,
+    this.initialName = '',
+    this.initialActive = true,
+    this.showActiveToggle = false,
+  });
+
+  final String title;
+  final String initialName;
+  final bool initialActive;
+  final bool showActiveToggle;
+
+  @override
+  State<_PartnerCoachEditorDialog> createState() =>
+      _PartnerCoachEditorDialogState();
+}
+
+class _PartnerCoachEditorDialogState extends State<_PartnerCoachEditorDialog> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  late final TextEditingController _nameController;
+  late bool _active;
+
+  @override
+  void initState() {
+    super.initState();
+    _nameController = TextEditingController(text: widget.initialName);
+    _active = widget.initialActive;
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(widget.title),
+      content: SizedBox(
+        width: 420,
+        child: Form(
+          key: _formKey,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              TextFormField(
+                controller: _nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Nombre del profesor',
+                ),
+                validator: (String? value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Informe el nombre';
+                  }
+                  return null;
+                },
+              ),
+              if (widget.showActiveToggle) ...<Widget>[
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _active,
+                  onChanged: (bool value) {
+                    setState(() {
+                      _active = value;
+                    });
+                  },
+                  title: const Text('Activo'),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          onPressed: () {
+            if (!_formKey.currentState!.validate()) {
+              return;
+            }
+            Navigator.of(context).pop(
+              _PartnerCoachDraft(
+                name: _nameController.text.trim(),
+                active: _active,
+              ),
+            );
+          },
+          child: const Text('Guardar'),
+        ),
+      ],
+    );
+  }
 }
 
 class _CourtBookingFormResult {
@@ -1898,6 +2404,14 @@ bool _sameDay(DateTime a, DateTime b) {
 
 String _formatCurrency(double amount) {
   return 'R\$ ${amount.toStringAsFixed(0)}';
+}
+
+String _paymentRateLabel(CourtSummaryReport summary) {
+  if (summary.scheduledCount == 0) {
+    return '0%';
+  }
+  final double rate = (summary.paidCount / summary.scheduledCount) * 100;
+  return '${rate.toStringAsFixed(0)}%';
 }
 
 String _formatDate(DateTime value) {

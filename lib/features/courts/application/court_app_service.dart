@@ -3,6 +3,17 @@ import '../domain/court_models.dart';
 abstract interface class CourtAppService {
   Future<List<CourtRateSetting>> listRates();
 
+  Future<List<CourtPartnerCoach>> listPartnerCoaches({bool activeOnly = true});
+
+  Future<CourtPartnerCoach> createPartnerCoach(
+    CreateCourtPartnerCoachModel input,
+  );
+
+  Future<CourtPartnerCoach> updatePartnerCoach(
+    int partnerCoachId,
+    UpdateCourtPartnerCoachModel input,
+  );
+
   Future<CourtRateSetting> updateRate(
     int rateId,
     UpdateCourtRateSettingModel input,

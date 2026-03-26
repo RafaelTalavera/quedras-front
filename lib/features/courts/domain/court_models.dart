@@ -180,6 +180,56 @@ class CourtMaterialSetting {
   }
 }
 
+class CourtPartnerCoach {
+  const CourtPartnerCoach({
+    required this.id,
+    required this.name,
+    required this.active,
+    required this.updatedAt,
+    required this.updatedBy,
+  });
+
+  final int id;
+  final String name;
+  final bool active;
+  final DateTime? updatedAt;
+  final String? updatedBy;
+
+  factory CourtPartnerCoach.fromJson(Map<String, dynamic> json) {
+    return CourtPartnerCoach(
+      id: _readInt(json, 'id') ?? 0,
+      name: _readString(json, 'name') ?? '',
+      active: json['active'] as bool? ?? false,
+      updatedAt: _tryParseDateTime(_readString(json, 'updatedAt')),
+      updatedBy: _readString(json, 'updatedBy'),
+    );
+  }
+}
+
+class CreateCourtPartnerCoachModel {
+  const CreateCourtPartnerCoachModel({required this.name});
+
+  final String name;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{'name': name.trim()};
+  }
+}
+
+class UpdateCourtPartnerCoachModel extends CreateCourtPartnerCoachModel {
+  const UpdateCourtPartnerCoachModel({
+    required super.name,
+    required this.active,
+  });
+
+  final bool active;
+
+  @override
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{'name': name.trim(), 'active': active};
+  }
+}
+
 class CourtBookingMaterial {
   const CourtBookingMaterial({
     required this.materialCode,
@@ -197,7 +247,9 @@ class CourtBookingMaterial {
 
   factory CourtBookingMaterial.fromJson(Map<String, dynamic> json) {
     return CourtBookingMaterial(
-      materialCode: CourtMaterialCode.tryParse(_readString(json, 'materialCode')),
+      materialCode: CourtMaterialCode.tryParse(
+        _readString(json, 'materialCode'),
+      ),
       materialLabel: _readString(json, 'materialLabel') ?? '',
       quantity: _readInt(json, 'quantity') ?? 0,
       unitPrice: (json['unitPrice'] as num?)?.toDouble() ?? 0,
@@ -275,7 +327,9 @@ class CourtBooking {
       durationMinutes: _readInt(json, 'durationMinutes') ?? 0,
       customerName: _readString(json, 'customerName') ?? '',
       customerReference: _readString(json, 'customerReference') ?? '',
-      customerType: CourtCustomerType.tryParse(_readString(json, 'customerType')),
+      customerType: CourtCustomerType.tryParse(
+        _readString(json, 'customerType'),
+      ),
       pricingPeriod: CourtPricingPeriod.tryParse(
         _readString(json, 'pricingPeriod'),
       ),
@@ -324,6 +378,13 @@ class CourtSummaryReport {
     required this.partnerCoachHours,
     required this.paidAmount,
     required this.pendingAmount,
+    required this.courtAmount,
+    required this.materialsAmount,
+    required this.expectedAmount,
+    required this.averageTicket,
+    required this.customerTypeBreakdown,
+    required this.pricingPeriodBreakdown,
+    required this.paymentMethodBreakdown,
   });
 
   final int scheduledCount;
@@ -337,8 +398,18 @@ class CourtSummaryReport {
   final double partnerCoachHours;
   final double paidAmount;
   final double pendingAmount;
+  final double courtAmount;
+  final double materialsAmount;
+  final double expectedAmount;
+  final double averageTicket;
+  final List<CourtSummaryBreakdown> customerTypeBreakdown;
+  final List<CourtSummaryBreakdown> pricingPeriodBreakdown;
+  final List<CourtSummaryBreakdown> paymentMethodBreakdown;
 
   factory CourtSummaryReport.fromJson(Map<String, dynamic> json) {
+    final Object? customerTypeBreakdownRaw = json['customerTypeBreakdown'];
+    final Object? pricingPeriodBreakdownRaw = json['pricingPeriodBreakdown'];
+    final Object? paymentMethodBreakdownRaw = json['paymentMethodBreakdown'];
     return CourtSummaryReport(
       scheduledCount: _readInt(json, 'scheduledCount') ?? 0,
       cancelledCount: _readInt(json, 'cancelledCount') ?? 0,
@@ -351,6 +422,72 @@ class CourtSummaryReport {
       partnerCoachHours: (json['partnerCoachHours'] as num?)?.toDouble() ?? 0,
       paidAmount: (json['paidAmount'] as num?)?.toDouble() ?? 0,
       pendingAmount: (json['pendingAmount'] as num?)?.toDouble() ?? 0,
+      courtAmount: (json['courtAmount'] as num?)?.toDouble() ?? 0,
+      materialsAmount: (json['materialsAmount'] as num?)?.toDouble() ?? 0,
+      expectedAmount: (json['expectedAmount'] as num?)?.toDouble() ?? 0,
+      averageTicket: (json['averageTicket'] as num?)?.toDouble() ?? 0,
+      customerTypeBreakdown: customerTypeBreakdownRaw is List
+          ? customerTypeBreakdownRaw
+                .map<CourtSummaryBreakdown>(
+                  (Object? item) =>
+                      CourtSummaryBreakdown.fromJson(_asMap(item)),
+                )
+                .toList()
+          : const <CourtSummaryBreakdown>[],
+      pricingPeriodBreakdown: pricingPeriodBreakdownRaw is List
+          ? pricingPeriodBreakdownRaw
+                .map<CourtSummaryBreakdown>(
+                  (Object? item) =>
+                      CourtSummaryBreakdown.fromJson(_asMap(item)),
+                )
+                .toList()
+          : const <CourtSummaryBreakdown>[],
+      paymentMethodBreakdown: paymentMethodBreakdownRaw is List
+          ? paymentMethodBreakdownRaw
+                .map<CourtSummaryBreakdown>(
+                  (Object? item) =>
+                      CourtSummaryBreakdown.fromJson(_asMap(item)),
+                )
+                .toList()
+          : const <CourtSummaryBreakdown>[],
+    );
+  }
+}
+
+class CourtSummaryBreakdown {
+  const CourtSummaryBreakdown({
+    required this.code,
+    required this.label,
+    required this.scheduledCount,
+    required this.paidCount,
+    required this.pendingCount,
+    required this.totalHours,
+    required this.courtAmount,
+    required this.materialsAmount,
+    required this.totalAmount,
+  });
+
+  final String code;
+  final String label;
+  final int scheduledCount;
+  final int paidCount;
+  final int pendingCount;
+  final double totalHours;
+  final double courtAmount;
+  final double materialsAmount;
+  final double totalAmount;
+
+  factory CourtSummaryBreakdown.fromJson(Map<String, dynamic> json) {
+    return CourtSummaryBreakdown(
+      code: _readString(json, 'code') ?? '',
+      label: _readString(json, 'label') ?? '',
+      scheduledCount: _readInt(json, 'scheduledCount') ?? 0,
+      paidCount: _readInt(json, 'paidCount') ?? 0,
+      pendingCount: _readInt(json, 'pendingCount') ?? 0,
+      totalHours: (json['totalHours'] as num?)?.toDouble() ?? 0,
+      courtAmount: (json['courtAmount'] as num?)?.toDouble() ?? 0,
+      materialsAmount: (json['materialsAmount'] as num?)?.toDouble() ?? 0,
+      totalAmount: (json['totalAmount'] as num?)?.toDouble() ?? 0,
     );
   }
 }
