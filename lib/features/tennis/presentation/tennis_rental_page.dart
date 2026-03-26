@@ -76,9 +76,13 @@ class TennisRentalPage extends StatefulWidget {
 
 class _TennisRentalPageState extends State<TennisRentalPage> {
   late DateTime _selectedDate;
+  late DateTime _reportStartDate;
+  late DateTime _reportEndDate;
   bool _loading = true;
+  bool _loadingSummary = false;
   bool _saving = false;
   String? _errorMessage;
+  String? _summaryErrorMessage;
   List<CourtBooking> _bookings = <CourtBooking>[];
   CourtSummaryReport? _summary;
 
@@ -86,6 +90,8 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
   void initState() {
     super.initState();
     _selectedDate = DateTime.now();
+    _reportStartDate = DateTime(_selectedDate.year, _selectedDate.month, 1);
+    _reportEndDate = DateTime(_selectedDate.year, _selectedDate.month + 1, 0);
     _load();
   }
 
@@ -176,24 +182,15 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
     setState(() {
       _loading = true;
       _errorMessage = null;
+      _summaryErrorMessage = null;
     });
     try {
-      final DateTime firstDay = DateTime(
-        _selectedDate.year,
-        _selectedDate.month,
-        1,
-      );
-      final DateTime lastDay = DateTime(
-        _selectedDate.year,
-        _selectedDate.month + 1,
-        0,
-      );
       final List<CourtBooking> bookings = await widget.courtAppService
           .listBookings();
       final CourtSummaryReport summary = await widget.courtAppService
           .getSummaryReport(
-            dateFrom: _formatDate(firstDay),
-            dateTo: _formatDate(lastDay),
+            dateFrom: _formatDate(_reportStartDate),
+            dateTo: _formatDate(_reportEndDate),
           );
       if (!mounted) {
         return;
@@ -202,6 +199,7 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
         _bookings = bookings;
         _summary = summary;
         _loading = false;
+        _loadingSummary = false;
       });
     } catch (error) {
       if (!mounted) {
@@ -209,7 +207,37 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
       }
       setState(() {
         _loading = false;
+        _loadingSummary = false;
         _errorMessage = error.toString().replaceFirst('Bad state: ', '');
+      });
+    }
+  }
+
+  Future<void> _reloadSummary() async {
+    setState(() {
+      _loadingSummary = true;
+      _summaryErrorMessage = null;
+    });
+    try {
+      final CourtSummaryReport summary = await widget.courtAppService
+          .getSummaryReport(
+            dateFrom: _formatDate(_reportStartDate),
+            dateTo: _formatDate(_reportEndDate),
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _summary = summary;
+        _loadingSummary = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadingSummary = false;
+        _summaryErrorMessage = error.toString().replaceFirst('Bad state: ', '');
       });
     }
   }
@@ -243,6 +271,42 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
     if (monthChanged) {
       await _load();
     }
+  }
+
+  Future<void> _pickReportStartDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _reportStartDate,
+      firstDate: DateTime(_selectedDate.year - 2, 1, 1),
+      lastDate: DateTime(_selectedDate.year + 2, 12, 31),
+    );
+    if (picked == null) {
+      return;
+    }
+    setState(() {
+      _reportStartDate = DateTime(picked.year, picked.month, picked.day);
+      if (_reportStartDate.isAfter(_reportEndDate)) {
+        _reportEndDate = _reportStartDate;
+      }
+    });
+  }
+
+  Future<void> _pickReportEndDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _reportEndDate,
+      firstDate: DateTime(_selectedDate.year - 2, 1, 1),
+      lastDate: DateTime(_selectedDate.year + 2, 12, 31),
+    );
+    if (picked == null) {
+      return;
+    }
+    setState(() {
+      _reportEndDate = DateTime(picked.year, picked.month, picked.day);
+      if (_reportEndDate.isBefore(_reportStartDate)) {
+        _reportStartDate = _reportEndDate;
+      }
+    });
   }
 
   Widget _buildSelectedDayCard(BuildContext context) {
@@ -446,6 +510,8 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
 
   Widget _buildSummaryCard(BuildContext context) {
     final CourtSummaryReport? summary = _summary;
+    final List<_PartnerCoachSummaryRow> partnerCoachRows =
+        _buildPartnerCoachSummaryRows();
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -456,14 +522,44 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
               'Resumo do mes',
               style: Theme.of(context).textTheme.headlineSmall,
             ),
-            const SizedBox(height: 6),
-            Text(
-              'Consolidado operativo do mes selecionado, com mix de clientes e valores esperados.',
-              style: Theme.of(context).textTheme.bodyMedium,
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: <Widget>[
+                OutlinedButton.icon(
+                  onPressed: _loadingSummary ? null : _pickReportStartDate,
+                  icon: const Icon(Icons.date_range_rounded),
+                  label: Text('Inicio: ${_formatShortDate(_reportStartDate)}'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _loadingSummary ? null : _pickReportEndDate,
+                  icon: const Icon(Icons.event_rounded),
+                  label: Text('Fim: ${_formatShortDate(_reportEndDate)}'),
+                ),
+                FilledButton.icon(
+                  onPressed: _loadingSummary ? null : _reloadSummary,
+                  icon: const Icon(Icons.refresh_rounded),
+                  label: Text(_loadingSummary ? 'Buscando...' : 'Buscar'),
+                ),
+              ],
             ),
             const SizedBox(height: 18),
+            if (_summaryErrorMessage != null) ...<Widget>[
+              Text(
+                _summaryErrorMessage!,
+                style: TextStyle(color: Colors.red.shade700),
+              ),
+              const SizedBox(height: 12),
+            ],
             if (summary == null)
               const Text('Resumo indisponivel.')
+            else if (_loadingSummary)
+              const Padding(
+                padding: EdgeInsets.symmetric(vertical: 12),
+                child: LinearProgressIndicator(),
+              )
             else
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -473,10 +569,13 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
                     runSpacing: 14,
                     children: <Widget>[
                       _MetricCard(
-                        title: _courtMonthLabels[_selectedDate.month - 1],
+                        title: _formatReportRangeLabel(
+                          _reportStartDate,
+                          _reportEndDate,
+                        ),
                         value: '${summary.scheduledCount} reservas ativas',
                         caption: summary.cancelledCount == 0
-                            ? 'Sem cancelamentos no mes'
+                            ? 'Sem cancelamentos no periodo'
                             : '${summary.cancelledCount} canceladas no historico',
                         icon: Icons.calendar_view_month_rounded,
                       ),
@@ -565,6 +664,8 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
                     items: summary.paymentMethodBreakdown,
                     hidePendingColumn: true,
                   ),
+                  const SizedBox(height: 18),
+                  _buildPartnerCoachBreakdownSection(context, partnerCoachRows),
                 ],
               ),
           ],
@@ -636,6 +737,117 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
         ],
       ),
     );
+  }
+
+  Widget _buildPartnerCoachBreakdownSection(
+    BuildContext context,
+    List<_PartnerCoachSummaryRow> items,
+  ) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCFCFB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Professores parceiros por nome',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Separacao de uso de quadra, horas e valores por professor parceiro no periodo consultado.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 14),
+          if (items.isEmpty)
+            const Text(
+              'Nenhum professor parceiro possui reservas ativas no periodo informado.',
+            )
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                columnSpacing: 16,
+                horizontalMargin: 12,
+                columns: const <DataColumn>[
+                  DataColumn(label: Text('Professor')),
+                  DataColumn(label: Text('Reservas')),
+                  DataColumn(label: Text('Pagas')),
+                  DataColumn(label: Text('Pendentes')),
+                  DataColumn(label: Text('Horas')),
+                  DataColumn(label: Text('Quadra')),
+                  DataColumn(label: Text('Materiais')),
+                  DataColumn(label: Text('Total')),
+                ],
+                rows: items.map((_PartnerCoachSummaryRow item) {
+                  return DataRow(
+                    cells: <DataCell>[
+                      DataCell(
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(minWidth: 180),
+                          child: Text(item.name),
+                        ),
+                      ),
+                      DataCell(Text('${item.scheduledCount}')),
+                      DataCell(Text('${item.paidCount}')),
+                      DataCell(Text('${item.pendingCount}')),
+                      DataCell(Text('${item.totalHours.toStringAsFixed(1)} h')),
+                      DataCell(Text(_formatCurrency(item.courtAmount))),
+                      DataCell(Text(_formatCurrency(item.materialsAmount))),
+                      DataCell(Text(_formatCurrency(item.totalAmount))),
+                    ],
+                  );
+                }).toList(),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<_PartnerCoachSummaryRow> _buildPartnerCoachSummaryRows() {
+    final Map<String, _PartnerCoachSummaryAccumulator> rowsByName =
+        <String, _PartnerCoachSummaryAccumulator>{};
+    for (final CourtBooking booking in _bookings) {
+      if (booking.customerType != CourtCustomerType.partnerCoach ||
+          booking.status != CourtBookingStatus.scheduled ||
+          !_isWithinReportPeriod(booking.bookingDate)) {
+        continue;
+      }
+      final String key = booking.customerName.trim().isEmpty
+          ? 'Professor sem nome'
+          : booking.customerName.trim();
+      final _PartnerCoachSummaryAccumulator accumulator = rowsByName
+          .putIfAbsent(key, () => _PartnerCoachSummaryAccumulator(name: key));
+      accumulator
+        ..scheduledCount += 1
+        ..paidCount += booking.paid ? 1 : 0
+        ..pendingCount += booking.paid ? 0 : 1
+        ..totalHours += booking.durationHours
+        ..courtAmount += booking.courtAmount
+        ..materialsAmount += booking.materialsAmount
+        ..totalAmount += booking.totalAmount;
+    }
+    final List<_PartnerCoachSummaryRow> rows =
+        rowsByName.values
+            .map((_PartnerCoachSummaryAccumulator item) => item.build())
+            .toList()
+          ..sort(
+            (_PartnerCoachSummaryRow a, _PartnerCoachSummaryRow b) =>
+                a.name.toLowerCase().compareTo(b.name.toLowerCase()),
+          );
+    return rows;
+  }
+
+  bool _isWithinReportPeriod(DateTime date) {
+    final DateTime normalized = DateTime(date.year, date.month, date.day);
+    return !normalized.isBefore(_reportStartDate) &&
+        !normalized.isAfter(_reportEndDate);
   }
 
   List<_CalendarCell> _buildCalendarCells() {
@@ -1262,6 +1474,54 @@ class _CalendarCell {
   const _CalendarCell.empty() : date = null;
 
   final DateTime? date;
+}
+
+class _PartnerCoachSummaryRow {
+  const _PartnerCoachSummaryRow({
+    required this.name,
+    required this.scheduledCount,
+    required this.paidCount,
+    required this.pendingCount,
+    required this.totalHours,
+    required this.courtAmount,
+    required this.materialsAmount,
+    required this.totalAmount,
+  });
+
+  final String name;
+  final int scheduledCount;
+  final int paidCount;
+  final int pendingCount;
+  final double totalHours;
+  final double courtAmount;
+  final double materialsAmount;
+  final double totalAmount;
+}
+
+class _PartnerCoachSummaryAccumulator {
+  _PartnerCoachSummaryAccumulator({required this.name});
+
+  final String name;
+  int scheduledCount = 0;
+  int paidCount = 0;
+  int pendingCount = 0;
+  double totalHours = 0;
+  double courtAmount = 0;
+  double materialsAmount = 0;
+  double totalAmount = 0;
+
+  _PartnerCoachSummaryRow build() {
+    return _PartnerCoachSummaryRow(
+      name: name,
+      scheduledCount: scheduledCount,
+      paidCount: paidCount,
+      pendingCount: pendingCount,
+      totalHours: totalHours,
+      courtAmount: courtAmount,
+      materialsAmount: materialsAmount,
+      totalAmount: totalAmount,
+    );
+  }
 }
 
 class _CourtBookingDialog extends StatefulWidget {
@@ -2464,6 +2724,13 @@ String _formatShortDate(DateTime value) {
   final String month = value.month.toString().padLeft(2, '0');
   final String day = value.day.toString().padLeft(2, '0');
   return '$day/$month/${value.year}';
+}
+
+String _formatReportRangeLabel(DateTime start, DateTime end) {
+  if (_sameDay(start, end)) {
+    return _formatShortDate(start);
+  }
+  return '${_formatShortDate(start)} a ${_formatShortDate(end)}';
 }
 
 DateTime _todayDate() {
