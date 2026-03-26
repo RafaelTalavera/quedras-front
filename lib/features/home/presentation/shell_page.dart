@@ -15,6 +15,10 @@ import '../../settings/presentation/settings_page.dart';
 import '../../tennis/presentation/tennis_rental_page.dart';
 import '../../tours/presentation/tours_travel_page.dart';
 
+const double _desktopSidebarWidth = 302;
+const double _desktopSidebarCompactHeight = 880;
+const double _desktopSidebarTightHeight = 760;
+
 class ShellPage extends StatefulWidget {
   const ShellPage({
     required this.section,
@@ -37,12 +41,27 @@ class ShellPage extends StatefulWidget {
 
 class _ShellPageState extends State<ShellPage> {
   late AppSection _selectedSection;
+  late final TennisRentalPageController _tennisRentalPageController;
+  late final Widget _massageBookingPage;
+  late final Widget _tennisRentalPage;
+  late final Widget _toursTravelPage;
   bool _redirectingToLogin = false;
+  TennisRentalSection _selectedTennisSection = TennisRentalSection.selectedDay;
 
   @override
   void initState() {
     super.initState();
     _selectedSection = widget.section;
+    _tennisRentalPageController = TennisRentalPageController();
+    _massageBookingPage = MassageBookingPage(
+      massageAppService: widget.massageAppService,
+    );
+    _tennisRentalPage = TennisRentalPage(
+      courtAppService: widget.courtAppService,
+      controller: _tennisRentalPageController,
+      onSectionChanged: _handleTennisSectionChanged,
+    );
+    _toursTravelPage = const SingleChildScrollView(child: ToursTravelPage());
     widget.sessionController.addListener(_handleSessionChanged);
   }
 
@@ -113,6 +132,8 @@ class _ShellPageState extends State<ShellPage> {
                       section: _selectedSection,
                       session: session,
                       onSectionSelected: _goToSection,
+                      tennisSection: _selectedTennisSection,
+                      onTennisSectionSelected: _goToTennisSection,
                       onLogout: _logout,
                       content: content,
                     )
@@ -120,6 +141,8 @@ class _ShellPageState extends State<ShellPage> {
                       section: _selectedSection,
                       session: session,
                       onSectionSelected: _goToSection,
+                      tennisSection: _selectedTennisSection,
+                      onTennisSectionSelected: _goToTennisSection,
                       onLogout: _logout,
                       content: content,
                     ),
@@ -131,16 +154,17 @@ class _ShellPageState extends State<ShellPage> {
   }
 
   Widget _buildContent() {
-    switch (_selectedSection) {
-      case AppSection.massageBooking:
-        return MassageBookingPage(massageAppService: widget.massageAppService);
-      case AppSection.tennisRental:
-        return TennisRentalPage(courtAppService: widget.courtAppService);
-      case AppSection.toursTravel:
-        return const ToursTravelPage();
-      case AppSection.settings:
-        return SettingsPage(session: widget.sessionController.session);
-    }
+    return IndexedStack(
+      index: _selectedSection.index,
+      children: <Widget>[
+        _massageBookingPage,
+        _tennisRentalPage,
+        _toursTravelPage,
+        SingleChildScrollView(
+          child: SettingsPage(session: widget.sessionController.session),
+        ),
+      ],
+    );
   }
 
   void _goToSection(AppSection section) {
@@ -151,14 +175,37 @@ class _ShellPageState extends State<ShellPage> {
     setState(() {
       _selectedSection = section;
     });
+  }
 
-    Navigator.of(
-      context,
-    ).pushReplacementNamed(AppRoutes.routeBySection(section));
+  Future<void> _goToTennisSection(TennisRentalSection section) async {
+    if (_selectedSection != AppSection.tennisRental) {
+      setState(() {
+        _selectedSection = AppSection.tennisRental;
+        _selectedTennisSection = section;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _tennisRentalPageController.scrollToSection(section);
+      });
+      return;
+    }
+
+    setState(() {
+      _selectedTennisSection = section;
+    });
+    await _tennisRentalPageController.scrollToSection(section);
   }
 
   void _logout() {
     widget.sessionController.clearSession();
+  }
+
+  void _handleTennisSectionChanged(TennisRentalSection section) {
+    if (!mounted || _selectedTennisSection == section) {
+      return;
+    }
+    setState(() {
+      _selectedTennisSection = section;
+    });
   }
 
   void _handleSessionChanged() {
@@ -180,6 +227,8 @@ class _DesktopShell extends StatelessWidget {
     required this.section,
     required this.session,
     required this.onSectionSelected,
+    required this.tennisSection,
+    required this.onTennisSectionSelected,
     required this.onLogout,
     required this.content,
   });
@@ -187,6 +236,8 @@ class _DesktopShell extends StatelessWidget {
   final AppSection section;
   final AuthSession? session;
   final ValueChanged<AppSection> onSectionSelected;
+  final TennisRentalSection tennisSection;
+  final ValueChanged<TennisRentalSection> onTennisSectionSelected;
   final VoidCallback onLogout;
   final Widget content;
 
@@ -197,11 +248,13 @@ class _DesktopShell extends StatelessWidget {
       child: Row(
         children: <Widget>[
           _GlassPanel(
-            width: 302,
+            width: _desktopSidebarWidth,
             child: _NavigationPanel(
               section: section,
               session: session,
               onSectionSelected: onSectionSelected,
+              tennisSection: tennisSection,
+              onTennisSectionSelected: onTennisSectionSelected,
               onLogout: onLogout,
             ),
           ),
@@ -209,15 +262,7 @@ class _DesktopShell extends StatelessWidget {
           Expanded(
             child: _GlassPanel(
               padding: const EdgeInsets.all(26),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 260),
-                switchInCurve: Curves.easeOutCubic,
-                switchOutCurve: Curves.easeInCubic,
-                child: KeyedSubtree(
-                  key: ValueKey<AppSection>(section),
-                  child: content,
-                ),
-              ),
+              child: content,
             ),
           ),
         ],
@@ -231,6 +276,8 @@ class _CompactShell extends StatelessWidget {
     required this.section,
     required this.session,
     required this.onSectionSelected,
+    required this.tennisSection,
+    required this.onTennisSectionSelected,
     required this.onLogout,
     required this.content,
   });
@@ -238,6 +285,8 @@ class _CompactShell extends StatelessWidget {
   final AppSection section;
   final AuthSession? session;
   final ValueChanged<AppSection> onSectionSelected;
+  final TennisRentalSection tennisSection;
+  final ValueChanged<TennisRentalSection> onTennisSectionSelected;
   final VoidCallback onLogout;
   final Widget content;
 
@@ -251,19 +300,15 @@ class _CompactShell extends StatelessWidget {
             section: section,
             session: session,
             onSectionSelected: onSectionSelected,
+            tennisSection: tennisSection,
+            onTennisSectionSelected: onTennisSectionSelected,
             onLogout: onLogout,
           ),
           const SizedBox(height: 12),
           Expanded(
             child: _GlassPanel(
               padding: const EdgeInsets.all(18),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 220),
-                child: KeyedSubtree(
-                  key: ValueKey<AppSection>(section),
-                  child: SingleChildScrollView(child: content),
-                ),
-              ),
+              child: content,
             ),
           ),
         ],
@@ -312,70 +357,195 @@ class _NavigationPanel extends StatelessWidget {
     required this.section,
     required this.session,
     required this.onSectionSelected,
+    required this.tennisSection,
+    required this.onTennisSectionSelected,
     required this.onLogout,
   });
 
   final AppSection section;
   final AuthSession? session;
   final ValueChanged<AppSection> onSectionSelected;
+  final TennisRentalSection tennisSection;
+  final ValueChanged<TennisRentalSection> onTennisSectionSelected;
   final VoidCallback onLogout;
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: <Widget>[
-        const Padding(
-          padding: EdgeInsets.fromLTRB(18, 24, 18, 18),
-          child: _BrandHeader(),
-        ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 0, 18, 18),
-          child: _SessionCard(session: session),
-        ),
-        Expanded(
-          child: NavigationRail(
-            selectedIndex: section.index,
-            minExtendedWidth: 236,
-            extended: true,
-            onDestinationSelected: (int index) {
-              onSectionSelected(AppSection.values[index]);
-            },
-            destinations: const <NavigationRailDestination>[
-              NavigationRailDestination(
-                icon: Icon(Icons.spa_outlined),
-                selectedIcon: Icon(Icons.spa_rounded),
-                label: Text('Massagens'),
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool compactHeader =
+            constraints.maxHeight < _desktopSidebarCompactHeight;
+        final bool tightSidebar =
+            constraints.maxHeight < _desktopSidebarTightHeight;
+        final EdgeInsets headerPadding = EdgeInsets.fromLTRB(
+          18,
+          compactHeader ? 18 : 24,
+          18,
+          compactHeader ? 14 : 18,
+        );
+        final EdgeInsets sessionPadding = EdgeInsets.fromLTRB(
+          18,
+          0,
+          18,
+          tightSidebar ? 12 : 18,
+        );
+        final EdgeInsets logoutPadding = EdgeInsets.fromLTRB(
+          18,
+          0,
+          18,
+          tightSidebar ? 18 : 22,
+        );
+
+        return Column(
+          children: <Widget>[
+            Padding(
+              padding: headerPadding,
+              child: _BrandHeader(compact: compactHeader),
+            ),
+            Padding(
+              padding: sessionPadding,
+              child: _SessionCard(
+                session: session,
+                compact: compactHeader,
+                showStatusPill: !tightSidebar,
               ),
-              NavigationRailDestination(
-                icon: Icon(Icons.sports_tennis_outlined),
-                selectedIcon: Icon(Icons.sports_tennis_rounded),
-                label: Text('Quadras'),
+            ),
+            if (section == AppSection.tennisRental)
+              Padding(
+                padding: EdgeInsets.fromLTRB(18, 0, 18, tightSidebar ? 12 : 14),
+                child: _TennisSectionMenu(
+                  selectedSection: tennisSection,
+                  onSelected: onTennisSectionSelected,
+                  compact: compactHeader,
+                  showDescription: !tightSidebar,
+                ),
               ),
-              NavigationRailDestination(
-                icon: Icon(Icons.explore_outlined),
-                selectedIcon: Icon(Icons.explore_rounded),
-                label: Text('Tours e viagens'),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 18),
+                child: _DesktopSectionList(
+                  section: section,
+                  onSectionSelected: onSectionSelected,
+                ),
               ),
-              NavigationRailDestination(
-                icon: Icon(Icons.tune_outlined),
-                selectedIcon: Icon(Icons.tune_rounded),
-                label: Text('Configuracoes'),
+            ),
+            Padding(
+              padding: logoutPadding,
+              child: SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: onLogout,
+                  icon: const Icon(Icons.logout_rounded),
+                  label: const Text('Sair'),
+                ),
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+class _DesktopSectionList extends StatelessWidget {
+  const _DesktopSectionList({
+    required this.section,
+    required this.onSectionSelected,
+  });
+
+  final AppSection section;
+  final ValueChanged<AppSection> onSectionSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView.separated(
+      padding: const EdgeInsets.only(top: 6, bottom: 8),
+      itemCount: AppSection.values.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (BuildContext context, int index) {
+        final AppSection item = AppSection.values[index];
+        final bool selected = item == section;
+        return _DesktopSectionButton(
+          label: _labelForSection(item),
+          icon: _iconForSection(item),
+          selected: selected,
+          onTap: () => onSectionSelected(item),
+        );
+      },
+    );
+  }
+}
+
+class _DesktopSectionButton extends StatelessWidget {
+  const _DesktopSectionButton({
+    required this.label,
+    required this.icon,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final IconData icon;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(20),
+        onTap: onTap,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(20),
+            color: selected
+                ? CostaNorteBrand.gold.withValues(alpha: 0.18)
+                : Colors.white.withValues(alpha: 0.72),
+            border: Border.all(
+              color: selected
+                  ? CostaNorteBrand.goldDeep.withValues(alpha: 0.24)
+                  : CostaNorteBrand.line,
+            ),
+          ),
+          child: Row(
+            children: <Widget>[
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(14),
+                  color: selected
+                      ? CostaNorteBrand.royalBlue
+                      : CostaNorteBrand.mist,
+                ),
+                child: Icon(
+                  icon,
+                  size: 20,
+                  color: selected
+                      ? Colors.white
+                      : CostaNorteBrand.royalBlueDeep,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  label,
+                  style: textTheme.labelLarge?.copyWith(
+                    color: selected
+                        ? CostaNorteBrand.royalBlueNight
+                        : CostaNorteBrand.ink,
+                  ),
+                ),
               ),
             ],
           ),
         ),
-        Padding(
-          padding: const EdgeInsets.fromLTRB(18, 0, 18, 22),
-          child: SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: onLogout,
-              icon: const Icon(Icons.logout_rounded),
-              label: const Text('Sair'),
-            ),
-          ),
-        ),
-      ],
+      ),
     );
   }
 }
@@ -385,12 +555,16 @@ class _CompactTopBar extends StatelessWidget {
     required this.section,
     required this.session,
     required this.onSectionSelected,
+    required this.tennisSection,
+    required this.onTennisSectionSelected,
     required this.onLogout,
   });
 
   final AppSection section;
   final AuthSession? session;
   final ValueChanged<AppSection> onSectionSelected;
+  final TennisRentalSection tennisSection;
+  final ValueChanged<TennisRentalSection> onTennisSectionSelected;
   final VoidCallback onLogout;
 
   @override
@@ -440,6 +614,123 @@ class _CompactTopBar extends StatelessWidget {
               );
             }).toList(),
           ),
+          if (section == AppSection.tennisRental) ...<Widget>[
+            const SizedBox(height: 10),
+            _TennisSectionMenu(
+              selectedSection: tennisSection,
+              onSelected: onTennisSectionSelected,
+              compact: true,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _TennisSectionMenu extends StatelessWidget {
+  const _TennisSectionMenu({
+    required this.selectedSection,
+    required this.onSelected,
+    this.compact = false,
+    this.showDescription = true,
+  });
+
+  final TennisRentalSection selectedSection;
+  final ValueChanged<TennisRentalSection> onSelected;
+  final bool compact;
+  final bool showDescription;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final BorderRadius borderRadius = BorderRadius.circular(compact ? 18 : 20);
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 12 : 14),
+      decoration: BoxDecoration(
+        borderRadius: borderRadius,
+        color: CostaNorteBrand.mist,
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Menu de quadras',
+            style: textTheme.titleSmall?.copyWith(
+              color: CostaNorteBrand.royalBlueDeep,
+            ),
+          ),
+          if (showDescription) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(
+              'Acesso rapido a cada bloco da operacao.',
+              style: textTheme.bodySmall,
+            ),
+          ],
+          SizedBox(height: showDescription ? 12 : 10),
+          ...TennisRentalSection.values.map((TennisRentalSection item) {
+            final bool selected = item == selectedSection;
+            return Padding(
+              padding: EdgeInsets.only(bottom: compact ? 6 : 8),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => onSelected(item),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compact ? 10 : 12,
+                      vertical: compact ? 10 : 12,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      color: selected
+                          ? CostaNorteBrand.foam
+                          : Colors.white.withValues(alpha: 0.72),
+                      border: Border.all(
+                        color: selected
+                            ? CostaNorteBrand.royalBlue.withValues(alpha: 0.22)
+                            : CostaNorteBrand.line,
+                      ),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Icon(
+                          _iconForTennisSection(item),
+                          size: 18,
+                          color: selected
+                              ? CostaNorteBrand.royalBlueDeep
+                              : CostaNorteBrand.mutedInk,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _labelForTennisSection(item),
+                            style: textTheme.labelLarge?.copyWith(
+                              color: selected
+                                  ? CostaNorteBrand.royalBlueDeep
+                                  : CostaNorteBrand.ink,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_outward_rounded,
+                          size: 18,
+                          color: selected
+                              ? CostaNorteBrand.royalBlueDeep
+                              : CostaNorteBrand.mutedInk,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
         ],
       ),
     );
@@ -447,10 +738,15 @@ class _CompactTopBar extends StatelessWidget {
 }
 
 class _SessionCard extends StatelessWidget {
-  const _SessionCard({required this.session, this.compact = false});
+  const _SessionCard({
+    required this.session,
+    this.compact = false,
+    this.showStatusPill = true,
+  });
 
   final AuthSession? session;
   final bool compact;
+  final bool showStatusPill;
 
   @override
   Widget build(BuildContext context) {
@@ -463,9 +759,12 @@ class _SessionCard extends StatelessWidget {
 
     return Container(
       width: double.infinity,
-      padding: EdgeInsets.all(compact ? 12 : 14),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 4 : 5,
+        vertical: compact ? 3 : 4,
+      ),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(12),
         color: CostaNorteBrand.foam,
         border: Border.all(color: CostaNorteBrand.line),
       ),
@@ -474,21 +773,25 @@ class _SessionCard extends StatelessWidget {
         children: <Widget>[
           Text(
             'Sessao ativa',
-            style: textTheme.labelLarge?.copyWith(
+            style: textTheme.labelMedium?.copyWith(
               color: CostaNorteBrand.mutedInk,
+              fontSize: 8,
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 0.5),
           Text(
             activeSession.username,
-            style: textTheme.titleLarge?.copyWith(color: CostaNorteBrand.ink),
+            style: textTheme.titleSmall?.copyWith(
+              color: CostaNorteBrand.ink,
+              fontSize: 12,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
-          const SizedBox(height: 8),
-          const Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[_SessionPill(label: 'Acesso autorizado')],
-          ),
+          if (showStatusPill) ...<Widget>[
+            const SizedBox(height: 1),
+            const _SessionPill(label: 'Acesso autorizado', compact: true),
+          ],
         ],
       ),
     );
@@ -496,23 +799,28 @@ class _SessionCard extends StatelessWidget {
 }
 
 class _SessionPill extends StatelessWidget {
-  const _SessionPill({required this.label});
+  const _SessionPill({required this.label, this.compact = false});
 
   final String label;
+  final bool compact;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      padding: EdgeInsets.symmetric(
+        horizontal: compact ? 5 : 10,
+        vertical: compact ? 2 : 6,
+      ),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
         gradient: CostaNorteBrand.goldAccentGradient,
       ),
       child: Text(
         label,
-        style: Theme.of(
-          context,
-        ).textTheme.labelMedium?.copyWith(color: CostaNorteBrand.charcoal),
+        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+          color: CostaNorteBrand.charcoal,
+          fontSize: compact ? 8 : null,
+        ),
       ),
     );
   }
@@ -525,8 +833,6 @@ class _BrandHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final TextTheme textTheme = Theme.of(context).textTheme;
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
@@ -559,25 +865,6 @@ class _BrandHeader extends StatelessWidget {
             alignment: Alignment.centerLeft,
             child: CostaNorteLogo(width: compact ? 138 : 184),
           ),
-        ),
-        const SizedBox(height: 14),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(999),
-            color: CostaNorteBrand.gold.withValues(alpha: 0.18),
-          ),
-          child: Text(
-            'Hotel Costa Norte',
-            style: textTheme.labelMedium?.copyWith(
-              color: CostaNorteBrand.charcoal,
-            ),
-          ),
-        ),
-        const SizedBox(height: 10),
-        Text(
-          'Servicos internos do hotel',
-          style: textTheme.bodySmall?.copyWith(color: CostaNorteBrand.mutedInk),
         ),
       ],
     );
@@ -630,5 +917,27 @@ IconData _iconForSection(AppSection section) {
       return Icons.explore_rounded;
     case AppSection.settings:
       return Icons.tune_rounded;
+  }
+}
+
+String _labelForTennisSection(TennisRentalSection section) {
+  switch (section) {
+    case TennisRentalSection.selectedDay:
+      return 'Dia selecionado';
+    case TennisRentalSection.monthlyAgenda:
+      return 'Agenda mensal';
+    case TennisRentalSection.summary:
+      return 'Resumo do periodo';
+  }
+}
+
+IconData _iconForTennisSection(TennisRentalSection section) {
+  switch (section) {
+    case TennisRentalSection.selectedDay:
+      return Icons.today_rounded;
+    case TennisRentalSection.monthlyAgenda:
+      return Icons.calendar_month_rounded;
+    case TennisRentalSection.summary:
+      return Icons.analytics_rounded;
   }
 }

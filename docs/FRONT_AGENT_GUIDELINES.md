@@ -54,6 +54,7 @@
 - Cuando el usuario indique que un layout, flujo o patron queda cerrado como estandar del sistema, el agente debe tratarlo como base congelada.
 - El agente no debe modificar un patron cerrado salvo pedido explicito del usuario.
 - Los calendarios del sistema deben seguir el documento `docs/CALENDAR_LAYOUT_STANDARD.md`.
+- Los sidebars desktop del shell deben seguir el documento `docs/SIDEBAR_LAYOUT_STANDARD.md`.
 
 ## Prioridad de esta guia
 - Esta guia aplica a cualquier intervencion del agente sobre frontend dentro de este repositorio.

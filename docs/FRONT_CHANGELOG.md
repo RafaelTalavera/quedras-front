@@ -1,5 +1,22 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-03-26 | Post Hito 12 | Sidebar desktop de Quadras con navegacion interna y compactacion operativa
+- Componente afectado: Frontend (`Shell` + `Quadras`) + documentacion UI
+- Archivos tocados:
+  - `lib/features/home/presentation/shell_page.dart`
+  - `lib/features/tennis/presentation/tennis_rental_page.dart`
+  - `docs/INTERNAL_NAVIGATION_STANDARD.md`
+  - `docs/SIDEBAR_LAYOUT_STANDARD.md`
+  - `docs/FRONT_AGENT_GUIDELINES.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: agregar acceso interno desde el sidebar izquierdo a los bloques de `Quadras`, corregir desbordes verticales del panel y cerrar una version mas compacta del bloque institucional y de sesion.
+- Impacto funcional:
+  - `Quadras` ahora expone accesos directos a `Dia selecionado`, `Agenda mensal` y `Resumo do periodo`
+  - el shell conserva estado y scroll de la pantalla usando navegacion interna sin recrear la seccion
+  - el sidebar desktop elimina textos institucionales redundantes bajo el logo
+  - `Sessao ativa` queda en una version visual mucho mas compacta para liberar altura util
+  - el criterio de layout del sidebar queda documentado para futuras iteraciones
+
 ## 2026-03-26 | Post Hito 12 | Selector directo de fecha en el detalle diario de Quadras
 - Componente afectado: Frontend (`Quadras`) + documentacion funcional
 - Archivos tocados:

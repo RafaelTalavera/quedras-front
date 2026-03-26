@@ -65,16 +65,47 @@ const List<String> _courtTimeSlots = <String>[
   '22:00',
 ];
 
+enum TennisRentalSection { selectedDay, monthlyAgenda, summary }
+
+class TennisRentalPageController {
+  _TennisRentalPageState? _state;
+
+  Future<void> scrollToSection(TennisRentalSection section) async {
+    await _state?._scrollToSection(section);
+  }
+
+  void _attach(_TennisRentalPageState state) {
+    _state = state;
+  }
+
+  void _detach(_TennisRentalPageState state) {
+    if (identical(_state, state)) {
+      _state = null;
+    }
+  }
+}
+
 class TennisRentalPage extends StatefulWidget {
-  const TennisRentalPage({required this.courtAppService, super.key});
+  const TennisRentalPage({
+    required this.courtAppService,
+    this.controller,
+    this.onSectionChanged,
+    super.key,
+  });
 
   final CourtAppService courtAppService;
+  final TennisRentalPageController? controller;
+  final ValueChanged<TennisRentalSection>? onSectionChanged;
 
   @override
   State<TennisRentalPage> createState() => _TennisRentalPageState();
 }
 
 class _TennisRentalPageState extends State<TennisRentalPage> {
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _selectedDaySectionKey = GlobalKey();
+  final GlobalKey _monthlyAgendaSectionKey = GlobalKey();
+  final GlobalKey _summarySectionKey = GlobalKey();
   late DateTime _selectedDate;
   late DateTime _reportStartDate;
   late DateTime _reportEndDate;
@@ -86,14 +117,40 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
   String? _selectedSummaryDetailKey;
   List<CourtBooking> _bookings = <CourtBooking>[];
   CourtSummaryReport? _summary;
+  TennisRentalSection _currentSection = TennisRentalSection.selectedDay;
 
   @override
   void initState() {
     super.initState();
+    widget.controller?._attach(this);
+    _scrollController.addListener(_handleScroll);
     _selectedDate = DateTime.now();
     _reportStartDate = DateTime(_selectedDate.year, _selectedDate.month, 1);
     _reportEndDate = DateTime(_selectedDate.year, _selectedDate.month + 1, 0);
     _load();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _notifyCurrentSection();
+      }
+    });
+  }
+
+  @override
+  void didUpdateWidget(covariant TennisRentalPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.controller != widget.controller) {
+      oldWidget.controller?._detach(this);
+      widget.controller?._attach(this);
+    }
+  }
+
+  @override
+  void dispose() {
+    widget.controller?._detach(this);
+    _scrollController
+      ..removeListener(_handleScroll)
+      ..dispose();
+    super.dispose();
   }
 
   List<CourtBooking> get _monthBookings =>
@@ -114,6 +171,7 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
+      controller: _scrollController,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
@@ -168,15 +226,102 @@ class _TennisRentalPageState extends State<TennisRentalPage> {
               ),
             )
           else ...<Widget>[
-            _buildSelectedDayCard(context),
+            KeyedSubtree(
+              key: _selectedDaySectionKey,
+              child: _buildSelectedDayCard(context),
+            ),
             const SizedBox(height: 18),
-            _buildCalendarCard(context),
+            KeyedSubtree(
+              key: _monthlyAgendaSectionKey,
+              child: _buildCalendarCard(context),
+            ),
             const SizedBox(height: 18),
-            _buildSummaryCard(context),
+            KeyedSubtree(
+              key: _summarySectionKey,
+              child: _buildSummaryCard(context),
+            ),
           ],
         ],
       ),
     );
+  }
+
+  void _handleScroll() {
+    _notifyCurrentSection();
+  }
+
+  Future<void> _scrollToSection(TennisRentalSection section) async {
+    final BuildContext? targetContext = _sectionKeyFor(section).currentContext;
+    if (targetContext == null) {
+      return;
+    }
+    await Scrollable.ensureVisible(
+      targetContext,
+      duration: const Duration(milliseconds: 320),
+      curve: Curves.easeOutCubic,
+      alignment: 0.02,
+    );
+    _setCurrentSection(section);
+  }
+
+  GlobalKey _sectionKeyFor(TennisRentalSection section) {
+    switch (section) {
+      case TennisRentalSection.selectedDay:
+        return _selectedDaySectionKey;
+      case TennisRentalSection.monthlyAgenda:
+        return _monthlyAgendaSectionKey;
+      case TennisRentalSection.summary:
+        return _summarySectionKey;
+    }
+  }
+
+  void _notifyCurrentSection() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) {
+        return;
+      }
+      _setCurrentSection(_resolveCurrentSection());
+    });
+  }
+
+  TennisRentalSection _resolveCurrentSection() {
+    final Map<TennisRentalSection, GlobalKey> sectionKeys =
+        <TennisRentalSection, GlobalKey>{
+          TennisRentalSection.selectedDay: _selectedDaySectionKey,
+          TennisRentalSection.monthlyAgenda: _monthlyAgendaSectionKey,
+          TennisRentalSection.summary: _summarySectionKey,
+        };
+    const double anchorY = 180;
+    TennisRentalSection bestSection = _currentSection;
+    double? bestDistance;
+
+    for (final MapEntry<TennisRentalSection, GlobalKey> entry
+        in sectionKeys.entries) {
+      final BuildContext? sectionContext = entry.value.currentContext;
+      if (sectionContext == null) {
+        continue;
+      }
+      final RenderObject? renderObject = sectionContext.findRenderObject();
+      if (renderObject is! RenderBox) {
+        continue;
+      }
+      final double sectionTop = renderObject.localToGlobal(Offset.zero).dy;
+      final double distance = (sectionTop - anchorY).abs();
+      if (bestDistance == null || distance < bestDistance) {
+        bestDistance = distance;
+        bestSection = entry.key;
+      }
+    }
+
+    return bestSection;
+  }
+
+  void _setCurrentSection(TennisRentalSection section) {
+    if (_currentSection == section) {
+      return;
+    }
+    _currentSection = section;
+    widget.onSectionChanged?.call(section);
   }
 
   Future<void> _load() async {
