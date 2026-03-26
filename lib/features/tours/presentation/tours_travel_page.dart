@@ -825,6 +825,18 @@ class _ToursTravelPageState extends State<ToursTravelPage> {
             name: draft.name,
             contact: draft.contact,
             defaultCommissionPercent: draft.defaultCommission,
+            offerings: draft.offerings
+                .map(
+                  (_ProviderOfferingDraft item) =>
+                      ToursProviderOfferingInputModel(
+                        serviceType: item.serviceType,
+                        name: item.name,
+                        amount: item.amount,
+                        description: item.description,
+                        active: item.active,
+                      ),
+                )
+                .toList(),
           ),
         ),
         'Falha ao salvar fornecedor',
@@ -837,6 +849,18 @@ class _ToursTravelPageState extends State<ToursTravelPage> {
             name: draft.name,
             contact: draft.contact,
             defaultCommissionPercent: draft.defaultCommission,
+            offerings: draft.offerings
+                .map(
+                  (_ProviderOfferingDraft item) =>
+                      ToursProviderOfferingInputModel(
+                        serviceType: item.serviceType,
+                        name: item.name,
+                        amount: item.amount,
+                        description: item.description,
+                        active: item.active,
+                      ),
+                )
+                .toList(),
             active: draft.active,
           ),
         ),
@@ -1042,6 +1066,16 @@ class _ToursTravelPageState extends State<ToursTravelPage> {
             '${b.providerName} · ${b.guestReference}',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
+          if (b.providerOfferingName != null) ...<Widget>[
+            const SizedBox(height: 4),
+            Text(
+              b.providerOfferingName!,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: CostaNorteBrand.royalBlueDeep,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           if (b.description != null) ...<Widget>[
             const SizedBox(height: 8),
             Text(b.description!, style: Theme.of(context).textTheme.bodyMedium),
@@ -1117,8 +1151,28 @@ class _BookingDialogState extends State<_BookingDialog> {
   late DateTime _endAt;
   late ToursServiceType _serviceType;
   late int _providerId;
+  int? _providerOfferingId;
   bool _paid = false;
   ToursPaymentMethod? _paymentMethod;
+
+  ToursProvider get _selectedProvider => widget.providers.firstWhere(
+    (ToursProvider p) => p.id == _providerId,
+  );
+
+  List<ToursProviderOffering> get _availableOfferings {
+    final ToursBooking? booking = widget.booking;
+    return _selectedProvider.offerings.where((ToursProviderOffering item) {
+      if (item.active) {
+        return true;
+      }
+      return booking != null && booking.providerOfferingId == item.id;
+    }).toList()
+      ..sort(
+        (ToursProviderOffering a, ToursProviderOffering b) => a.name
+            .toLowerCase()
+            .compareTo(b.name.toLowerCase()),
+      );
+  }
 
   @override
   void initState() {
@@ -1140,6 +1194,7 @@ class _BookingDialogState extends State<_BookingDialog> {
     _endAt = booking?.endAt ?? _startAt.add(const Duration(hours: 2));
     _serviceType = booking?.serviceType ?? ToursServiceType.tour;
     _providerId = provider.id;
+    _providerOfferingId = booking?.providerOfferingId;
     _client = TextEditingController(text: booking?.clientName ?? '');
     _reference = TextEditingController(text: booking?.guestReference ?? '');
     _amount = TextEditingController(
@@ -1166,6 +1221,7 @@ class _BookingDialogState extends State<_BookingDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final List<ToursProviderOffering> offerings = _availableOfferings;
     return AlertDialog(
       title: Text(
         widget.booking == null ? 'Novo agendamento' : 'Editar agendamento',
@@ -1219,13 +1275,64 @@ class _BookingDialogState extends State<_BookingDialog> {
                     );
                     setState(() {
                       _providerId = value;
-                      if (widget.booking == null) {
-                        _commission.text = provider.defaultCommissionPercent
-                            .toStringAsFixed(1);
-                      }
+                      _providerOfferingId = null;
+                      _commission.text = provider.defaultCommissionPercent
+                          .toStringAsFixed(1);
                     });
                   },
                 ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<int?>(
+                  value: _providerOfferingId,
+                  decoration: const InputDecoration(
+                    labelText: 'Destino / viagem do fornecedor',
+                    prefixIcon: Icon(Icons.place_rounded),
+                  ),
+                  items: <DropdownMenuItem<int?>>[
+                    const DropdownMenuItem<int?>(
+                      value: null,
+                      child: Text('Informar manualmente'),
+                    ),
+                    ...offerings.map(
+                      (ToursProviderOffering item) => DropdownMenuItem<int?>(
+                        value: item.id,
+                        child: Text(
+                          '${item.name} · ${item.serviceType.label} · ${_money(item.amount)}',
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (int? value) {
+                    setState(() {
+                      _providerOfferingId = value;
+                    });
+                    _applyOffering(value);
+                  },
+                ),
+                if (_providerOfferingId != null) ...<Widget>[
+                  const SizedBox(height: 8),
+                  Builder(
+                    builder: (BuildContext context) {
+                      ToursProviderOffering? selected;
+                      for (final ToursProviderOffering item in offerings) {
+                        if (item.id == _providerOfferingId) {
+                          selected = item;
+                          break;
+                        }
+                      }
+                      if (selected == null) {
+                        return const SizedBox.shrink();
+                      }
+                      return Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          selected.description ?? 'Sem detalhes cadastrados.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      );
+                    },
+                  ),
+                ],
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _client,
@@ -1434,6 +1541,7 @@ class _BookingDialogState extends State<_BookingDialog> {
         clientName: _client.text.trim(),
         guestReference: _reference.text.trim(),
         providerId: _providerId,
+        providerOfferingId: _providerOfferingId,
         amount: _number(_amount.text) ?? 0,
         commissionPercent: _number(_commission.text) ?? 0,
         description: _description.text.trim(),
@@ -1441,6 +1549,27 @@ class _BookingDialogState extends State<_BookingDialog> {
         paymentMethod: _paymentMethod,
       ),
     );
+  }
+
+  void _applyOffering(int? offeringId) {
+    if (offeringId == null) {
+      return;
+    }
+    ToursProviderOffering? selected;
+    for (final ToursProviderOffering item in _availableOfferings) {
+      if (item.id == offeringId) {
+        selected = item;
+        break;
+      }
+    }
+    if (selected == null) {
+      return;
+    }
+    setState(() {
+      _serviceType = selected!.serviceType;
+      _amount.text = selected.amount.toStringAsFixed(0);
+      _description.text = selected.description ?? '';
+    });
   }
 }
 
@@ -1457,8 +1586,16 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   late final TextEditingController _commission = TextEditingController(
     text: '10',
   );
+  late final TextEditingController _offeringName = TextEditingController();
+  late final TextEditingController _offeringAmount = TextEditingController();
+  late final TextEditingController _offeringDescription =
+      TextEditingController();
   int? _selectedId;
   bool _active = true;
+  ToursServiceType _offeringServiceType = ToursServiceType.tour;
+  bool _offeringActive = true;
+  int? _editingOfferingIndex;
+  List<_ProviderOfferingDraft> _offerings = <_ProviderOfferingDraft>[];
 
   ToursProvider? get _selectedProvider {
     for (final ToursProvider provider in widget.providers) {
@@ -1474,6 +1611,9 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     _name.dispose();
     _contact.dispose();
     _commission.dispose();
+    _offeringName.dispose();
+    _offeringAmount.dispose();
+    _offeringDescription.dispose();
     super.dispose();
   }
 
@@ -1483,83 +1623,208 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       title: const Text('Fornecedores'),
       content: SizedBox(
         width: 560,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: <Widget>[
-            DropdownButtonFormField<int?>(
-              value: _selectedId,
-              decoration: const InputDecoration(
-                labelText: 'Fornecedor existente',
-                prefixIcon: Icon(Icons.apartment_rounded),
-              ),
-              items: <DropdownMenuItem<int?>>[
-                const DropdownMenuItem<int?>(
-                  value: null,
-                  child: Text('Novo fornecedor'),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              DropdownButtonFormField<int?>(
+                value: _selectedId,
+                decoration: const InputDecoration(
+                  labelText: 'Fornecedor existente',
+                  prefixIcon: Icon(Icons.apartment_rounded),
                 ),
-                ...widget.providers.map(
-                  (ToursProvider item) => DropdownMenuItem<int?>(
-                    value: item.id,
-                    child: Text(item.name),
+                items: <DropdownMenuItem<int?>>[
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('Novo fornecedor'),
+                  ),
+                  ...widget.providers.map(
+                    (ToursProvider item) => DropdownMenuItem<int?>(
+                      value: item.id,
+                      child: Text(item.name),
+                    ),
+                  ),
+                ],
+                onChanged: _loadProvider,
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _name,
+                decoration: const InputDecoration(
+                  labelText: 'Nome',
+                  prefixIcon: Icon(Icons.badge_rounded),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _contact,
+                decoration: const InputDecoration(
+                  labelText: 'Contato',
+                  prefixIcon: Icon(Icons.phone_rounded),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _commission,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Comissao padrao %',
+                  prefixIcon: Icon(Icons.percent_rounded),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _active,
+                onChanged: _selectedId == null
+                    ? null
+                    : (bool value) => setState(() => _active = value),
+                title: const Text('Fornecedor ativo'),
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Destinos e viagens do fornecedor',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+              const SizedBox(height: 10),
+              if (_offerings.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: CostaNorteBrand.mist,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: CostaNorteBrand.line),
+                  ),
+                  child: Text(
+                    'Cadastre pelo menos um destino, passeio ou traslado para este fornecedor.',
+                  ),
+                )
+              else
+                ...List<Widget>.generate(_offerings.length, (int index) {
+                  final _ProviderOfferingDraft item = _offerings[index];
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: CostaNorteBrand.foam,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: CostaNorteBrand.line),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: <Widget>[
+                          Row(
+                            children: <Widget>[
+                              Expanded(
+                                child: Text(
+                                  item.name,
+                                  style: Theme.of(context).textTheme.titleSmall,
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => _editOffering(index),
+                                child: const Text('Editar'),
+                              ),
+                              TextButton(
+                                onPressed: () => _removeOffering(index),
+                                child: const Text('Excluir'),
+                              ),
+                            ],
+                          ),
+                          Text(
+                            '${item.serviceType.label} · ${_money(item.amount)}${item.active ? '' : ' · Inativo'}',
+                          ),
+                          if (item.description.isNotEmpty) ...<Widget>[
+                            const SizedBox(height: 4),
+                            Text(item.description),
+                          ],
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<ToursServiceType>(
+                value: _offeringServiceType,
+                decoration: const InputDecoration(
+                  labelText: 'Tipo do item',
+                  prefixIcon: Icon(Icons.map_rounded),
+                ),
+                items: ToursServiceType.values
+                    .map(
+                      (ToursServiceType item) =>
+                          DropdownMenuItem<ToursServiceType>(
+                            value: item,
+                            child: Text(item.label),
+                          ),
+                    )
+                    .toList(),
+                onChanged: (ToursServiceType? value) {
+                  if (value != null) {
+                    setState(() => _offeringServiceType = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _offeringName,
+                decoration: const InputDecoration(
+                  labelText: 'Nome do destino ou traslado',
+                  prefixIcon: Icon(Icons.place_rounded),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _offeringAmount,
+                keyboardType: const TextInputType.numberWithOptions(
+                  decimal: true,
+                ),
+                decoration: const InputDecoration(
+                  labelText: 'Valor base',
+                  prefixIcon: Icon(Icons.attach_money_rounded),
+                ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _offeringDescription,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Detalhes',
+                  prefixIcon: Icon(Icons.notes_rounded),
+                  alignLabelWithHint: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _offeringActive,
+                onChanged: (bool value) => setState(() => _offeringActive = value),
+                title: const Text('Item ativo'),
+              ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: FilledButton.tonalIcon(
+                  onPressed: _upsertOffering,
+                  icon: Icon(
+                    _editingOfferingIndex == null
+                        ? Icons.add_rounded
+                        : Icons.check_rounded,
+                  ),
+                  label: Text(
+                    _editingOfferingIndex == null
+                        ? 'Adicionar item'
+                        : 'Atualizar item',
                   ),
                 ),
-              ],
-              onChanged: (int? value) {
-                setState(() {
-                  _selectedId = value;
-                  final ToursProvider? provider = _selectedProvider;
-                  if (provider == null) {
-                    _name.clear();
-                    _contact.clear();
-                    _commission.text = '10';
-                    _active = true;
-                  } else {
-                    _name.text = provider.name;
-                    _contact.text = provider.contact;
-                    _commission.text = provider.defaultCommissionPercent
-                        .toStringAsFixed(1);
-                    _active = provider.active;
-                  }
-                });
-              },
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _name,
-              decoration: const InputDecoration(
-                labelText: 'Nome',
-                prefixIcon: Icon(Icons.badge_rounded),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _contact,
-              decoration: const InputDecoration(
-                labelText: 'Contato',
-                prefixIcon: Icon(Icons.phone_rounded),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _commission,
-              keyboardType: const TextInputType.numberWithOptions(
-                decimal: true,
-              ),
-              decoration: const InputDecoration(
-                labelText: 'Comissao padrao %',
-                prefixIcon: Icon(Icons.percent_rounded),
-              ),
-            ),
-            const SizedBox(height: 12),
-            SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              value: _active,
-              onChanged: _selectedId == null
-                  ? null
-                  : (bool value) => setState(() => _active = value),
-              title: const Text('Fornecedor ativo'),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
       actions: <Widget>[
@@ -1573,11 +1838,13 @@ class _ProviderDialogState extends State<_ProviderDialog> {
             if (_name.text.trim().isEmpty ||
                 _contact.text.trim().isEmpty ||
                 commission == null ||
-                commission < 0) {
+                commission < 0 ||
+                _offerings.isEmpty) {
               AppAlerts.warning(
                 context,
                 title: 'Campos obrigatorios',
-                message: 'Informe nome, contato e comissao valida.',
+                message:
+                    'Informe nome, contato, comissao valida e ao menos um destino ou traslado.',
               );
               return;
             }
@@ -1588,6 +1855,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                 contact: _contact.text.trim(),
                 defaultCommission: commission,
                 active: _selectedId == null ? true : _active,
+                offerings: List<_ProviderOfferingDraft>.from(_offerings),
               ),
             );
           },
@@ -1595,6 +1863,120 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         ),
       ],
     );
+  }
+
+  void _loadProvider(int? value) {
+    setState(() {
+      _selectedId = value;
+      final ToursProvider? provider = _selectedProvider;
+      if (provider == null) {
+        _name.clear();
+        _contact.clear();
+        _commission.text = '10';
+        _active = true;
+        _offerings = <_ProviderOfferingDraft>[];
+      } else {
+        _name.text = provider.name;
+        _contact.text = provider.contact;
+        _commission.text = provider.defaultCommissionPercent.toStringAsFixed(1);
+        _active = provider.active;
+        _offerings = provider.offerings
+            .map(
+              (ToursProviderOffering item) => _ProviderOfferingDraft(
+                serviceType: item.serviceType,
+                name: item.name,
+                amount: item.amount,
+                description: item.description ?? '',
+                active: item.active,
+              ),
+            )
+            .toList();
+      }
+      _clearOfferingEditor();
+    });
+  }
+
+  void _upsertOffering() {
+    final double? amount = _number(_offeringAmount.text);
+    if (_offeringName.text.trim().isEmpty || amount == null || amount < 0) {
+      AppAlerts.warning(
+        context,
+        title: 'Item invalido',
+        message: 'Informe nome e valor valido para o destino ou traslado.',
+      );
+      return;
+    }
+    final _ProviderOfferingDraft draft = _ProviderOfferingDraft(
+      serviceType: _offeringServiceType,
+      name: _offeringName.text.trim(),
+      amount: amount,
+      description: _offeringDescription.text.trim(),
+      active: _offeringActive,
+    );
+    final Iterable<_ProviderOfferingDraft> duplicates = _offerings
+        .asMap()
+        .entries
+        .where(
+          (MapEntry<int, _ProviderOfferingDraft> entry) =>
+              entry.key != _editingOfferingIndex &&
+              entry.value.name.trim().toLowerCase() ==
+                  draft.name.trim().toLowerCase(),
+        )
+        .map((MapEntry<int, _ProviderOfferingDraft> entry) => entry.value);
+    if (duplicates.isNotEmpty) {
+      AppAlerts.warning(
+        context,
+        title: 'Nome duplicado',
+        message: 'Cada fornecedor deve ter nomes de destino/servico unicos.',
+      );
+      return;
+    }
+    setState(() {
+      if (_editingOfferingIndex == null) {
+        _offerings = <_ProviderOfferingDraft>[..._offerings, draft];
+      } else {
+        _offerings[_editingOfferingIndex!] = draft;
+      }
+      _offerings.sort(
+        (_ProviderOfferingDraft a, _ProviderOfferingDraft b) => a.name
+            .toLowerCase()
+            .compareTo(b.name.toLowerCase()),
+      );
+      _clearOfferingEditor();
+    });
+  }
+
+  void _editOffering(int index) {
+    final _ProviderOfferingDraft item = _offerings[index];
+    setState(() {
+      _editingOfferingIndex = index;
+      _offeringServiceType = item.serviceType;
+      _offeringName.text = item.name;
+      _offeringAmount.text = item.amount.toStringAsFixed(0);
+      _offeringDescription.text = item.description;
+      _offeringActive = item.active;
+    });
+  }
+
+  void _removeOffering(int index) {
+    setState(() {
+      _offerings.removeAt(index);
+      if (_editingOfferingIndex == index) {
+        _clearOfferingEditor();
+      } else if (_editingOfferingIndex != null &&
+          _editingOfferingIndex! > index) {
+        _editingOfferingIndex = _editingOfferingIndex! - 1;
+      }
+    });
+  }
+
+  void _clearOfferingEditor() {
+    _editingOfferingIndex = null;
+    _offeringServiceType = ToursServiceType.tour;
+    _offeringName.clear();
+    _offeringAmount.clear();
+    _offeringDescription.clear();
+    _offeringActive = true;
   }
 }
 
@@ -1751,6 +2133,7 @@ class _BookingDraft {
     required this.clientName,
     required this.guestReference,
     required this.providerId,
+    required this.providerOfferingId,
     required this.amount,
     required this.commissionPercent,
     required this.description,
@@ -1763,6 +2146,7 @@ class _BookingDraft {
   final String clientName;
   final String guestReference;
   final int providerId;
+  final int? providerOfferingId;
   final double amount;
   final double commissionPercent;
   final String description;
@@ -1775,6 +2159,7 @@ class _BookingDraft {
     clientName: clientName,
     guestReference: guestReference,
     providerId: providerId,
+    providerOfferingId: providerOfferingId,
     amount: amount,
     commissionPercent: commissionPercent,
     description: description,
@@ -1790,6 +2175,7 @@ class _BookingDraft {
     clientName: clientName,
     guestReference: guestReference,
     providerId: providerId,
+    providerOfferingId: providerOfferingId,
     amount: amount,
     commissionPercent: commissionPercent,
     description: description,
@@ -1807,11 +2193,29 @@ class _ProviderDraft {
     required this.contact,
     required this.defaultCommission,
     required this.active,
+    required this.offerings,
   });
   final int? id;
   final String name;
   final String contact;
   final double defaultCommission;
+  final bool active;
+  final List<_ProviderOfferingDraft> offerings;
+}
+
+class _ProviderOfferingDraft {
+  const _ProviderOfferingDraft({
+    required this.serviceType,
+    required this.name,
+    required this.amount,
+    required this.description,
+    required this.active,
+  });
+
+  final ToursServiceType serviceType;
+  final String name;
+  final double amount;
+  final String description;
   final bool active;
 }
 

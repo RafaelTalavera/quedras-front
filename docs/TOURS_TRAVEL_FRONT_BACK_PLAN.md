@@ -4,6 +4,7 @@
 - Implementar `Tours e viagens` con el mismo criterio operativo y visual de `Massagens` y `Quadras`.
 - Permitir registrar tours y viajes sin bloqueo por superposicion horaria.
 - Mantener trazabilidad de proveedor, cobro, comision y pagos.
+- Permitir que cada proveedor administre un catalogo de destinos, paseos o traslados reutilizable en el agendamiento.
 
 ## Reglas funcionales confirmadas
 - El usuario puede lanzar agendamientos de:
@@ -14,12 +15,14 @@
   - `startAt`
   - `endAt`
   - `provider`
+  - `providerOffering` opcional
   - `amount`
   - `commissionPercent`
   - `description`
   - estado de pago
   - forma de pago
 - `amount` y `commissionPercent` deben ser editables en cada agendamiento.
+- El operador puede seleccionar un item predefinido del proveedor y luego ajustar valor, descripcion o tipo si hace falta.
 - La comision se calcula como porcentaje sobre el valor del servicio.
 - Los resumenes deben priorizar:
   - cuanto se cobro
@@ -39,6 +42,8 @@
   - cancelar agendamiento
   - registrar pago
   - mantener proveedores
+  - mantener destinos/servicios por proveedor
+  - seleccionar destino/servicio del proveedor dentro del booking
   - ver agenda diaria
   - ver agenda mensual
   - ver resumen por proveedor
@@ -53,6 +58,18 @@
 - `active`
 - `updatedAt`
 - `updatedBy`
+- `offerings[]`
+
+### Item del proveedor
+- `id`
+- `providerId`
+- `serviceType`
+- `name`
+- `amount`
+- `description`
+- `active`
+- `updatedAt`
+- `updatedBy`
 
 ### Agendamiento
 - `id`
@@ -64,6 +81,8 @@
 - `providerId`
 - `providerName`
 - `providerActive`
+- `providerOfferingId`
+- `providerOfferingName`
 - `amount`
 - `commissionPercent`
 - `commissionAmount`
@@ -108,6 +127,7 @@
 
 ## Reglas de negocio backend
 - No debe existir validacion de overlap para tours/viajes.
+- El catalogo de cada proveedor debe viajar dentro del payload de proveedor para simplificar la operacion en front.
 - Solo agendamientos `SCHEDULED` cuentan para cobro y resumen operativo.
 - Un agendamiento cancelado:
   - no debe poder pagarse

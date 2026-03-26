@@ -59,6 +59,44 @@ enum ToursServiceType {
   }
 }
 
+class ToursProviderOffering {
+  const ToursProviderOffering({
+    required this.id,
+    required this.providerId,
+    required this.serviceType,
+    required this.name,
+    required this.amount,
+    required this.description,
+    required this.active,
+    required this.updatedAt,
+    required this.updatedBy,
+  });
+
+  final int id;
+  final int providerId;
+  final ToursServiceType serviceType;
+  final String name;
+  final double amount;
+  final String? description;
+  final bool active;
+  final DateTime? updatedAt;
+  final String? updatedBy;
+
+  factory ToursProviderOffering.fromJson(Map<String, dynamic> json) {
+    return ToursProviderOffering(
+      id: _readInt(json, 'id') ?? 0,
+      providerId: _readInt(json, 'providerId') ?? 0,
+      serviceType: ToursServiceType.tryParse(_readString(json, 'serviceType')),
+      name: _readString(json, 'name') ?? '',
+      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      description: _trimOrNull(_readString(json, 'description')),
+      active: json['active'] as bool? ?? false,
+      updatedAt: _tryParseDateTime(_readString(json, 'updatedAt')),
+      updatedBy: _trimOrNull(_readString(json, 'updatedBy')),
+    );
+  }
+}
+
 class ToursProvider {
   const ToursProvider({
     required this.id,
@@ -68,6 +106,7 @@ class ToursProvider {
     required this.active,
     required this.updatedAt,
     required this.updatedBy,
+    required this.offerings,
   });
 
   final int id;
@@ -77,8 +116,20 @@ class ToursProvider {
   final bool active;
   final DateTime? updatedAt;
   final String? updatedBy;
+  final List<ToursProviderOffering> offerings;
 
   factory ToursProvider.fromJson(Map<String, dynamic> json) {
+    final List<ToursProviderOffering> offerings =
+        (json['offerings'] as List<dynamic>? ?? const <dynamic>[])
+            .map<ToursProviderOffering>(
+              (dynamic item) => ToursProviderOffering.fromJson(_asMap(item)),
+            )
+            .toList()
+          ..sort(
+            (ToursProviderOffering a, ToursProviderOffering b) => a.name
+                .toLowerCase()
+                .compareTo(b.name.toLowerCase()),
+          );
     return ToursProvider(
       id: _readInt(json, 'id') ?? 0,
       name: _readString(json, 'name') ?? '',
@@ -90,6 +141,7 @@ class ToursProvider {
       active: json['active'] as bool? ?? false,
       updatedAt: _tryParseDateTime(_readString(json, 'updatedAt')),
       updatedBy: _trimOrNull(_readString(json, 'updatedBy')),
+      offerings: offerings,
     );
   }
 
@@ -101,6 +153,7 @@ class ToursProvider {
     bool? active,
     DateTime? updatedAt,
     String? updatedBy,
+    List<ToursProviderOffering>? offerings,
   }) {
     return ToursProvider(
       id: id ?? this.id,
@@ -111,6 +164,7 @@ class ToursProvider {
       active: active ?? this.active,
       updatedAt: updatedAt ?? this.updatedAt,
       updatedBy: updatedBy ?? this.updatedBy,
+      offerings: offerings ?? this.offerings,
     );
   }
 }
@@ -173,6 +227,8 @@ class ToursBooking {
     required this.providerId,
     required this.providerName,
     required this.providerActive,
+    required this.providerOfferingId,
+    required this.providerOfferingName,
     required this.amount,
     required this.commissionPercent,
     required this.commissionAmount,
@@ -200,6 +256,8 @@ class ToursBooking {
   final int providerId;
   final String providerName;
   final bool providerActive;
+  final int? providerOfferingId;
+  final String? providerOfferingName;
   final double amount;
   final double commissionPercent;
   final double commissionAmount;
@@ -235,6 +293,10 @@ class ToursBooking {
           (json['providerActive'] as bool?) ??
           (provider?['active'] as bool?) ??
           false,
+      providerOfferingId: _readInt(json, 'providerOfferingId'),
+      providerOfferingName: _trimOrNull(
+        _readString(json, 'providerOfferingName'),
+      ),
       amount: (json['amount'] as num?)?.toDouble() ?? 0,
       commissionPercent: (json['commissionPercent'] as num?)?.toDouble() ?? 0,
       commissionAmount: (json['commissionAmount'] as num?)?.toDouble() ?? 0,
@@ -257,6 +319,32 @@ class ToursBooking {
   }
 }
 
+class ToursProviderOfferingInputModel {
+  const ToursProviderOfferingInputModel({
+    required this.serviceType,
+    required this.name,
+    required this.amount,
+    required this.description,
+    required this.active,
+  });
+
+  final ToursServiceType serviceType;
+  final String name;
+  final double amount;
+  final String? description;
+  final bool active;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'serviceType': serviceType.apiValue,
+      'name': name.trim(),
+      'amount': amount,
+      'description': _trimOrNull(description),
+      'active': active,
+    };
+  }
+}
+
 class CreateToursBookingModel {
   const CreateToursBookingModel({
     required this.serviceType,
@@ -265,6 +353,7 @@ class CreateToursBookingModel {
     required this.clientName,
     required this.guestReference,
     required this.providerId,
+    required this.providerOfferingId,
     required this.amount,
     required this.commissionPercent,
     required this.description,
@@ -280,6 +369,7 @@ class CreateToursBookingModel {
   final String clientName;
   final String guestReference;
   final int providerId;
+  final int? providerOfferingId;
   final double amount;
   final double commissionPercent;
   final String? description;
@@ -296,6 +386,7 @@ class CreateToursBookingModel {
       'clientName': clientName.trim(),
       'guestReference': guestReference.trim(),
       'providerId': providerId,
+      'providerOfferingId': providerOfferingId,
       'amount': amount,
       'commissionPercent': commissionPercent,
       'description': _trimOrNull(description),
@@ -315,6 +406,7 @@ class UpdateToursBookingModel extends CreateToursBookingModel {
     required super.clientName,
     required super.guestReference,
     required super.providerId,
+    required super.providerOfferingId,
     required super.amount,
     required super.commissionPercent,
     required super.description,
@@ -362,17 +454,22 @@ class CreateToursProviderModel {
     required this.name,
     required this.contact,
     required this.defaultCommissionPercent,
+    required this.offerings,
   });
 
   final String name;
   final String contact;
   final double defaultCommissionPercent;
+  final List<ToursProviderOfferingInputModel> offerings;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'name': name.trim(),
       'contact': contact.trim(),
       'defaultCommissionPercent': defaultCommissionPercent,
+      'offerings': offerings
+          .map((ToursProviderOfferingInputModel item) => item.toJson())
+          .toList(),
     };
   }
 }
@@ -382,6 +479,7 @@ class UpdateToursProviderModel extends CreateToursProviderModel {
     required super.name,
     required super.contact,
     required super.defaultCommissionPercent,
+    required super.offerings,
     required this.active,
   });
 
@@ -394,6 +492,9 @@ class UpdateToursProviderModel extends CreateToursProviderModel {
       'contact': contact.trim(),
       'defaultCommissionPercent': defaultCommissionPercent,
       'active': active,
+      'offerings': offerings
+          .map((ToursProviderOfferingInputModel item) => item.toJson())
+          .toList(),
     };
   }
 }
@@ -423,6 +524,16 @@ DateTime? _tryParseDateTime(String? rawValue) {
 Map<String, dynamic>? _asMapOrNull(Object? value) {
   if (value is! Map) {
     return null;
+  }
+  return value.map<String, dynamic>(
+    (Object? key, Object? mapValue) =>
+        MapEntry<String, dynamic>(key.toString(), mapValue),
+  );
+}
+
+Map<String, dynamic> _asMap(Object? value) {
+  if (value is! Map) {
+    return <String, dynamic>{};
   }
   return value.map<String, dynamic>(
     (Object? key, Object? mapValue) =>
