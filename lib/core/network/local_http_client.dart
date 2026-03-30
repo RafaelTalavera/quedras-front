@@ -49,6 +49,14 @@ final class LocalHttpClient implements ApiClient {
     return _send('PATCH', path, headers: headers, body: body);
   }
 
+  @override
+  Future<ApiResponse> delete(
+    String path, {
+    Map<String, String>? headers,
+  }) async {
+    return _send('DELETE', path, headers: headers);
+  }
+
   Future<ApiResponse> _send(
     String method,
     String path, {
@@ -60,7 +68,7 @@ final class LocalHttpClient implements ApiClient {
         .timeout(_requestTimeout);
     _applyHeaders(request, headers);
     if (body != null) {
-      request.write(body);
+      request.add(utf8.encode(body));
     }
     final HttpClientResponse response = await request.close().timeout(
       _requestTimeout,
@@ -83,6 +91,16 @@ final class LocalHttpClient implements ApiClient {
     if (headers == null || headers.isEmpty) {
       return;
     }
-    headers.forEach(request.headers.add);
+    headers.forEach((String name, String value) {
+      final String normalizedName = name.toLowerCase();
+      final String normalizedValue = value.toLowerCase();
+      if (normalizedName == HttpHeaders.contentTypeHeader &&
+          normalizedValue.startsWith('application/json') &&
+          !normalizedValue.contains('charset=')) {
+        request.headers.add(name, '$value; charset=utf-8');
+        return;
+      }
+      request.headers.add(name, value);
+    });
   }
 }

@@ -67,6 +67,13 @@ final class AuthorizedApiClient implements ApiClient {
     );
   }
 
+  @override
+  Future<ApiResponse> delete(String path, {Map<String, String>? headers}) {
+    return _run(
+      () => _delegate.delete(path, headers: _withAuthorization(headers)),
+    );
+  }
+
   Future<ApiResponse> _run(Future<ApiResponse> Function() request) async {
     final ApiResponse response = await request();
     if (response.statusCode == 401) {

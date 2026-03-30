@@ -10,6 +10,8 @@ import '../../auth/domain/auth_session.dart';
 import '../../courts/application/court_app_service.dart';
 import '../../massages/application/massage_app_service.dart';
 import '../../massages/presentation/massage_booking_page.dart';
+import '../../maintenance/application/maintenance_app_service.dart';
+import '../../maintenance/presentation/maintenance_page.dart';
 import '../../reservations/application/reservation_app_service.dart';
 import '../../settings/presentation/settings_page.dart';
 import '../../tennis/presentation/tennis_rental_page.dart';
@@ -28,6 +30,7 @@ class ShellPage extends StatefulWidget {
     required this.reservationAppService,
     required this.courtAppService,
     required this.toursAppService,
+    required this.maintenanceAppService,
     super.key,
   });
 
@@ -37,6 +40,7 @@ class ShellPage extends StatefulWidget {
   final ReservationAppService reservationAppService;
   final CourtAppService courtAppService;
   final ToursAppService toursAppService;
+  final MaintenanceAppService maintenanceAppService;
 
   @override
   State<ShellPage> createState() => _ShellPageState();
@@ -47,14 +51,18 @@ class _ShellPageState extends State<ShellPage> {
   late final MassageBookingPageController _massageBookingPageController;
   late final TennisRentalPageController _tennisRentalPageController;
   late final ToursTravelPageController _toursTravelPageController;
+  late final MaintenancePageController _maintenancePageController;
   late final Widget _massageBookingPage;
   late final Widget _tennisRentalPage;
   late final Widget _toursTravelPage;
+  late final Widget _maintenancePage;
   bool _redirectingToLogin = false;
   MassageBookingSection _selectedMassageSection =
       MassageBookingSection.selectedDay;
   TennisRentalSection _selectedTennisSection = TennisRentalSection.selectedDay;
   ToursTravelSection _selectedToursSection = ToursTravelSection.selectedDay;
+  MaintenanceSection _selectedMaintenanceSection =
+      MaintenanceSection.selectedDay;
 
   @override
   void initState() {
@@ -63,6 +71,7 @@ class _ShellPageState extends State<ShellPage> {
     _massageBookingPageController = MassageBookingPageController();
     _tennisRentalPageController = TennisRentalPageController();
     _toursTravelPageController = ToursTravelPageController();
+    _maintenancePageController = MaintenancePageController();
     _massageBookingPage = MassageBookingPage(
       massageAppService: widget.massageAppService,
       controller: _massageBookingPageController,
@@ -77,6 +86,11 @@ class _ShellPageState extends State<ShellPage> {
       toursAppService: widget.toursAppService,
       controller: _toursTravelPageController,
       onSectionChanged: _handleToursSectionChanged,
+    );
+    _maintenancePage = MaintenancePage(
+      maintenanceAppService: widget.maintenanceAppService,
+      controller: _maintenancePageController,
+      onSectionChanged: _handleMaintenanceSectionChanged,
     );
     widget.sessionController.addListener(_handleSessionChanged);
   }
@@ -157,6 +171,8 @@ class _ShellPageState extends State<ShellPage> {
                       onTennisSectionSelected: _goToTennisSection,
                       toursSection: _selectedToursSection,
                       onToursSectionSelected: _goToToursSection,
+                      maintenanceSection: _selectedMaintenanceSection,
+                      onMaintenanceSectionSelected: _goToMaintenanceSection,
                       showSectionShortcutMenu: showSectionShortcutMenu,
                       onLogout: _logout,
                       content: content,
@@ -171,6 +187,8 @@ class _ShellPageState extends State<ShellPage> {
                       onTennisSectionSelected: _goToTennisSection,
                       toursSection: _selectedToursSection,
                       onToursSectionSelected: _goToToursSection,
+                      maintenanceSection: _selectedMaintenanceSection,
+                      onMaintenanceSectionSelected: _goToMaintenanceSection,
                       showSectionShortcutMenu: showSectionShortcutMenu,
                       onLogout: _logout,
                       content: content,
@@ -189,6 +207,7 @@ class _ShellPageState extends State<ShellPage> {
         _massageBookingPage,
         _tennisRentalPage,
         _toursTravelPage,
+        _maintenancePage,
         SingleChildScrollView(
           child: SettingsPage(session: widget.sessionController.session),
         ),
@@ -260,6 +279,24 @@ class _ShellPageState extends State<ShellPage> {
     await _toursTravelPageController.scrollToSection(section);
   }
 
+  Future<void> _goToMaintenanceSection(MaintenanceSection section) async {
+    if (_selectedSection != AppSection.maintenance) {
+      setState(() {
+        _selectedSection = AppSection.maintenance;
+        _selectedMaintenanceSection = section;
+      });
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _maintenancePageController.scrollToSection(section);
+      });
+      return;
+    }
+
+    setState(() {
+      _selectedMaintenanceSection = section;
+    });
+    await _maintenancePageController.scrollToSection(section);
+  }
+
   void _logout() {
     widget.sessionController.clearSession();
   }
@@ -291,6 +328,15 @@ class _ShellPageState extends State<ShellPage> {
     });
   }
 
+  void _handleMaintenanceSectionChanged(MaintenanceSection section) {
+    if (!mounted || _selectedMaintenanceSection == section) {
+      return;
+    }
+    setState(() {
+      _selectedMaintenanceSection = section;
+    });
+  }
+
   void _handleSessionChanged() {
     if (widget.sessionController.isAuthenticated ||
         !mounted ||
@@ -316,6 +362,8 @@ class _DesktopShell extends StatelessWidget {
     required this.onTennisSectionSelected,
     required this.toursSection,
     required this.onToursSectionSelected,
+    required this.maintenanceSection,
+    required this.onMaintenanceSectionSelected,
     required this.showSectionShortcutMenu,
     required this.onLogout,
     required this.content,
@@ -330,6 +378,8 @@ class _DesktopShell extends StatelessWidget {
   final ValueChanged<TennisRentalSection> onTennisSectionSelected;
   final ToursTravelSection toursSection;
   final ValueChanged<ToursTravelSection> onToursSectionSelected;
+  final MaintenanceSection maintenanceSection;
+  final ValueChanged<MaintenanceSection> onMaintenanceSectionSelected;
   final bool showSectionShortcutMenu;
   final VoidCallback onLogout;
   final Widget content;
@@ -352,6 +402,8 @@ class _DesktopShell extends StatelessWidget {
               onTennisSectionSelected: onTennisSectionSelected,
               toursSection: toursSection,
               onToursSectionSelected: onToursSectionSelected,
+              maintenanceSection: maintenanceSection,
+              onMaintenanceSectionSelected: onMaintenanceSectionSelected,
               showSectionShortcutMenu: showSectionShortcutMenu,
               onLogout: onLogout,
             ),
@@ -380,6 +432,8 @@ class _CompactShell extends StatelessWidget {
     required this.onTennisSectionSelected,
     required this.toursSection,
     required this.onToursSectionSelected,
+    required this.maintenanceSection,
+    required this.onMaintenanceSectionSelected,
     required this.showSectionShortcutMenu,
     required this.onLogout,
     required this.content,
@@ -394,6 +448,8 @@ class _CompactShell extends StatelessWidget {
   final ValueChanged<TennisRentalSection> onTennisSectionSelected;
   final ToursTravelSection toursSection;
   final ValueChanged<ToursTravelSection> onToursSectionSelected;
+  final MaintenanceSection maintenanceSection;
+  final ValueChanged<MaintenanceSection> onMaintenanceSectionSelected;
   final bool showSectionShortcutMenu;
   final VoidCallback onLogout;
   final Widget content;
@@ -414,6 +470,8 @@ class _CompactShell extends StatelessWidget {
             onTennisSectionSelected: onTennisSectionSelected,
             toursSection: toursSection,
             onToursSectionSelected: onToursSectionSelected,
+            maintenanceSection: maintenanceSection,
+            onMaintenanceSectionSelected: onMaintenanceSectionSelected,
             showSectionShortcutMenu: showSectionShortcutMenu,
             onLogout: onLogout,
           ),
@@ -476,6 +534,8 @@ class _NavigationPanel extends StatelessWidget {
     required this.onTennisSectionSelected,
     required this.toursSection,
     required this.onToursSectionSelected,
+    required this.maintenanceSection,
+    required this.onMaintenanceSectionSelected,
     required this.showSectionShortcutMenu,
     required this.onLogout,
   });
@@ -489,6 +549,8 @@ class _NavigationPanel extends StatelessWidget {
   final ValueChanged<TennisRentalSection> onTennisSectionSelected;
   final ToursTravelSection toursSection;
   final ValueChanged<ToursTravelSection> onToursSectionSelected;
+  final MaintenanceSection maintenanceSection;
+  final ValueChanged<MaintenanceSection> onMaintenanceSectionSelected;
   final bool showSectionShortcutMenu;
   final VoidCallback onLogout;
 
@@ -559,6 +621,16 @@ class _NavigationPanel extends StatelessWidget {
                 child: _ToursSectionMenu(
                   selectedSection: toursSection,
                   onSelected: onToursSectionSelected,
+                  compact: compactHeader,
+                  showDescription: !tightSidebar,
+                ),
+              ),
+            if (showSectionShortcutMenu && section == AppSection.maintenance)
+              Padding(
+                padding: EdgeInsets.fromLTRB(18, 0, 18, tightSidebar ? 12 : 14),
+                child: _MaintenanceSectionMenu(
+                  selectedSection: maintenanceSection,
+                  onSelected: onMaintenanceSectionSelected,
                   compact: compactHeader,
                   showDescription: !tightSidebar,
                 ),
@@ -704,6 +776,8 @@ class _CompactTopBar extends StatelessWidget {
     required this.onTennisSectionSelected,
     required this.toursSection,
     required this.onToursSectionSelected,
+    required this.maintenanceSection,
+    required this.onMaintenanceSectionSelected,
     required this.showSectionShortcutMenu,
     required this.onLogout,
   });
@@ -717,6 +791,8 @@ class _CompactTopBar extends StatelessWidget {
   final ValueChanged<TennisRentalSection> onTennisSectionSelected;
   final ToursTravelSection toursSection;
   final ValueChanged<ToursTravelSection> onToursSectionSelected;
+  final MaintenanceSection maintenanceSection;
+  final ValueChanged<MaintenanceSection> onMaintenanceSectionSelected;
   final bool showSectionShortcutMenu;
   final VoidCallback onLogout;
 
@@ -791,6 +867,15 @@ class _CompactTopBar extends StatelessWidget {
             _ToursSectionMenu(
               selectedSection: toursSection,
               onSelected: onToursSectionSelected,
+              compact: true,
+            ),
+          ],
+          if (showSectionShortcutMenu &&
+              section == AppSection.maintenance) ...<Widget>[
+            const SizedBox(height: 10),
+            _MaintenanceSectionMenu(
+              selectedSection: maintenanceSection,
+              onSelected: onMaintenanceSectionSelected,
               compact: true,
             ),
           ],
@@ -1132,6 +1217,115 @@ class _ToursSectionMenu extends StatelessWidget {
   }
 }
 
+class _MaintenanceSectionMenu extends StatelessWidget {
+  const _MaintenanceSectionMenu({
+    required this.selectedSection,
+    required this.onSelected,
+    this.compact = false,
+    this.showDescription = true,
+  });
+
+  final MaintenanceSection selectedSection;
+  final ValueChanged<MaintenanceSection> onSelected;
+  final bool compact;
+  final bool showDescription;
+
+  @override
+  Widget build(BuildContext context) {
+    final TextTheme textTheme = Theme.of(context).textTheme;
+    final BorderRadius borderRadius = BorderRadius.circular(compact ? 18 : 20);
+
+    return Container(
+      width: double.infinity,
+      padding: EdgeInsets.all(compact ? 12 : 14),
+      decoration: BoxDecoration(
+        borderRadius: borderRadius,
+        color: CostaNorteBrand.mist,
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Menu de manutencao',
+            style: textTheme.titleSmall?.copyWith(
+              color: CostaNorteBrand.royalBlueDeep,
+            ),
+          ),
+          if (showDescription) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(
+              'Acesso rapido a cada bloco da operacao.',
+              style: textTheme.bodySmall,
+            ),
+          ],
+          SizedBox(height: showDescription ? 12 : 10),
+          ...MaintenanceSection.values.map((MaintenanceSection item) {
+            final bool selected = item == selectedSection;
+            return Padding(
+              padding: EdgeInsets.only(bottom: compact ? 6 : 8),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(16),
+                  onTap: () => onSelected(item),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compact ? 10 : 12,
+                      vertical: compact ? 10 : 12,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      color: selected
+                          ? CostaNorteBrand.foam
+                          : Colors.white.withValues(alpha: 0.72),
+                      border: Border.all(
+                        color: selected
+                            ? CostaNorteBrand.royalBlue.withValues(alpha: 0.22)
+                            : CostaNorteBrand.line,
+                      ),
+                    ),
+                    child: Row(
+                      children: <Widget>[
+                        Icon(
+                          _iconForMaintenanceSection(item),
+                          size: 18,
+                          color: selected
+                              ? CostaNorteBrand.royalBlueDeep
+                              : CostaNorteBrand.mutedInk,
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Text(
+                            _labelForMaintenanceSection(item),
+                            style: textTheme.labelLarge?.copyWith(
+                              color: selected
+                                  ? CostaNorteBrand.royalBlueDeep
+                                  : CostaNorteBrand.ink,
+                            ),
+                          ),
+                        ),
+                        Icon(
+                          Icons.arrow_outward_rounded,
+                          size: 18,
+                          color: selected
+                              ? CostaNorteBrand.royalBlueDeep
+                              : CostaNorteBrand.mutedInk,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+}
+
 class _SessionCard extends StatelessWidget {
   const _SessionCard({
     required this.session,
@@ -1297,6 +1491,8 @@ String _labelForSection(AppSection section) {
       return 'Quadras';
     case AppSection.toursTravel:
       return 'Tours';
+    case AppSection.maintenance:
+      return 'Manutencao';
     case AppSection.settings:
       return 'Config.';
   }
@@ -1321,6 +1517,8 @@ IconData _iconForSection(AppSection section) {
       return Icons.sports_tennis_rounded;
     case AppSection.toursTravel:
       return Icons.explore_rounded;
+    case AppSection.maintenance:
+      return Icons.build_circle_rounded;
     case AppSection.settings:
       return Icons.tune_rounded;
   }
@@ -1377,6 +1575,28 @@ IconData _iconForToursSection(ToursTravelSection section) {
     case ToursTravelSection.monthlyAgenda:
       return Icons.calendar_month_rounded;
     case ToursTravelSection.summary:
+      return Icons.analytics_rounded;
+  }
+}
+
+String _labelForMaintenanceSection(MaintenanceSection section) {
+  switch (section) {
+    case MaintenanceSection.selectedDay:
+      return 'Dia selecionado';
+    case MaintenanceSection.monthlyAgenda:
+      return 'Agenda mensal';
+    case MaintenanceSection.summary:
+      return 'Resumo do periodo';
+  }
+}
+
+IconData _iconForMaintenanceSection(MaintenanceSection section) {
+  switch (section) {
+    case MaintenanceSection.selectedDay:
+      return Icons.today_rounded;
+    case MaintenanceSection.monthlyAgenda:
+      return Icons.calendar_month_rounded;
+    case MaintenanceSection.summary:
       return Icons.analytics_rounded;
   }
 }

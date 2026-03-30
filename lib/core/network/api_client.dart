@@ -18,6 +18,8 @@ abstract interface class ApiClient {
     Map<String, String>? headers,
     String? body,
   });
+
+  Future<ApiResponse> delete(String path, {Map<String, String>? headers});
 }
 
 final class ApiResponse {

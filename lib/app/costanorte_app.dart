@@ -12,6 +12,8 @@ import '../features/courts/application/court_app_service.dart';
 import '../features/courts/infrastructure/http_court_app_service.dart';
 import '../features/massages/application/massage_app_service.dart';
 import '../features/massages/infrastructure/http_massage_app_service.dart';
+import '../features/maintenance/application/maintenance_app_service.dart';
+import '../features/maintenance/infrastructure/http_maintenance_app_service.dart';
 import '../features/reservations/application/reservation_app_service.dart';
 import '../features/reservations/infrastructure/http_reservation_app_service.dart';
 import '../features/tours/application/tours_app_service.dart';
@@ -29,13 +31,15 @@ class CostaNorteApp extends StatefulWidget {
     ReservationAppService? reservationAppService,
     CourtAppService? courtAppService,
     ToursAppService? toursAppService,
+    MaintenanceAppService? maintenanceAppService,
   }) : _apiClient = apiClient,
        _authAppService = authAppService,
        _sessionController = sessionController,
        _massageAppService = massageAppService,
        _reservationAppService = reservationAppService,
        _courtAppService = courtAppService,
-       _toursAppService = toursAppService;
+       _toursAppService = toursAppService,
+       _maintenanceAppService = maintenanceAppService;
 
   final ApiClient? _apiClient;
   final AuthAppService? _authAppService;
@@ -44,6 +48,7 @@ class CostaNorteApp extends StatefulWidget {
   final ReservationAppService? _reservationAppService;
   final CourtAppService? _courtAppService;
   final ToursAppService? _toursAppService;
+  final MaintenanceAppService? _maintenanceAppService;
 
   @override
   State<CostaNorteApp> createState() => _CostaNorteAppState();
@@ -58,6 +63,7 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
   late final ReservationAppService _reservationAppService;
   late final CourtAppService _courtAppService;
   late final ToursAppService _toursAppService;
+  late final MaintenanceAppService _maintenanceAppService;
 
   @override
   void initState() {
@@ -84,6 +90,9 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
     _toursAppService =
         widget._toursAppService ??
         HttpToursAppService(apiClient: _authorizedApiClient);
+    _maintenanceAppService =
+        widget._maintenanceAppService ??
+        HttpMaintenanceAppService(apiClient: _authorizedApiClient);
   }
 
   @override
@@ -101,6 +110,7 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
         reservationAppService: _reservationAppService,
         courtAppService: _courtAppService,
         toursAppService: _toursAppService,
+        maintenanceAppService: _maintenanceAppService,
       ),
     );
   }
