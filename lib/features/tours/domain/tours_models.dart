@@ -59,6 +59,26 @@ enum ToursServiceType {
   }
 }
 
+enum ToursSummaryGroupBy {
+  provider('PROVIDER', 'Prestador'),
+  serviceType('SERVICE_TYPE', 'Tipo'),
+  paymentMethod('PAYMENT_METHOD', 'Pagamento');
+
+  const ToursSummaryGroupBy(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+
+  static ToursSummaryGroupBy tryParse(String? rawValue) {
+    for (final ToursSummaryGroupBy value in ToursSummaryGroupBy.values) {
+      if (value.apiValue == rawValue) {
+        return value;
+      }
+    }
+    return ToursSummaryGroupBy.provider;
+  }
+}
+
 class ToursProviderOffering {
   const ToursProviderOffering({
     required this.id,
@@ -126,9 +146,8 @@ class ToursProvider {
             )
             .toList()
           ..sort(
-            (ToursProviderOffering a, ToursProviderOffering b) => a.name
-                .toLowerCase()
-                .compareTo(b.name.toLowerCase()),
+            (ToursProviderOffering a, ToursProviderOffering b) =>
+                a.name.toLowerCase().compareTo(b.name.toLowerCase()),
           );
     return ToursProvider(
       id: _readInt(json, 'id') ?? 0,
@@ -212,6 +231,207 @@ class ToursProviderSummary {
       pendingAmount: (json['pendingAmount'] as num?)?.toDouble() ?? 0,
       commissionAmount: (json['commissionAmount'] as num?)?.toDouble() ?? 0,
       lastBookingAt: _tryParseDateTime(_readString(json, 'lastBookingAt')),
+    );
+  }
+}
+
+class ToursSummaryBreakdown {
+  const ToursSummaryBreakdown({
+    required this.code,
+    required this.label,
+    required this.active,
+    required this.scheduledCount,
+    required this.paidCount,
+    required this.pendingCount,
+    required this.totalHours,
+    required this.grossAmount,
+    required this.paidAmount,
+    required this.pendingAmount,
+    required this.commissionAmount,
+  });
+
+  final String code;
+  final String label;
+  final bool? active;
+  final int scheduledCount;
+  final int paidCount;
+  final int pendingCount;
+  final double totalHours;
+  final double grossAmount;
+  final double paidAmount;
+  final double pendingAmount;
+  final double commissionAmount;
+
+  factory ToursSummaryBreakdown.fromJson(Map<String, dynamic> json) {
+    return ToursSummaryBreakdown(
+      code: _readString(json, 'code') ?? '',
+      label: _readString(json, 'label') ?? '-',
+      active: json['active'] as bool?,
+      scheduledCount: _readInt(json, 'scheduledCount') ?? 0,
+      paidCount: _readInt(json, 'paidCount') ?? 0,
+      pendingCount: _readInt(json, 'pendingCount') ?? 0,
+      totalHours: (json['totalHours'] as num?)?.toDouble() ?? 0,
+      grossAmount: (json['grossAmount'] as num?)?.toDouble() ?? 0,
+      paidAmount: (json['paidAmount'] as num?)?.toDouble() ?? 0,
+      pendingAmount: (json['pendingAmount'] as num?)?.toDouble() ?? 0,
+      commissionAmount: (json['commissionAmount'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
+
+class ToursSummaryReport {
+  const ToursSummaryReport({
+    required this.scheduledCount,
+    required this.cancelledCount,
+    required this.paidCount,
+    required this.pendingCount,
+    required this.totalHours,
+    required this.grossAmount,
+    required this.paidAmount,
+    required this.pendingAmount,
+    required this.commissionAmount,
+    required this.netAmount,
+    required this.averageTicket,
+    required this.providerBreakdown,
+    required this.serviceTypeBreakdown,
+    required this.paymentMethodBreakdown,
+  });
+
+  final int scheduledCount;
+  final int cancelledCount;
+  final int paidCount;
+  final int pendingCount;
+  final double totalHours;
+  final double grossAmount;
+  final double paidAmount;
+  final double pendingAmount;
+  final double commissionAmount;
+  final double netAmount;
+  final double averageTicket;
+  final List<ToursSummaryBreakdown> providerBreakdown;
+  final List<ToursSummaryBreakdown> serviceTypeBreakdown;
+  final List<ToursSummaryBreakdown> paymentMethodBreakdown;
+
+  factory ToursSummaryReport.fromJson(Map<String, dynamic> json) {
+    return ToursSummaryReport(
+      scheduledCount: _readInt(json, 'scheduledCount') ?? 0,
+      cancelledCount: _readInt(json, 'cancelledCount') ?? 0,
+      paidCount: _readInt(json, 'paidCount') ?? 0,
+      pendingCount: _readInt(json, 'pendingCount') ?? 0,
+      totalHours: (json['totalHours'] as num?)?.toDouble() ?? 0,
+      grossAmount: (json['grossAmount'] as num?)?.toDouble() ?? 0,
+      paidAmount: (json['paidAmount'] as num?)?.toDouble() ?? 0,
+      pendingAmount: (json['pendingAmount'] as num?)?.toDouble() ?? 0,
+      commissionAmount: (json['commissionAmount'] as num?)?.toDouble() ?? 0,
+      netAmount: (json['netAmount'] as num?)?.toDouble() ?? 0,
+      averageTicket: (json['averageTicket'] as num?)?.toDouble() ?? 0,
+      providerBreakdown: _readBreakdownList(json, 'providerBreakdown'),
+      serviceTypeBreakdown: _readBreakdownList(json, 'serviceTypeBreakdown'),
+      paymentMethodBreakdown: _readBreakdownList(
+        json,
+        'paymentMethodBreakdown',
+      ),
+    );
+  }
+}
+
+class ToursSummaryDetailItem {
+  const ToursSummaryDetailItem({
+    required this.bookingId,
+    required this.startAt,
+    required this.endAt,
+    required this.serviceType,
+    required this.providerId,
+    required this.providerName,
+    required this.providerOfferingId,
+    required this.providerOfferingName,
+    required this.clientName,
+    required this.guestReference,
+    required this.amount,
+    required this.commissionAmount,
+    required this.paid,
+    required this.paymentMethod,
+    required this.paymentDate,
+    required this.status,
+    required this.description,
+  });
+
+  final int bookingId;
+  final DateTime startAt;
+  final DateTime endAt;
+  final ToursServiceType serviceType;
+  final int providerId;
+  final String providerName;
+  final int? providerOfferingId;
+  final String? providerOfferingName;
+  final String clientName;
+  final String guestReference;
+  final double amount;
+  final double commissionAmount;
+  final bool paid;
+  final ToursPaymentMethod? paymentMethod;
+  final DateTime? paymentDate;
+  final ToursBookingStatus status;
+  final String? description;
+
+  factory ToursSummaryDetailItem.fromJson(Map<String, dynamic> json) {
+    return ToursSummaryDetailItem(
+      bookingId: _readInt(json, 'bookingId') ?? 0,
+      startAt: DateTime.parse(_readString(json, 'startAt') ?? ''),
+      endAt: DateTime.parse(_readString(json, 'endAt') ?? ''),
+      serviceType: ToursServiceType.tryParse(_readString(json, 'serviceType')),
+      providerId: _readInt(json, 'providerId') ?? 0,
+      providerName: _readString(json, 'providerName') ?? 'Fornecedor',
+      providerOfferingId: _readInt(json, 'providerOfferingId'),
+      providerOfferingName: _trimOrNull(
+        _readString(json, 'providerOfferingName'),
+      ),
+      clientName: _readString(json, 'clientName') ?? '',
+      guestReference: _readString(json, 'guestReference') ?? '',
+      amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      commissionAmount: (json['commissionAmount'] as num?)?.toDouble() ?? 0,
+      paid: json['paid'] as bool? ?? false,
+      paymentMethod: ToursPaymentMethod.tryParse(
+        _readString(json, 'paymentMethod'),
+      ),
+      paymentDate: _tryParseDate(_readString(json, 'paymentDate')),
+      status: ToursBookingStatus.tryParse(_readString(json, 'status')),
+      description: _trimOrNull(_readString(json, 'description')),
+    );
+  }
+}
+
+class ToursSummaryDetail {
+  const ToursSummaryDetail({
+    required this.groupBy,
+    required this.code,
+    required this.label,
+    required this.active,
+    required this.summary,
+    required this.items,
+  });
+
+  final ToursSummaryGroupBy groupBy;
+  final String code;
+  final String label;
+  final bool? active;
+  final ToursSummaryBreakdown summary;
+  final List<ToursSummaryDetailItem> items;
+
+  factory ToursSummaryDetail.fromJson(Map<String, dynamic> json) {
+    return ToursSummaryDetail(
+      groupBy: ToursSummaryGroupBy.tryParse(_readString(json, 'groupBy')),
+      code: _readString(json, 'code') ?? '',
+      label: _readString(json, 'label') ?? '-',
+      active: json['active'] as bool?,
+      summary: ToursSummaryBreakdown.fromJson(
+        _asMapOrNull(json['summary']) ?? const <String, dynamic>{},
+      ),
+      items: (json['items'] as List<dynamic>? ?? const <dynamic>[])
+          .map<ToursSummaryDetailItem>(
+            (dynamic item) => ToursSummaryDetailItem.fromJson(_asMap(item)),
+          )
+          .toList(),
     );
   }
 }
@@ -549,4 +769,15 @@ String? _readString(Map<String, dynamic>? json, String key) {
 int? _readInt(Map<String, dynamic>? json, String key) {
   final Object? value = json?[key];
   return value is num ? value.toInt() : null;
+}
+
+List<ToursSummaryBreakdown> _readBreakdownList(
+  Map<String, dynamic> json,
+  String key,
+) {
+  return (json[key] as List<dynamic>? ?? const <dynamic>[])
+      .map<ToursSummaryBreakdown>(
+        (dynamic item) => ToursSummaryBreakdown.fromJson(_asMap(item)),
+      )
+      .toList();
 }

@@ -1,7 +1,14 @@
 import '../domain/tours_models.dart';
 
 abstract interface class ToursAppService {
-  Future<List<ToursProviderSummary>> listProviderSummaryReport({
+  Future<ToursSummaryReport> getSummaryReport({
+    required String dateFrom,
+    required String dateTo,
+  });
+
+  Future<ToursSummaryDetail> getSummaryDetail({
+    required ToursSummaryGroupBy groupBy,
+    required String code,
     required String dateFrom,
     required String dateTo,
   });

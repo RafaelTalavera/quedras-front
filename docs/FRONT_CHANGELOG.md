@@ -1,5 +1,21 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-03-26 | Post Hito 12 | Tours e Viagens con resumen estandar y detalle en modal
+- Componente afectado: Frontend (`Tours e Viagens`) + integracion con backend + documentacion funcional
+- Archivos tocados:
+  - `lib/features/tours/application/tours_app_service.dart`
+  - `lib/features/tours/domain/tours_models.dart`
+  - `lib/features/tours/infrastructure/http_tours_app_service.dart`
+  - `lib/features/tours/presentation/tours_travel_page.dart`
+  - `test/features/tours/infrastructure/http_tours_app_service_test.dart`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: alinear `Tours e Viagens` al nuevo contrato backend de resumen de periodo y completar la experiencia faltante de detalle por fila usando el patron de modal ya consolidado en `Massagens`.
+- Impacto funcional:
+  - el modulo deja de consumir solo `providers/summary` y pasa a usar `GET /api/v1/tours/reports/summary`
+  - el bloque `Resumo do periodo` ahora muestra KPIs globales y tablas por prestador, tipo y pagamento
+  - al seleccionar una fila de cualquiera de las tablas, el detalle se abre en ventana modal usando `AppDialogShell`
+  - el frontend incorpora prueba de infraestructura para los contratos `summary` y `summary/details`
+
 ## 2026-03-26 | Post Hito 12 | Estandar visual del resumen de Massagens y detalle de prestador en modal
 - Componente afectado: Frontend (`Massagens`) + documentacion funcional
 - Archivos tocados:

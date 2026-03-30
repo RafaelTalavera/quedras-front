@@ -18,7 +18,7 @@ final class HttpToursAppService implements ToursAppService {
   final ApiClient _apiClient;
 
   @override
-  Future<List<ToursProviderSummary>> listProviderSummaryReport({
+  Future<ToursSummaryReport> getSummaryReport({
     required String dateFrom,
     required String dateTo,
   }) async {
@@ -26,8 +26,39 @@ final class HttpToursAppService implements ToursAppService {
       queryParameters: <String, String>{'dateFrom': dateFrom, 'dateTo': dateTo},
     ).query;
     final ApiResponse response = await _runRequest(
+      () =>
+          _apiClient.get('tours/reports/summary?$query', headers: _jsonHeaders),
+    );
+    if (!response.isSuccess) {
+      throw StateError(_extractApiErrorMessage(response));
+    }
+
+    final Object? decoded = _tryDecode(response.body);
+    if (decoded is! Map) {
+      throw StateError('Formato invalido do resumo de tours e viagens.');
+    }
+
+    return ToursSummaryReport.fromJson(_asMap(decoded));
+  }
+
+  @override
+  Future<ToursSummaryDetail> getSummaryDetail({
+    required ToursSummaryGroupBy groupBy,
+    required String code,
+    required String dateFrom,
+    required String dateTo,
+  }) async {
+    final String query = Uri(
+      queryParameters: <String, String>{
+        'groupBy': groupBy.apiValue,
+        'code': code,
+        'dateFrom': dateFrom,
+        'dateTo': dateTo,
+      },
+    ).query;
+    final ApiResponse response = await _runRequest(
       () => _apiClient.get(
-        'tours/reports/providers/summary?$query',
+        'tours/reports/summary/details?$query',
         headers: _jsonHeaders,
       ),
     );
@@ -36,15 +67,11 @@ final class HttpToursAppService implements ToursAppService {
     }
 
     final Object? decoded = _tryDecode(response.body);
-    if (decoded is! List) {
-      throw StateError('Formato invalido do resumo de tours e viagens.');
+    if (decoded is! Map) {
+      throw StateError('Formato invalido do detalhe do resumo de tours.');
     }
 
-    return decoded
-        .map<ToursProviderSummary>(
-          (Object? item) => ToursProviderSummary.fromJson(_asMap(item)),
-        )
-        .toList();
+    return ToursSummaryDetail.fromJson(_asMap(decoded));
   }
 
   @override

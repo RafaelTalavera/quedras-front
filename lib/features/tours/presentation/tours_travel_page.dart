@@ -4,7 +4,10 @@ import '../../../core/config/app_runtime_config.dart';
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/sync/auto_refresh_controller.dart';
 import '../../../core/theme/costa_norte_brand.dart';
+import '../../../core/widgets/app_dialog_dimensions.dart';
+import '../../../core/widgets/app_dialog_shell.dart';
 import '../../../core/widgets/brand_section_hero.dart';
+import '../../../core/widgets/horizontal_scrollable_container.dart';
 import '../application/tours_app_service.dart';
 import '../domain/tours_models.dart';
 
@@ -69,7 +72,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   late final AutoRefreshController _autoRefreshController;
   List<ToursProvider> _providers = <ToursProvider>[];
   List<ToursBooking> _bookings = <ToursBooking>[];
-  List<ToursProviderSummary> _summaries = <ToursProviderSummary>[];
+  ToursSummaryReport? _summaryReport;
   late DateTime _selectedDate;
   late DateTime _reportStart;
   late DateTime _reportEnd;
@@ -209,8 +212,8 @@ class _ToursTravelPageState extends State<ToursTravelPage>
           .listProviders();
       final List<ToursBooking> bookings = await widget.toursAppService
           .listBookings();
-      final List<ToursProviderSummary> summaries = await widget.toursAppService
-          .listProviderSummaryReport(
+      final ToursSummaryReport summaryReport = await widget.toursAppService
+          .getSummaryReport(
             dateFrom: _formatDate(_reportStart),
             dateTo: _formatDate(_reportEnd),
           );
@@ -218,7 +221,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       setState(() {
         _providers = providers;
         _bookings = bookings;
-        _summaries = summaries;
+        _summaryReport = summaryReport;
         _loading = false;
         _refreshingData = false;
       });
@@ -256,14 +259,14 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       _summaryError = null;
     });
     try {
-      final List<ToursProviderSummary> summaries = await widget.toursAppService
-          .listProviderSummaryReport(
+      final ToursSummaryReport summaryReport = await widget.toursAppService
+          .getSummaryReport(
             dateFrom: _formatDate(_reportStart),
             dateTo: _formatDate(_reportEnd),
           );
       if (!mounted) return;
       setState(() {
-        _summaries = summaries;
+        _summaryReport = summaryReport;
         _loadingSummary = false;
       });
     } catch (error) {
@@ -536,22 +539,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   }
 
   Widget _buildSummaryCard(BuildContext context) {
-    final double gross = _summaries.fold<double>(
-      0,
-      (double total, ToursProviderSummary s) => total + s.grossAmount,
-    );
-    final double paid = _summaries.fold<double>(
-      0,
-      (double total, ToursProviderSummary s) => total + s.paidAmount,
-    );
-    final double commission = _summaries.fold<double>(
-      0,
-      (double total, ToursProviderSummary s) => total + s.commissionAmount,
-    );
-    final int count = _summaries.fold<int>(
-      0,
-      (int total, ToursProviderSummary s) => total + s.scheduledCount,
-    );
+    final ToursSummaryReport? summary = _summaryReport;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -564,7 +552,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
             ),
             const SizedBox(height: 6),
             Text(
-              'Totais por fornecedor, valor cobrado e comissão consolidada.',
+              'Consolidado de agendamentos, horas, pagamentos e comissao para o intervalo consultado.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 18),
@@ -605,67 +593,483 @@ class _ToursTravelPageState extends State<ToursTravelPage>
                   context,
                   Icons.event_available_rounded,
                   'Agendamentos',
-                  '$count',
+                  '${summary?.scheduledCount ?? 0}',
+                ),
+                _metric(
+                  context,
+                  Icons.cancel_schedule_send_rounded,
+                  'Cancelados',
+                  '${summary?.cancelledCount ?? 0}',
+                ),
+                _metric(
+                  context,
+                  Icons.schedule_rounded,
+                  'Horas',
+                  _hours(summary?.totalHours ?? 0),
                 ),
                 _metric(
                   context,
                   Icons.attach_money_rounded,
                   'Cobrado',
-                  _money(gross),
+                  _money(summary?.grossAmount ?? 0),
                 ),
                 _metric(
                   context,
                   Icons.payments_rounded,
                   'Recebido',
-                  _money(paid),
+                  _money(summary?.paidAmount ?? 0),
+                ),
+                _metric(
+                  context,
+                  Icons.hourglass_bottom_rounded,
+                  'Pendente',
+                  _money(summary?.pendingAmount ?? 0),
                 ),
                 _metric(
                   context,
                   Icons.account_balance_wallet_rounded,
                   'Comissao',
-                  _money(commission),
+                  _money(summary?.commissionAmount ?? 0),
+                ),
+                _metric(
+                  context,
+                  Icons.savings_rounded,
+                  'Liquido',
+                  _money(summary?.netAmount ?? 0),
+                ),
+                _metric(
+                  context,
+                  Icons.stacked_line_chart_rounded,
+                  'Ticket medio',
+                  _money(summary?.averageTicket ?? 0),
                 ),
               ],
             ),
             const SizedBox(height: 20),
-            if (_summaries.isEmpty)
+            if (summary == null || _summaryIsEmpty(summary))
               _emptyBox(
                 context,
-                'Nenhum fornecedor possui tours ou viagens no periodo informado.',
+                'Nenhum tour ou viagem possui dados ativos no periodo informado.',
               )
-            else
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: DataTable(
-                  columnSpacing: 18,
-                  columns: const <DataColumn>[
-                    DataColumn(label: Text('Fornecedor')),
-                    DataColumn(label: Text('Agendados')),
-                    DataColumn(label: Text('Pagos')),
-                    DataColumn(label: Text('Pendentes')),
-                    DataColumn(label: Text('Cobrado')),
-                    DataColumn(label: Text('Recebido')),
-                    DataColumn(label: Text('Comissao')),
-                  ],
-                  rows: _summaries
-                      .map(
-                        (ToursProviderSummary s) => DataRow(
-                          cells: <DataCell>[
-                            DataCell(Text(s.providerName)),
-                            DataCell(Text('${s.scheduledCount}')),
-                            DataCell(Text('${s.paidCount}')),
-                            DataCell(Text('${s.pendingCount}')),
-                            DataCell(Text(_money(s.grossAmount))),
-                            DataCell(Text(_money(s.paidAmount))),
-                            DataCell(Text(_money(s.commissionAmount))),
-                          ],
-                        ),
-                      )
-                      .toList(),
-                ),
+            else ...<Widget>[
+              _buildSummaryTableSection(
+                context,
+                title: 'Resumo por prestador',
+                description:
+                    'Clique no nome para abrir o detalhe dos bookings desse parceiro no periodo.',
+                columns: const <DataColumn>[
+                  DataColumn(label: Text('Prestador')),
+                  DataColumn(label: Text('Agendados')),
+                  DataColumn(label: Text('Pagos')),
+                  DataColumn(label: Text('Pendentes')),
+                  DataColumn(label: Text('Horas')),
+                  DataColumn(label: Text('Cobrado')),
+                  DataColumn(label: Text('Comissao')),
+                ],
+                rows: summary.providerBreakdown
+                    .map(
+                      (ToursSummaryBreakdown item) => DataRow(
+                        cells: <DataCell>[
+                          DataCell(
+                            Wrap(
+                              spacing: 8,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: <Widget>[
+                                InkWell(
+                                  onTap: _loadingSummary
+                                      ? null
+                                      : () => _openSummaryDetails(
+                                          groupBy: ToursSummaryGroupBy.provider,
+                                          item: item,
+                                        ),
+                                  child: Text(
+                                    item.label,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ),
+                                if (item.active == false)
+                                  _summaryBadge(context, 'Inativo'),
+                              ],
+                            ),
+                          ),
+                          DataCell(Text('${item.scheduledCount}')),
+                          DataCell(Text('${item.paidCount}')),
+                          DataCell(Text('${item.pendingCount}')),
+                          DataCell(Text(_hours(item.totalHours))),
+                          DataCell(Text(_money(item.grossAmount))),
+                          DataCell(Text(_money(item.commissionAmount))),
+                        ],
+                      ),
+                    )
+                    .toList(),
               ),
+              const SizedBox(height: 16),
+              _buildSummaryTableSection(
+                context,
+                title: 'Resumo por tipo',
+                description:
+                    'Tours e viagens separados por tipo de servico, com detalhe em modal.',
+                columns: const <DataColumn>[
+                  DataColumn(label: Text('Tipo')),
+                  DataColumn(label: Text('Agendados')),
+                  DataColumn(label: Text('Pagos')),
+                  DataColumn(label: Text('Pendentes')),
+                  DataColumn(label: Text('Horas')),
+                  DataColumn(label: Text('Cobrado')),
+                  DataColumn(label: Text('Comissao')),
+                ],
+                rows: summary.serviceTypeBreakdown
+                    .map(
+                      (ToursSummaryBreakdown item) => _summaryDataRow(
+                        groupBy: ToursSummaryGroupBy.serviceType,
+                        item: item,
+                      ),
+                    )
+                    .toList(),
+              ),
+              const SizedBox(height: 16),
+              _buildSummaryTableSection(
+                context,
+                title: 'Resumo por pagamento',
+                description:
+                    'Meios de pagamento com dados do periodo e acesso ao detalhe das reservas pagas.',
+                columns: const <DataColumn>[
+                  DataColumn(label: Text('Metodo')),
+                  DataColumn(label: Text('Pagos')),
+                  DataColumn(label: Text('Horas')),
+                  DataColumn(label: Text('Cobrado')),
+                  DataColumn(label: Text('Comissao')),
+                ],
+                rows: summary.paymentMethodBreakdown
+                    .map(
+                      (ToursSummaryBreakdown item) => DataRow(
+                        cells: <DataCell>[
+                          DataCell(
+                            InkWell(
+                              onTap: _loadingSummary
+                                  ? null
+                                  : () => _openSummaryDetails(
+                                      groupBy:
+                                          ToursSummaryGroupBy.paymentMethod,
+                                      item: item,
+                                    ),
+                              child: Text(
+                                item.label,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                          DataCell(Text('${item.paidCount}')),
+                          DataCell(Text(_hours(item.totalHours))),
+                          DataCell(Text(_money(item.grossAmount))),
+                          DataCell(Text(_money(item.commissionAmount))),
+                        ],
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  bool _summaryIsEmpty(ToursSummaryReport summary) {
+    return summary.scheduledCount == 0 &&
+        summary.cancelledCount == 0 &&
+        summary.providerBreakdown.isEmpty &&
+        summary.serviceTypeBreakdown.isEmpty &&
+        summary.paymentMethodBreakdown.isEmpty;
+  }
+
+  Widget _buildSummaryTableSection(
+    BuildContext context, {
+    required String title,
+    required String description,
+    required List<DataColumn> columns,
+    required List<DataRow> rows,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCFCFB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(title, style: Theme.of(context).textTheme.titleLarge),
+          const SizedBox(height: 4),
+          Text(description, style: Theme.of(context).textTheme.bodyMedium),
+          const SizedBox(height: 14),
+          Container(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: CostaNorteBrand.line),
+            ),
+            child: HorizontalScrollableContainer(
+              child: DataTable(columnSpacing: 18, columns: columns, rows: rows),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  DataRow _summaryDataRow({
+    required ToursSummaryGroupBy groupBy,
+    required ToursSummaryBreakdown item,
+  }) {
+    return DataRow(
+      cells: <DataCell>[
+        DataCell(
+          InkWell(
+            onTap: _loadingSummary
+                ? null
+                : () => _openSummaryDetails(groupBy: groupBy, item: item),
+            child: Text(
+              item.label,
+              style: const TextStyle(fontWeight: FontWeight.w700),
+            ),
+          ),
+        ),
+        DataCell(Text('${item.scheduledCount}')),
+        DataCell(Text('${item.paidCount}')),
+        DataCell(Text('${item.pendingCount}')),
+        DataCell(Text(_hours(item.totalHours))),
+        DataCell(Text(_money(item.grossAmount))),
+        DataCell(Text(_money(item.commissionAmount))),
+      ],
+    );
+  }
+
+  Widget _summaryBadge(BuildContext context, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: CostaNorteBrand.mist,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Text(text, style: Theme.of(context).textTheme.labelMedium),
+    );
+  }
+
+  Future<void> _openSummaryDetails({
+    required ToursSummaryGroupBy groupBy,
+    required ToursSummaryBreakdown item,
+  }) async {
+    setState(() {
+      _loadingSummary = true;
+      _summaryError = null;
+    });
+
+    try {
+      final ToursSummaryDetail detail = await widget.toursAppService
+          .getSummaryDetail(
+            groupBy: groupBy,
+            code: item.code,
+            dateFrom: _formatDate(_reportStart),
+            dateTo: _formatDate(_reportEnd),
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadingSummary = false;
+      });
+      await showDialog<void>(
+        context: context,
+        builder: (BuildContext context) {
+          return AppDialogShell(
+            maxWidth: AppDialogDimensions.wideFormWidth,
+            maxHeight: 720,
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              detail.label,
+                              style: Theme.of(context).textTheme.headlineSmall,
+                            ),
+                            const SizedBox(height: 6),
+                            Text(
+                              '${groupBy.label} · ${_short(_reportStart)} a ${_short(_reportEnd)}',
+                              style: Theme.of(context).textTheme.bodyMedium,
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (detail.active == false)
+                        _summaryBadge(context, 'Inativo'),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: <Widget>[
+                      _metric(
+                        context,
+                        Icons.event_available_rounded,
+                        'Agendados',
+                        '${detail.summary.scheduledCount}',
+                      ),
+                      _metric(
+                        context,
+                        Icons.schedule_rounded,
+                        'Horas',
+                        _hours(detail.summary.totalHours),
+                      ),
+                      _metric(
+                        context,
+                        Icons.attach_money_rounded,
+                        'Cobrado',
+                        _money(detail.summary.grossAmount),
+                      ),
+                      _metric(
+                        context,
+                        Icons.account_balance_wallet_rounded,
+                        'Comissao',
+                        _money(detail.summary.commissionAmount),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (detail.items.isEmpty)
+                    _emptyBox(
+                      context,
+                      'Nenhum booking ativo encontrado para esse recorte.',
+                    )
+                  else
+                    ...detail.items.map(
+                      (ToursSummaryDetailItem booking) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _buildSummaryDetailTile(context, booking),
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      child: const Text('Fechar'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadingSummary = false;
+        _summaryError = error.toString().replaceFirst('Bad state: ', '');
+      });
+    }
+  }
+
+  Widget _buildSummaryDetailTile(
+    BuildContext context,
+    ToursSummaryDetailItem booking,
+  ) {
+    final Color color = booking.status == ToursBookingStatus.cancelled
+        ? CostaNorteBrand.error
+        : booking.paid
+        ? CostaNorteBrand.success
+        : CostaNorteBrand.goldDeep;
+    final String paymentCopy = booking.status == ToursBookingStatus.cancelled
+        ? (booking.description ?? 'Agendamento cancelado')
+        : booking.paid
+        ? 'Pago${booking.paymentMethod != null ? ' · ${booking.paymentMethod!.label}' : ''}'
+        : 'Pagamento pendente';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: Text(
+                  '${booking.clientName} · ${booking.guestReference}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  booking.status == ToursBookingStatus.cancelled
+                      ? 'Cancelado'
+                      : booking.paid
+                      ? 'Pago'
+                      : 'Pendente',
+                  style: TextStyle(color: color, fontWeight: FontWeight.w700),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              _summaryBadge(
+                context,
+                '${booking.serviceType.label} · ${_short(booking.startAt)} ${_time(booking.startAt)}-${_time(booking.endAt)}',
+              ),
+              _summaryBadge(
+                context,
+                booking.providerOfferingName ?? booking.providerName,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            '${_money(booking.amount)} · Comissao ${_money(booking.commissionAmount)}',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 4),
+          Text(paymentCopy, style: Theme.of(context).textTheme.bodyMedium),
+          if ((booking.description ?? '').isNotEmpty) ...<Widget>[
+            const SizedBox(height: 6),
+            Text(
+              booking.description!,
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -1371,257 +1775,335 @@ class _BookingDialogState extends State<_BookingDialog> {
   @override
   Widget build(BuildContext context) {
     final List<ToursProviderOffering> offerings = _availableOfferings;
-    return AlertDialog(
-      title: Text(
-        widget.booking == null ? 'Novo agendamento' : 'Editar agendamento',
-      ),
-      content: SizedBox(
-        width: 620,
-        child: Form(
-          key: _formKey,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: <Widget>[
-                DropdownButtonFormField<ToursServiceType>(
-                  value: _serviceType,
-                  decoration: const InputDecoration(
-                    labelText: 'Tipo',
-                    prefixIcon: Icon(Icons.category_rounded),
-                  ),
-                  items: ToursServiceType.values
-                      .map(
-                        (ToursServiceType item) =>
-                            DropdownMenuItem<ToursServiceType>(
-                              value: item,
-                              child: Text(item.label),
+    return AppDialogShell(
+      maxWidth: AppDialogDimensions.standardFormWidth,
+      maxHeight: 760,
+      child: Form(
+        key: _formKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              widget.booking == null
+                  ? 'Novo agendamento'
+                  : 'Editar agendamento',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Inicio em ${_fullDate(_dateOnly(_startAt))} as ${_time(_startAt)}',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 18),
+            Expanded(
+              child: SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    DropdownButtonFormField<ToursServiceType>(
+                      value: _serviceType,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo',
+                        prefixIcon: Icon(Icons.category_rounded),
+                      ),
+                      items: ToursServiceType.values
+                          .map(
+                            (ToursServiceType item) =>
+                                DropdownMenuItem<ToursServiceType>(
+                                  value: item,
+                                  child: Text(item.label),
+                                ),
+                          )
+                          .toList(),
+                      onChanged: (ToursServiceType? value) {
+                        if (value != null) setState(() => _serviceType = value);
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int>(
+                      value: _providerId,
+                      decoration: const InputDecoration(
+                        labelText: 'Fornecedor',
+                        prefixIcon: Icon(Icons.business_rounded),
+                      ),
+                      items: widget.providers
+                          .map(
+                            (ToursProvider item) => DropdownMenuItem<int>(
+                              value: item.id,
+                              child: Text(item.name),
                             ),
-                      )
-                      .toList(),
-                  onChanged: (ToursServiceType? value) {
-                    if (value != null) setState(() => _serviceType = value);
-                  },
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<int>(
-                  value: _providerId,
-                  decoration: const InputDecoration(
-                    labelText: 'Fornecedor',
-                    prefixIcon: Icon(Icons.business_rounded),
-                  ),
-                  items: widget.providers
-                      .map(
-                        (ToursProvider item) => DropdownMenuItem<int>(
-                          value: item.id,
-                          child: Text(item.name),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: (int? value) {
-                    if (value == null) return;
-                    final ToursProvider provider = widget.providers.firstWhere(
-                      (ToursProvider item) => item.id == value,
-                    );
-                    setState(() {
-                      _providerId = value;
-                      _providerOfferingId = null;
-                      _commission.text = provider.defaultCommissionPercent
-                          .toStringAsFixed(1);
-                    });
-                  },
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<int?>(
-                  value: _providerOfferingId,
-                  decoration: const InputDecoration(
-                    labelText: 'Destino / viagem do fornecedor',
-                    prefixIcon: Icon(Icons.place_rounded),
-                  ),
-                  items: <DropdownMenuItem<int?>>[
-                    const DropdownMenuItem<int?>(
-                      value: null,
-                      child: Text('Informar manualmente'),
+                          )
+                          .toList(),
+                      onChanged: (int? value) {
+                        if (value == null) return;
+                        final ToursProvider provider = widget.providers
+                            .firstWhere(
+                              (ToursProvider item) => item.id == value,
+                            );
+                        setState(() {
+                          _providerId = value;
+                          _providerOfferingId = null;
+                          _commission.text = provider.defaultCommissionPercent
+                              .toStringAsFixed(1);
+                        });
+                      },
                     ),
-                    ...offerings.map(
-                      (ToursProviderOffering item) => DropdownMenuItem<int?>(
-                        value: item.id,
-                        child: Text(
-                          '${item.name} · ${item.serviceType.label} · ${_money(item.amount)}',
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<int?>(
+                      value: _providerOfferingId,
+                      decoration: const InputDecoration(
+                        labelText: 'Destino / viagem do fornecedor',
+                        prefixIcon: Icon(Icons.place_rounded),
+                      ),
+                      items: <DropdownMenuItem<int?>>[
+                        const DropdownMenuItem<int?>(
+                          value: null,
+                          child: Text('Informar manualmente'),
                         ),
+                        ...offerings.map(
+                          (
+                            ToursProviderOffering item,
+                          ) => DropdownMenuItem<int?>(
+                            value: item.id,
+                            child: Text(
+                              '${item.name} · ${item.serviceType.label} · ${_money(item.amount)}',
+                            ),
+                          ),
+                        ),
+                      ],
+                      onChanged: (int? value) {
+                        setState(() {
+                          _providerOfferingId = value;
+                        });
+                        _applyOffering(value);
+                      },
+                    ),
+                    if (_providerOfferingId != null) ...<Widget>[
+                      const SizedBox(height: 8),
+                      Builder(
+                        builder: (BuildContext context) {
+                          ToursProviderOffering? selected;
+                          for (final ToursProviderOffering item in offerings) {
+                            if (item.id == _providerOfferingId) {
+                              selected = item;
+                              break;
+                            }
+                          }
+                          if (selected == null) {
+                            return const SizedBox.shrink();
+                          }
+                          return Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              selected.description ??
+                                  'Sem detalhes cadastrados.',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _client,
+                      decoration: const InputDecoration(
+                        labelText: 'Cliente',
+                        prefixIcon: Icon(Icons.person_rounded),
+                      ),
+                      validator: (String? value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Informe o cliente'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _reference,
+                      decoration: const InputDecoration(
+                        labelText: 'Referencia / quarto',
+                        prefixIcon: Icon(Icons.badge_rounded),
+                      ),
+                      validator: (String? value) =>
+                          value == null || value.trim().isEmpty
+                          ? 'Informe a referencia'
+                          : null,
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _pickStartDate,
+                      icon: const Icon(Icons.event_rounded),
+                      label: Text(
+                        'Inicio: ${_fullDate(_dateOnly(_startAt))}',
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  ],
-                  onChanged: (int? value) {
-                    setState(() {
-                      _providerOfferingId = value;
-                    });
-                    _applyOffering(value);
-                  },
-                ),
-                if (_providerOfferingId != null) ...<Widget>[
-                  const SizedBox(height: 8),
-                  Builder(
-                    builder: (BuildContext context) {
-                      ToursProviderOffering? selected;
-                      for (final ToursProviderOffering item in offerings) {
-                        if (item.id == _providerOfferingId) {
-                          selected = item;
-                          break;
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: _time(_startAt),
+                      decoration: const InputDecoration(
+                        labelText: 'Horario de inicio',
+                        prefixIcon: Icon(Icons.schedule_rounded),
+                      ),
+                      items: _timeOptionsFor(_startAt)
+                          .map(
+                            (String value) => DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (String? value) {
+                        if (value != null) {
+                          _updateStartTime(value);
                         }
-                      }
-                      if (selected == null) {
-                        return const SizedBox.shrink();
-                      }
-                      return Align(
-                        alignment: Alignment.centerLeft,
-                        child: Text(
-                          selected.description ?? 'Sem detalhes cadastrados.',
-                          style: Theme.of(context).textTheme.bodySmall,
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    OutlinedButton.icon(
+                      onPressed: _pickEndDate,
+                      icon: const Icon(Icons.event_available_rounded),
+                      label: Text(
+                        'Fim: ${_fullDate(_dateOnly(_endAt))}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      value: _time(_endAt),
+                      decoration: const InputDecoration(
+                        labelText: 'Horario de termino',
+                        prefixIcon: Icon(Icons.timelapse_rounded),
+                      ),
+                      items: _timeOptionsFor(_endAt)
+                          .map(
+                            (String value) => DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            ),
+                          )
+                          .toList(),
+                      onChanged: (String? value) {
+                        if (value != null) {
+                          _updateEndTime(value);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Periodo: ${_dateTime(_startAt)} - ${_dateTime(_endAt)}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: TextFormField(
+                            controller: _amount,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'Valor',
+                              prefixIcon: Icon(Icons.attach_money_rounded),
+                            ),
+                            validator: (String? value) =>
+                                (_number(value) ?? -1) < 0
+                                ? 'Valor invalido'
+                                : null,
+                          ),
                         ),
-                      );
-                    },
-                  ),
-                ],
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _client,
-                  decoration: const InputDecoration(
-                    labelText: 'Cliente',
-                    prefixIcon: Icon(Icons.person_rounded),
-                  ),
-                  validator: (String? value) =>
-                      value == null || value.trim().isEmpty
-                      ? 'Informe o cliente'
-                      : null,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _reference,
-                  decoration: const InputDecoration(
-                    labelText: 'Referencia / quarto',
-                    prefixIcon: Icon(Icons.badge_rounded),
-                  ),
-                  validator: (String? value) =>
-                      value == null || value.trim().isEmpty
-                      ? 'Informe a referencia'
-                      : null,
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _pickStartAt,
-                        icon: const Icon(Icons.schedule_rounded),
-                        label: Text('Inicio: ${_dateTime(_startAt)}'),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: TextFormField(
+                            controller: _commission,
+                            keyboardType: const TextInputType.numberWithOptions(
+                              decimal: true,
+                            ),
+                            decoration: const InputDecoration(
+                              labelText: 'Comissao %',
+                              prefixIcon: Icon(Icons.percent_rounded),
+                            ),
+                            validator: (String? value) =>
+                                (_number(value) ?? -1) < 0
+                                ? 'Percentual invalido'
+                                : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _description,
+                      minLines: 3,
+                      maxLines: 5,
+                      decoration: const InputDecoration(
+                        labelText: 'Descricao',
+                        prefixIcon: Icon(Icons.notes_rounded),
+                        alignLabelWithHint: true,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: _pickEndAt,
-                        icon: const Icon(Icons.timelapse_rounded),
-                        label: Text('Fim: ${_dateTime(_endAt)}'),
-                      ),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _paid,
+                      title: const Text('Registrar como pago'),
+                      onChanged: (bool value) => setState(() {
+                        _paid = value;
+                        if (!_paid) _paymentMethod = null;
+                      }),
                     ),
+                    if (_paid) ...<Widget>[
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<ToursPaymentMethod>(
+                        value: _paymentMethod,
+                        decoration: const InputDecoration(
+                          labelText: 'Forma de pagamento',
+                          prefixIcon: Icon(Icons.credit_card_rounded),
+                        ),
+                        items: ToursPaymentMethod.values
+                            .map(
+                              (ToursPaymentMethod item) =>
+                                  DropdownMenuItem<ToursPaymentMethod>(
+                                    value: item,
+                                    child: Text(item.label),
+                                  ),
+                            )
+                            .toList(),
+                        validator: (ToursPaymentMethod? value) => value == null
+                            ? 'Informe a forma de pagamento'
+                            : null,
+                        onChanged: (ToursPaymentMethod? value) =>
+                            setState(() => _paymentMethod = value),
+                      ),
+                    ],
                   ],
                 ),
-                const SizedBox(height: 12),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: TextFormField(
-                        controller: _amount,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: const InputDecoration(
-                          labelText: 'Valor',
-                          prefixIcon: Icon(Icons.attach_money_rounded),
-                        ),
-                        validator: (String? value) => (_number(value) ?? -1) < 0
-                            ? 'Valor invalido'
-                            : null,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: TextFormField(
-                        controller: _commission,
-                        keyboardType: const TextInputType.numberWithOptions(
-                          decimal: true,
-                        ),
-                        decoration: const InputDecoration(
-                          labelText: 'Comissao %',
-                          prefixIcon: Icon(Icons.percent_rounded),
-                        ),
-                        validator: (String? value) => (_number(value) ?? -1) < 0
-                            ? 'Percentual invalido'
-                            : null,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _description,
-                  minLines: 3,
-                  maxLines: 5,
-                  decoration: const InputDecoration(
-                    labelText: 'Descricao',
-                    prefixIcon: Icon(Icons.notes_rounded),
-                    alignLabelWithHint: true,
+              ),
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancelar'),
                   ),
                 ),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: _paid,
-                  title: const Text('Registrar como pago'),
-                  onChanged: (bool value) => setState(() {
-                    _paid = value;
-                    if (!_paid) _paymentMethod = null;
-                  }),
-                ),
-                if (_paid) ...<Widget>[
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<ToursPaymentMethod>(
-                    value: _paymentMethod,
-                    decoration: const InputDecoration(
-                      labelText: 'Forma de pagamento',
-                      prefixIcon: Icon(Icons.credit_card_rounded),
-                    ),
-                    items: ToursPaymentMethod.values
-                        .map(
-                          (ToursPaymentMethod item) =>
-                              DropdownMenuItem<ToursPaymentMethod>(
-                                value: item,
-                                child: Text(item.label),
-                              ),
-                        )
-                        .toList(),
-                    validator: (ToursPaymentMethod? value) =>
-                        value == null ? 'Informe a forma de pagamento' : null,
-                    onChanged: (ToursPaymentMethod? value) =>
-                        setState(() => _paymentMethod = value),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: FilledButton(
+                    onPressed: _submit,
+                    child: const Text('Salvar'),
                   ),
-                ],
+                ),
               ],
             ),
-          ),
+          ],
         ),
       ),
-      actions: <Widget>[
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancelar'),
-        ),
-        FilledButton(onPressed: _submit, child: const Text('Salvar')),
-      ],
     );
   }
 
-  Future<void> _pickStartAt() async {
+  Future<void> _pickStartDate() async {
     final DateTime? date = await showDatePicker(
       context: context,
       initialDate: _startAt,
@@ -1629,18 +2111,13 @@ class _BookingDialogState extends State<_BookingDialog> {
       lastDate: DateTime(_startAt.year + 1, 12, 31),
     );
     if (date == null || !mounted) return;
-    final TimeOfDay? time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(hour: _startAt.hour, minute: _startAt.minute),
-    );
-    if (time == null) return;
     setState(() {
       _startAt = DateTime(
         date.year,
         date.month,
         date.day,
-        time.hour,
-        time.minute,
+        _startAt.hour,
+        _startAt.minute,
       );
       if (!_endAt.isAfter(_startAt)) {
         _endAt = _startAt.add(const Duration(hours: 2));
@@ -1648,7 +2125,7 @@ class _BookingDialogState extends State<_BookingDialog> {
     });
   }
 
-  Future<void> _pickEndAt() async {
+  Future<void> _pickEndDate() async {
     final DateTime? date = await showDatePicker(
       context: context,
       initialDate: _endAt,
@@ -1656,20 +2133,30 @@ class _BookingDialogState extends State<_BookingDialog> {
       lastDate: DateTime(_startAt.year + 1, 12, 31),
     );
     if (date == null || !mounted) return;
-    final TimeOfDay? time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay(hour: _endAt.hour, minute: _endAt.minute),
-    );
-    if (time == null) return;
     setState(
       () => _endAt = DateTime(
         date.year,
         date.month,
         date.day,
-        time.hour,
-        time.minute,
+        _endAt.hour,
+        _endAt.minute,
       ),
     );
+  }
+
+  void _updateStartTime(String value) {
+    setState(() {
+      _startAt = _dateWithTime(_startAt, value);
+      if (!_endAt.isAfter(_startAt)) {
+        _endAt = _startAt.add(const Duration(hours: 2));
+      }
+    });
+  }
+
+  void _updateEndTime(String value) {
+    setState(() {
+      _endAt = _dateWithTime(_endAt, value);
+    });
   }
 
   void _submit() {
@@ -2382,6 +2869,35 @@ DateTime _today() {
   return DateTime(now.year, now.month, now.day);
 }
 
+DateTime _dateOnly(DateTime value) =>
+    DateTime(value.year, value.month, value.day);
+
+DateTime _dateWithTime(DateTime date, String time) {
+  final List<String> parts = time.split(':');
+  return DateTime(
+    date.year,
+    date.month,
+    date.day,
+    int.parse(parts[0]),
+    int.parse(parts[1]),
+  );
+}
+
+List<String> _timeOptionsFor(DateTime selected) {
+  final Set<String> options = <String>{..._tourTimeSlots, _time(selected)};
+  final List<String> sorted = options.toList()
+    ..sort((String left, String right) {
+      final List<String> leftParts = left.split(':');
+      final List<String> rightParts = right.split(':');
+      final int leftMinutes =
+          (int.parse(leftParts[0]) * 60) + int.parse(leftParts[1]);
+      final int rightMinutes =
+          (int.parse(rightParts[0]) * 60) + int.parse(rightParts[1]);
+      return leftMinutes.compareTo(rightMinutes);
+    });
+  return sorted;
+}
+
 String _formatDate(DateTime value) =>
     '${value.year}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
 String _short(DateTime value) =>
@@ -2392,6 +2908,7 @@ String _dateTime(DateTime value) => '${_short(value)} ${_time(value)}';
 String _fullDate(DateTime date) =>
     '${_week[date.weekday - 1]}, ${date.day} de ${_months[date.month - 1]} de ${date.year}';
 String _money(double amount) => 'R\$ ${amount.toStringAsFixed(0)}';
+String _hours(double value) => '${value.toStringAsFixed(2)}h';
 double? _number(String? rawValue) {
   if (rawValue == null) return null;
   final String normalized = rawValue
@@ -2402,3 +2919,12 @@ double? _number(String? rawValue) {
       .trim();
   return double.tryParse(normalized);
 }
+
+final List<String> _tourTimeSlots = List<String>.unmodifiable(
+  List<String>.generate(29, (int index) {
+    final int totalMinutes = (9 * 60) + (index * 30);
+    final int hour = totalMinutes ~/ 60;
+    final int minute = totalMinutes % 60;
+    return '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+  }),
+);

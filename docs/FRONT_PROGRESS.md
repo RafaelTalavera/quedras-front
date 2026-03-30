@@ -13,6 +13,7 @@
 - `Quadras` ya opera con backend autenticado real para listar reservas, lanzar reservas, informar pago, cancelar y administrar tarifas/materiales.
 - Se validaron lanzamientos de prueba persistidos en base para `Hospede`, `Externo` y `VIP` el dia `2026-03-25`.
 - `Massagens` ya opera con relacion `prestador -> masajista`, resumen por prestador y acciones operativas integradas en la pantalla principal.
+- `Tours e Viagens` ya consume el resumen estandar de periodo desde backend y abre detalle por fila en ventana modal.
 - La autenticacion JWT sigue en memoria y protege modulos internos del sistema.
 - El frente inmediato de mejora es endurecer validaciones y UX operacional, en especial mensajes al usuario, reglas de agenda y alineacion frontend-backend donde aun hay diferencias.
 
@@ -65,7 +66,7 @@
 
 ## Pendientes inmediatos frontend
 - Cerrar y validar contrato backend especifico para `Massagens` con estructura real de `therapists`, `status`, edicion, cancelacion y auditoria por usuario.
-- Definir contrato backend especifico para `Tours e Viagens`.
+- Validar funcionalmente el nuevo resumen estandar de `Tours e Viagens` contra datos reales del hotel.
 - Verificar en backend que JWT quede persistido como autor real en `createdBy/updatedBy/cancelledBy`.
 - Evaluar si la sesion seguira solo en memoria o necesitara persistencia controlada.
 - Alinear en backend la regla de `Quadras` para bloquear fechas pasadas, hoy resuelta solo en frontend.
