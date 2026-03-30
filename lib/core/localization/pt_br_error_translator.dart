@@ -69,6 +69,8 @@ final class PtBrErrorTranslator {
         return 'Informe o meio de pagamento quando o atendimento estiver marcado como pago.';
       case 'paymentDate is required when paid is true':
         return 'Informe a data do pagamento quando o atendimento estiver marcado como pago.';
+      case 'Request body is invalid or uses unsupported character encoding.':
+        return 'O corpo da requisicao e invalido ou usa codificacao de caracteres nao suportada.';
       case 'Unexpected error':
         return 'Erro inesperado.';
       default:

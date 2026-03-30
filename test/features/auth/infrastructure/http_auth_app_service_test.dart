@@ -63,6 +63,34 @@ void main() {
     );
   });
 
+  test(
+    'HttpAuthAppService traduz credenciais invalidas com senha nao ascii',
+    () async {
+      final _FakeApiClient client = _FakeApiClient()
+        ..enqueue(
+          const ApiResponse(
+            statusCode: 401,
+            body: '{"message":"Invalid username or password."}',
+          ),
+        );
+      final HttpAuthAppService service = HttpAuthAppService(apiClient: client);
+
+      await expectLater(
+        () => service.login(
+          username: 'operador.demo',
+          password: 'Costanorte2026ª',
+        ),
+        throwsA(
+          isA<StateError>().having(
+            (StateError error) => error.message.toString(),
+            'message',
+            'Usu\u00e1rio ou senha inv\u00e1lidos.',
+          ),
+        ),
+      );
+    },
+  );
+
   test('HttpAuthAppService rejeita payload invalido do backend', () async {
     final _FakeApiClient client = _FakeApiClient()
       ..enqueue(
@@ -145,6 +173,11 @@ final class _FakeApiClient implements ApiClient {
     String? body,
   }) {
     return _consume('PUT', path, headers: headers, body: body);
+  }
+
+  @override
+  Future<ApiResponse> delete(String path, {Map<String, String>? headers}) {
+    return _consume('DELETE', path, headers: headers);
   }
 
   Future<ApiResponse> _consume(

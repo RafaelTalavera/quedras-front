@@ -26,6 +26,7 @@ class _LoginPageState extends State<LoginPage> {
   final TextEditingController _passwordController = TextEditingController();
 
   bool _submitting = false;
+  bool _passwordVisible = false;
   String? _errorMessage;
 
   @override
@@ -248,10 +249,23 @@ class _LoginPageState extends State<LoginPage> {
             const SizedBox(height: 14),
             TextFormField(
               controller: _passwordController,
-              obscureText: true,
-              decoration: const InputDecoration(
+              obscureText: !_passwordVisible,
+              decoration: InputDecoration(
                 labelText: 'Senha',
-                prefixIcon: Icon(Icons.key_outlined),
+                prefixIcon: const Icon(Icons.key_outlined),
+                suffixIcon: IconButton(
+                  onPressed: () {
+                    setState(() {
+                      _passwordVisible = !_passwordVisible;
+                    });
+                  },
+                  tooltip: _passwordVisible ? 'Ocultar senha' : 'Mostrar senha',
+                  icon: Icon(
+                    _passwordVisible
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                  ),
+                ),
               ),
               validator: (String? value) {
                 if (value == null || value.isEmpty) {
