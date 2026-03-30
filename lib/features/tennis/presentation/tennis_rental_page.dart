@@ -1,10 +1,18 @@
+import 'dart:io';
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/config/app_runtime_config.dart';
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/sync/auto_refresh_controller.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/brand_section_hero.dart';
+import '../../../core/widgets/costa_norte_logo.dart';
 import '../../courts/application/court_app_service.dart';
 import '../../courts/domain/court_models.dart';
 
@@ -117,6 +125,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
   bool _refreshingData = false;
   bool _loadingSummary = false;
   bool _saving = false;
+  int? _sharingBookingId;
   String? _errorMessage;
   String? _summaryErrorMessage;
   String? _selectedSummaryDetailKey;
@@ -416,6 +425,66 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     await _load(showLoading: false);
   }
 
+  Future<void> _shareBookingReceipt(CourtBooking booking) async {
+    if (_sharingBookingId != null) {
+      return;
+    }
+
+    setState(() {
+      _sharingBookingId = booking.id;
+    });
+
+    try {
+      final Uint8List receiptBytes = await _CourtBookingReceiptRenderer(
+        booking: booking,
+        context: context,
+      ).build();
+      final Directory tempDir = await getTemporaryDirectory();
+      final String filePath =
+          '${tempDir.path}/comprovante_reserva_${booking.id}_${_formatDate(booking.bookingDate)}.png';
+      final File file = File(filePath);
+      await file.writeAsBytes(receiptBytes, flush: true);
+
+      final ShareResult result = await SharePlus.instance.share(
+        ShareParams(
+          files: <XFile>[XFile(file.path, mimeType: 'image/png')],
+          fileNameOverrides: <String>[
+            'comprovante_reserva_${booking.id}.png',
+          ],
+          subject: 'Comprovante de reserva',
+        ),
+      );
+
+      if (!mounted) {
+        return;
+      }
+
+      if (result.status == ShareResultStatus.unavailable) {
+        await AppAlerts.warning(
+          context,
+          title: 'Compartilhamento indisponivel',
+          message:
+              'Nao foi possivel abrir o compartilhamento para o WhatsApp neste dispositivo.',
+        );
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.error(
+        context,
+        title: 'Falha ao enviar comprovante',
+        message: 'Nao foi possivel gerar o comprovante da reserva: $error',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sharingBookingId = null;
+        });
+      }
+    }
+  }
+
   Future<void> _reloadSummary() async {
     setState(() {
       _loadingSummary = true;
@@ -611,7 +680,11 @@ class _TennisRentalPageState extends State<TennisRentalPage>
               ..._dayBookings.map(
                 (CourtBooking booking) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: _CourtBookingTile(booking: booking),
+                  child: _CourtBookingTile(
+                    booking: booking,
+                    sharing: _sharingBookingId == booking.id,
+                    onShare: () => _shareBookingReceipt(booking),
+                  ),
                 ),
               ),
           ],
@@ -1307,7 +1380,11 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                     ...normalized.map(
                       (CourtBooking booking) => Padding(
                         padding: const EdgeInsets.only(bottom: 12),
-                        child: _CourtBookingTile(booking: booking),
+                        child: _CourtBookingTile(
+                          booking: booking,
+                          sharing: _sharingBookingId == booking.id,
+                          onShare: () => _shareBookingReceipt(booking),
+                        ),
                       ),
                     ),
                 ],
@@ -1768,9 +1845,15 @@ class _InfoPill extends StatelessWidget {
 }
 
 class _CourtBookingTile extends StatelessWidget {
-  const _CourtBookingTile({required this.booking});
+  const _CourtBookingTile({
+    required this.booking,
+    this.onShare,
+    this.sharing = false,
+  });
 
   final CourtBooking booking;
+  final VoidCallback? onShare;
+  final bool sharing;
 
   @override
   Widget build(BuildContext context) {
@@ -1875,7 +1958,194 @@ class _CourtBookingTile extends StatelessWidget {
             const SizedBox(height: 6),
             Text(detailText, style: Theme.of(context).textTheme.bodySmall),
           ],
+          if (onShare != null) ...<Widget>[
+            const SizedBox(height: 14),
+            Align(
+              alignment: Alignment.centerLeft,
+              child: OutlinedButton.icon(
+                onPressed: sharing ? null : onShare,
+                icon: Icon(
+                  sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
+                ),
+                label: Text(sharing ? 'Enviando...' : 'Enviar por WhatsApp'),
+              ),
+            ),
+          ],
         ],
+      ),
+    );
+  }
+}
+
+final class _CourtBookingReceiptRenderer {
+  const _CourtBookingReceiptRenderer({
+    required this.booking,
+    required this.context,
+  });
+
+  final CourtBooking booking;
+  final BuildContext context;
+
+  Future<Uint8List> build() async {
+    const Size logicalSize = Size(960, 760);
+    const double pixelRatio = 2;
+    final RenderRepaintBoundary boundary = RenderRepaintBoundary();
+    final ui.FlutterView view = View.of(context);
+    final RenderView renderView = RenderView(
+      view: view,
+      configuration: ViewConfiguration(
+        logicalConstraints: BoxConstraints.tight(logicalSize),
+        devicePixelRatio: pixelRatio,
+      ),
+      child: RenderPositionedBox(alignment: Alignment.center, child: boundary),
+    );
+    final PipelineOwner pipelineOwner = PipelineOwner()..rootNode = renderView;
+    renderView.prepareInitialFrame();
+
+    final BuildOwner buildOwner = BuildOwner(focusManager: FocusManager());
+    final RenderObjectToWidgetElement<RenderBox> rootElement =
+        RenderObjectToWidgetAdapter<RenderBox>(
+          container: boundary,
+          child: _ReceiptRenderShell(
+            size: logicalSize,
+            theme: Theme.of(context),
+            mediaQueryData: MediaQuery.of(context).copyWith(
+              size: logicalSize,
+              devicePixelRatio: pixelRatio,
+            ),
+            child: _CourtBookingReceiptCard(booking: booking),
+          ),
+        ).attachToRenderTree(buildOwner);
+
+    buildOwner
+      ..buildScope(rootElement)
+      ..finalizeTree();
+    pipelineOwner
+      ..flushLayout()
+      ..flushCompositingBits()
+      ..flushPaint();
+
+    final ui.Image image = await boundary.toImage(pixelRatio: pixelRatio);
+    final ByteData? data = await image.toByteData(
+      format: ui.ImageByteFormat.png,
+    );
+    if (data == null) {
+      throw StateError('Nao foi possivel converter o comprovante em imagem.');
+    }
+    return data.buffer.asUint8List();
+  }
+}
+
+class _ReceiptRenderShell extends StatelessWidget {
+  const _ReceiptRenderShell({
+    required this.size,
+    required this.theme,
+    required this.mediaQueryData,
+    required this.child,
+  });
+
+  final Size size;
+  final ThemeData theme;
+  final MediaQueryData mediaQueryData;
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    return MediaQuery(
+      data: mediaQueryData,
+      child: Theme(
+        data: theme,
+        child: Directionality(
+          textDirection: TextDirection.ltr,
+          child: Material(
+            color: const Color(0x00000000),
+            child: SizedBox(
+              width: size.width,
+              height: size.height,
+              child: child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CourtBookingReceiptCard extends StatelessWidget {
+  const _CourtBookingReceiptCard({required this.booking});
+
+  final CourtBooking booking;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(28),
+      decoration: const BoxDecoration(
+        gradient: CostaNorteBrand.ambientGradient,
+      ),
+      child: Center(
+        child: Container(
+          width: 820,
+          padding: const EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(28),
+            border: Border.all(color: CostaNorteBrand.line),
+            boxShadow: const <BoxShadow>[
+              BoxShadow(
+                color: Color(0x14000000),
+                blurRadius: 24,
+                offset: Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const CostaNorteLogo(width: 210),
+                  const Spacer(),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(999),
+                      color: _statusColor(booking).withValues(alpha: 0.12),
+                    ),
+                    child: Text(
+                      _statusLabel(booking),
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        color: _statusColor(booking),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 18),
+              Text(
+                'Comprovante de reserva',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'Quadras de tenis | Hotel Costa Norte',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              const SizedBox(height: 22),
+              _CourtBookingTile(booking: booking),
+              const SizedBox(height: 18),
+              Text(
+                'Emitido pelo Hotel Costa Norte',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }
