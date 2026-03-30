@@ -7,6 +7,7 @@ import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/app_dialog_dimensions.dart';
 import '../../../core/widgets/app_dialog_shell.dart';
 import '../../../core/widgets/brand_section_hero.dart';
+import '../../../core/widgets/horizontal_scrollable_container.dart';
 import '../application/massage_app_service.dart';
 import '../domain/massage_models.dart';
 
@@ -87,8 +88,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   final GlobalKey _monthlyAgendaSectionKey = GlobalKey();
   final GlobalKey _monthlySummarySectionKey = GlobalKey();
   final GlobalKey _summaryKey = GlobalKey();
-  final ScrollController _providerReportTableScrollController =
-      ScrollController();
 
   late final AutoRefreshController _autoRefreshController;
   List<MassageProvider> _providers = <MassageProvider>[];
@@ -161,7 +160,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     _scrollController
       ..removeListener(_handleScroll)
       ..dispose();
-    _providerReportTableScrollController.dispose();
     super.dispose();
   }
 
@@ -593,92 +591,79 @@ class _MassageBookingPageState extends State<MassageBookingPage>
             borderRadius: BorderRadius.circular(18),
             border: Border.all(color: CostaNorteBrand.line),
           ),
-          child: Scrollbar(
-            controller: _providerReportTableScrollController,
-            thumbVisibility: true,
-            trackVisibility: true,
-            child: SingleChildScrollView(
-              controller: _providerReportTableScrollController,
-              scrollDirection: Axis.horizontal,
-              padding: const EdgeInsets.only(bottom: 6),
-              child: ConstrainedBox(
-                // Keep the table readable on narrow layouts while preserving
-                // access to all provider report columns through horizontal scroll.
-                constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                child: DataTable(
-                  columnSpacing: 16,
-                  horizontalMargin: 12,
-                  headingRowHeight: 56,
-                  dataRowMinHeight: 64,
-                  dataRowMaxHeight: 72,
-                  columns: <DataColumn>[
-                    DataColumn(label: _buildReportColumnLabel('Prestador')),
-                    DataColumn(label: _buildReportColumnLabel('Atencoes')),
-                    DataColumn(label: _buildReportColumnLabel('Canceladas')),
-                    DataColumn(label: _buildReportColumnLabel('Pagas')),
-                    DataColumn(label: _buildReportColumnLabel('Pendentes')),
-                    DataColumn(label: _buildReportColumnLabel('Cobrado')),
-                    DataColumn(label: _buildReportColumnLabel('Pendente R\$')),
-                    DataColumn(label: _buildReportColumnLabel('Ultimo')),
-                    DataColumn(label: _buildReportColumnLabel('Acoes')),
-                  ],
-                  rows: _providerSummaries.map((
-                    MassageProviderSummary summary,
-                  ) {
-                    final bool selected =
-                        summary.providerId == _selectedSummaryProviderId;
-                    return DataRow(
-                      selected: selected,
-                      onSelectChanged: (_) =>
-                          _selectProviderSummary(summary.providerId),
-                      cells: <DataCell>[
-                        DataCell(
-                          ConstrainedBox(
-                            constraints: const BoxConstraints(minWidth: 140),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: <Widget>[
-                                Text(summary.providerName),
-                                Text(
-                                  summary.providerActive ? 'Ativo' : 'Inativo',
-                                  style: Theme.of(context).textTheme.bodySmall,
-                                ),
-                              ],
-                            ),
+          child: HorizontalScrollableContainer(
+            child: ConstrainedBox(
+              // Keep the table readable on narrow layouts while preserving
+              // access to all provider report columns through horizontal scroll.
+              constraints: BoxConstraints(minWidth: constraints.maxWidth),
+              child: DataTable(
+                columnSpacing: 16,
+                horizontalMargin: 12,
+                headingRowHeight: 56,
+                dataRowMinHeight: 64,
+                dataRowMaxHeight: 72,
+                columns: <DataColumn>[
+                  DataColumn(label: _buildReportColumnLabel('Prestador')),
+                  DataColumn(label: _buildReportColumnLabel('Atencoes')),
+                  DataColumn(label: _buildReportColumnLabel('Canceladas')),
+                  DataColumn(label: _buildReportColumnLabel('Pagas')),
+                  DataColumn(label: _buildReportColumnLabel('Pendentes')),
+                  DataColumn(label: _buildReportColumnLabel('Cobrado')),
+                  DataColumn(label: _buildReportColumnLabel('Pendente R\$')),
+                  DataColumn(label: _buildReportColumnLabel('Ultimo')),
+                  DataColumn(label: _buildReportColumnLabel('Acoes')),
+                ],
+                rows: _providerSummaries.map((MassageProviderSummary summary) {
+                  final bool selected =
+                      summary.providerId == _selectedSummaryProviderId;
+                  return DataRow(
+                    selected: selected,
+                    onSelectChanged: (_) =>
+                        _selectProviderSummary(summary.providerId),
+                    cells: <DataCell>[
+                      DataCell(
+                        ConstrainedBox(
+                          constraints: const BoxConstraints(minWidth: 140),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: <Widget>[
+                              Text(summary.providerName),
+                              Text(
+                                summary.providerActive ? 'Ativo' : 'Inativo',
+                                style: Theme.of(context).textTheme.bodySmall,
+                              ),
+                            ],
                           ),
                         ),
-                        DataCell(Text('${summary.attendedCount}')),
-                        DataCell(Text('${summary.cancelledCount}')),
-                        DataCell(Text('${summary.paidCount}')),
-                        DataCell(Text('${summary.pendingCount}')),
-                        DataCell(
-                          Text(_formatCurrencyLabel(summary.paidAmount)),
+                      ),
+                      DataCell(Text('${summary.attendedCount}')),
+                      DataCell(Text('${summary.cancelledCount}')),
+                      DataCell(Text('${summary.paidCount}')),
+                      DataCell(Text('${summary.pendingCount}')),
+                      DataCell(Text(_formatCurrencyLabel(summary.paidAmount))),
+                      DataCell(
+                        Text(_formatCurrencyLabel(summary.pendingAmount)),
+                      ),
+                      DataCell(
+                        Text(
+                          summary.lastBookingAt == null
+                              ? '-'
+                              : _formatShortDateLabel(summary.lastBookingAt!),
                         ),
-                        DataCell(
-                          Text(_formatCurrencyLabel(summary.pendingAmount)),
+                      ),
+                      DataCell(
+                        TextButton(
+                          onPressed: _loadingReport
+                              ? null
+                              : () =>
+                                    _selectProviderSummary(summary.providerId),
+                          child: const Text('Ver detalhe'),
                         ),
-                        DataCell(
-                          Text(
-                            summary.lastBookingAt == null
-                                ? '-'
-                                : _formatShortDateLabel(summary.lastBookingAt!),
-                          ),
-                        ),
-                        DataCell(
-                          TextButton(
-                            onPressed: _loadingReport
-                                ? null
-                                : () => _selectProviderSummary(
-                                    summary.providerId,
-                                  ),
-                            child: const Text('Ver detalhe'),
-                          ),
-                        ),
-                      ],
-                    );
-                  }).toList(),
-                ),
+                      ),
+                    ],
+                  );
+                }).toList(),
               ),
             ),
           ),
