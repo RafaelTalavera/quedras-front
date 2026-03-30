@@ -104,6 +104,9 @@ class _ShellPageState extends State<ShellPage> {
     final bool compactLayout = MediaQuery.of(context).size.width < 960;
     final Widget content = _buildContent();
     final AuthSession? session = widget.sessionController.session;
+    final bool showSectionShortcutMenu = _shouldShowSectionShortcutMenu(
+      session,
+    );
 
     return Scaffold(
       body: DecoratedBox(
@@ -154,6 +157,7 @@ class _ShellPageState extends State<ShellPage> {
                       onTennisSectionSelected: _goToTennisSection,
                       toursSection: _selectedToursSection,
                       onToursSectionSelected: _goToToursSection,
+                      showSectionShortcutMenu: showSectionShortcutMenu,
                       onLogout: _logout,
                       content: content,
                     )
@@ -167,6 +171,7 @@ class _ShellPageState extends State<ShellPage> {
                       onTennisSectionSelected: _goToTennisSection,
                       toursSection: _selectedToursSection,
                       onToursSectionSelected: _goToToursSection,
+                      showSectionShortcutMenu: showSectionShortcutMenu,
                       onLogout: _logout,
                       content: content,
                     ),
@@ -311,6 +316,7 @@ class _DesktopShell extends StatelessWidget {
     required this.onTennisSectionSelected,
     required this.toursSection,
     required this.onToursSectionSelected,
+    required this.showSectionShortcutMenu,
     required this.onLogout,
     required this.content,
   });
@@ -324,6 +330,7 @@ class _DesktopShell extends StatelessWidget {
   final ValueChanged<TennisRentalSection> onTennisSectionSelected;
   final ToursTravelSection toursSection;
   final ValueChanged<ToursTravelSection> onToursSectionSelected;
+  final bool showSectionShortcutMenu;
   final VoidCallback onLogout;
   final Widget content;
 
@@ -345,6 +352,7 @@ class _DesktopShell extends StatelessWidget {
               onTennisSectionSelected: onTennisSectionSelected,
               toursSection: toursSection,
               onToursSectionSelected: onToursSectionSelected,
+              showSectionShortcutMenu: showSectionShortcutMenu,
               onLogout: onLogout,
             ),
           ),
@@ -372,6 +380,7 @@ class _CompactShell extends StatelessWidget {
     required this.onTennisSectionSelected,
     required this.toursSection,
     required this.onToursSectionSelected,
+    required this.showSectionShortcutMenu,
     required this.onLogout,
     required this.content,
   });
@@ -385,6 +394,7 @@ class _CompactShell extends StatelessWidget {
   final ValueChanged<TennisRentalSection> onTennisSectionSelected;
   final ToursTravelSection toursSection;
   final ValueChanged<ToursTravelSection> onToursSectionSelected;
+  final bool showSectionShortcutMenu;
   final VoidCallback onLogout;
   final Widget content;
 
@@ -404,6 +414,7 @@ class _CompactShell extends StatelessWidget {
             onTennisSectionSelected: onTennisSectionSelected,
             toursSection: toursSection,
             onToursSectionSelected: onToursSectionSelected,
+            showSectionShortcutMenu: showSectionShortcutMenu,
             onLogout: onLogout,
           ),
           const SizedBox(height: 12),
@@ -465,6 +476,7 @@ class _NavigationPanel extends StatelessWidget {
     required this.onTennisSectionSelected,
     required this.toursSection,
     required this.onToursSectionSelected,
+    required this.showSectionShortcutMenu,
     required this.onLogout,
   });
 
@@ -477,6 +489,7 @@ class _NavigationPanel extends StatelessWidget {
   final ValueChanged<TennisRentalSection> onTennisSectionSelected;
   final ToursTravelSection toursSection;
   final ValueChanged<ToursTravelSection> onToursSectionSelected;
+  final bool showSectionShortcutMenu;
   final VoidCallback onLogout;
 
   @override
@@ -520,7 +533,7 @@ class _NavigationPanel extends StatelessWidget {
                 showStatusPill: !tightSidebar,
               ),
             ),
-            if (section == AppSection.massageBooking)
+            if (showSectionShortcutMenu && section == AppSection.massageBooking)
               Padding(
                 padding: EdgeInsets.fromLTRB(18, 0, 18, tightSidebar ? 12 : 14),
                 child: _MassageSectionMenu(
@@ -530,7 +543,7 @@ class _NavigationPanel extends StatelessWidget {
                   showDescription: !tightSidebar,
                 ),
               ),
-            if (section == AppSection.tennisRental)
+            if (showSectionShortcutMenu && section == AppSection.tennisRental)
               Padding(
                 padding: EdgeInsets.fromLTRB(18, 0, 18, tightSidebar ? 12 : 14),
                 child: _TennisSectionMenu(
@@ -540,7 +553,7 @@ class _NavigationPanel extends StatelessWidget {
                   showDescription: !tightSidebar,
                 ),
               ),
-            if (section == AppSection.toursTravel)
+            if (showSectionShortcutMenu && section == AppSection.toursTravel)
               Padding(
                 padding: EdgeInsets.fromLTRB(18, 0, 18, tightSidebar ? 12 : 14),
                 child: _ToursSectionMenu(
@@ -691,6 +704,7 @@ class _CompactTopBar extends StatelessWidget {
     required this.onTennisSectionSelected,
     required this.toursSection,
     required this.onToursSectionSelected,
+    required this.showSectionShortcutMenu,
     required this.onLogout,
   });
 
@@ -703,6 +717,7 @@ class _CompactTopBar extends StatelessWidget {
   final ValueChanged<TennisRentalSection> onTennisSectionSelected;
   final ToursTravelSection toursSection;
   final ValueChanged<ToursTravelSection> onToursSectionSelected;
+  final bool showSectionShortcutMenu;
   final VoidCallback onLogout;
 
   @override
@@ -752,7 +767,8 @@ class _CompactTopBar extends StatelessWidget {
               );
             }).toList(),
           ),
-          if (section == AppSection.tennisRental) ...<Widget>[
+          if (showSectionShortcutMenu &&
+              section == AppSection.tennisRental) ...<Widget>[
             const SizedBox(height: 10),
             _TennisSectionMenu(
               selectedSection: tennisSection,
@@ -760,7 +776,8 @@ class _CompactTopBar extends StatelessWidget {
               compact: true,
             ),
           ],
-          if (section == AppSection.massageBooking) ...<Widget>[
+          if (showSectionShortcutMenu &&
+              section == AppSection.massageBooking) ...<Widget>[
             const SizedBox(height: 10),
             _MassageSectionMenu(
               selectedSection: massageSection,
@@ -768,7 +785,8 @@ class _CompactTopBar extends StatelessWidget {
               compact: true,
             ),
           ],
-          if (section == AppSection.toursTravel) ...<Widget>[
+          if (showSectionShortcutMenu &&
+              section == AppSection.toursTravel) ...<Widget>[
             const SizedBox(height: 10),
             _ToursSectionMenu(
               selectedSection: toursSection,
@@ -780,6 +798,11 @@ class _CompactTopBar extends StatelessWidget {
       ),
     );
   }
+}
+
+bool _shouldShowSectionShortcutMenu(AuthSession? session) {
+  // Hidden by default until system-function visibility rules are defined.
+  return false;
 }
 
 class _MassageSectionMenu extends StatelessWidget {
