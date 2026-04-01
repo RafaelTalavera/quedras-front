@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/config/app_runtime_config.dart';
 import '../../../core/feedback/app_alerts.dart';
+import '../../../core/feedback/app_share.dart';
 import '../../../core/sync/auto_refresh_controller.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/app_dialog_dimensions.dart';
@@ -80,6 +81,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   bool _refreshingData = false;
   bool _saving = false;
   bool _loadingSummary = false;
+  int? _sharingBookingId;
   String? _error;
   String? _summaryError;
   ToursTravelSection _currentSection = ToursTravelSection.selectedDay;
@@ -318,6 +320,13 @@ class _ToursTravelPageState extends State<ToursTravelPage>
                 OutlinedButton.icon(
                   onPressed: _saving || _dayBookings.isEmpty
                       ? null
+                      : _shareBooking,
+                  icon: const Icon(Icons.send_rounded),
+                  label: const Text('Compartir'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _saving || _dayBookings.isEmpty
+                      ? null
                       : _cancelBooking,
                   icon: const Icon(Icons.cancel_schedule_send_rounded),
                   label: const Text('Cancelar'),
@@ -441,7 +450,22 @@ class _ToursTravelPageState extends State<ToursTravelPage>
               ..._dayBookings.map(
                 (ToursBooking b) => Padding(
                   padding: const EdgeInsets.only(bottom: 12),
-                  child: _bookingTile(context, b),
+                  child: _bookingTile(
+                    context,
+                    b,
+                    sharing: _sharingBookingId == b.id,
+                    onEdit: _isBookingEditable(b)
+                        ? () => _editBooking(booking: b)
+                        : null,
+                    onPayment: _canRegisterPayment(b)
+                        ? () => _markPayment(booking: b)
+                        : null,
+                    onShare: () => _shareBooking(booking: b),
+                    onCancel: _isBookingEditable(b)
+                        ? () => _cancelBooking(booking: b)
+                        : null,
+                    onDoubleTap: () => _openBookingActionDialog(b),
+                  ),
                 ),
               ),
           ],
@@ -529,6 +553,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
                   bookings: cell.bookings,
                   selected: _sameDay(cell.date, _selectedDate),
                   onTap: () => setState(() => _selectedDate = cell.date),
+                  onDoubleTap: () => _openCalendarDayActions(cell.date),
                 );
               },
             ),
@@ -1148,11 +1173,14 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     );
   }
 
-  Future<void> _editBooking() async {
-    final ToursBooking? selected = await _pickBooking(
-      'Editar agendamento',
-      (ToursBooking b) => b.status == ToursBookingStatus.scheduled,
-    );
+  Future<void> _editBooking({ToursBooking? booking}) async {
+    final ToursBooking? selected =
+        booking ??
+        await _pickBooking(
+          'Editar agendamento',
+          canSelect: _isBookingEditable,
+          emptyMessage: 'Nao ha agendamentos ativos para editar neste dia.',
+        );
     if (selected == null || !mounted) {
       return;
     }
@@ -1177,11 +1205,15 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     );
   }
 
-  Future<void> _markPayment() async {
-    final ToursBooking? selected = await _pickBooking(
-      'Informar pago',
-      (ToursBooking b) => b.status == ToursBookingStatus.scheduled && !b.paid,
-    );
+  Future<void> _markPayment({ToursBooking? booking}) async {
+    final ToursBooking? selected =
+        booking ??
+        await _pickBooking(
+          'Informar pago',
+          canSelect: _canRegisterPayment,
+          emptyMessage:
+              'Todos os agendamentos deste dia ja estao pagos ou cancelados.',
+        );
     if (selected == null || !mounted) {
       return;
     }
@@ -1203,11 +1235,48 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     );
   }
 
-  Future<void> _cancelBooking() async {
-    final ToursBooking? selected = await _pickBooking(
-      'Cancelar agendamento',
-      (ToursBooking b) => b.status == ToursBookingStatus.scheduled,
-    );
+  Future<void> _shareBooking({ToursBooking? booking}) async {
+    final ToursBooking? selected =
+        booking ??
+        await _pickBooking(
+          'Compartir',
+          emptyMessage: 'Nao ha agendamentos para compartilhar neste dia.',
+        );
+    if (selected == null || !mounted) {
+      return;
+    }
+    if (_sharingBookingId != null) {
+      return;
+    }
+
+    setState(() => _sharingBookingId = selected.id);
+    try {
+      await AppShare.shareText(
+        context,
+        text: _buildBookingShareMessage(selected),
+        subject: 'Agendamento de ${selected.providerName}',
+        failureTitle: 'Falha ao compartilhar',
+        failureMessagePrefix:
+            'Nao foi possivel preparar a mensagem do agendamento',
+      );
+      if (!mounted) {
+        return;
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sharingBookingId = null);
+      }
+    }
+  }
+
+  Future<void> _cancelBooking({ToursBooking? booking}) async {
+    final ToursBooking? selected =
+        booking ??
+        await _pickBooking(
+          'Cancelar agendamento',
+          canSelect: _isBookingEditable,
+          emptyMessage: 'Nao ha agendamentos ativos para cancelar neste dia.',
+        );
     if (selected == null || !mounted) {
       return;
     }
@@ -1223,6 +1292,50 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       ),
       'Falha ao cancelar agendamento',
     );
+  }
+
+  Future<void> _openCalendarDayActions(DateTime date) async {
+    setState(() {
+      _selectedDate = DateTime(date.year, date.month, date.day);
+    });
+    final ToursBooking? booking = await _pickBooking(
+      'Agendamentos do dia',
+      emptyMessage: 'Nao ha tours ou viagens registrados para este dia.',
+    );
+    if (booking == null || !mounted) {
+      return;
+    }
+    await _openBookingActionDialog(booking);
+  }
+
+  Future<void> _openBookingActionDialog(ToursBooking booking) async {
+    final _ToursBookingAction? action = await showDialog<_ToursBookingAction>(
+      context: context,
+      builder: (BuildContext context) => _ToursBookingActionDialog(
+        booking: booking,
+        sharing: _sharingBookingId == booking.id,
+        canEdit: _isBookingEditable(booking),
+        canRegisterPayment: _canRegisterPayment(booking),
+      ),
+    );
+    if (action == null || !mounted) {
+      return;
+    }
+
+    switch (action) {
+      case _ToursBookingAction.edit:
+        await _editBooking(booking: booking);
+        return;
+      case _ToursBookingAction.payment:
+        await _markPayment(booking: booking);
+        return;
+      case _ToursBookingAction.share:
+        await _shareBooking(booking: booking);
+        return;
+      case _ToursBookingAction.cancel:
+        await _cancelBooking(booking: booking);
+        return;
+    }
   }
 
   Future<void> _manageProvider() async {
@@ -1301,11 +1414,20 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   }
 
   Future<ToursBooking?> _pickBooking(
-    String title,
-    bool Function(ToursBooking booking) predicate,
-  ) {
-    final List<ToursBooking> items = _dayBookings.where(predicate).toList();
-    if (items.isEmpty) return Future<ToursBooking?>.value(null);
+    String title, {
+    bool Function(ToursBooking booking)? canSelect,
+    String? emptyMessage,
+  }) async {
+    final List<ToursBooking> items = canSelect == null
+        ? _dayBookings
+        : _dayBookings.where(canSelect).toList();
+    if (items.isEmpty) {
+      if (!mounted || emptyMessage == null) {
+        return null;
+      }
+      await AppAlerts.info(context, title: title, message: emptyMessage);
+      return null;
+    }
     return showDialog<ToursBooking>(
       context: context,
       builder: (BuildContext context) => SimpleDialog(
@@ -1322,6 +1444,49 @@ class _ToursTravelPageState extends State<ToursTravelPage>
             .toList(),
       ),
     );
+  }
+
+  bool _isBookingEditable(ToursBooking booking) {
+    return booking.status == ToursBookingStatus.scheduled;
+  }
+
+  bool _canRegisterPayment(ToursBooking booking) {
+    return booking.status == ToursBookingStatus.scheduled && !booking.paid;
+  }
+
+  String _buildBookingShareMessage(ToursBooking booking) {
+    ToursProvider? provider;
+    for (final ToursProvider item in _providers) {
+      if (item.id == booking.providerId) {
+        provider = item;
+        break;
+      }
+    }
+    final String paymentLine = booking.status == ToursBookingStatus.cancelled
+        ? 'Estado: cancelado'
+        : booking.paid
+        ? 'Pago em ${_short(booking.paymentDate ?? _today())} via ${booking.paymentMethod?.label ?? 'meio nao informado'}'
+        : 'Pagamento pendente';
+    final StringBuffer buffer = StringBuffer()
+      ..writeln('Agendamento Hotel Costa Norte')
+      ..writeln('${booking.serviceType.label}: ${booking.clientName}')
+      ..writeln(
+        'Horario: ${_fullDate(_dateOnly(booking.startAt))} | ${_time(booking.startAt)} - ${_time(booking.endAt)}',
+      )
+      ..writeln('Prestador: ${booking.providerName}')
+      ..writeln(
+        'Contato: ${provider != null && provider.contact.isNotEmpty ? provider.contact : 'nao informado'}',
+      )
+      ..writeln('Valor: ${_money(booking.amount)}')
+      ..writeln('Comissao: ${_money(booking.commissionAmount)}')
+      ..writeln(paymentLine);
+    if ((booking.guestReference).trim().isNotEmpty) {
+      buffer.writeln('Referencia: ${booking.guestReference}');
+    }
+    if ((booking.description ?? '').trim().isNotEmpty) {
+      buffer.writeln('Observacoes: ${booking.description!.trim()}');
+    }
+    return buffer.toString().trim();
   }
 
   Future<void> _pickSelectedDate() async {
@@ -1407,115 +1572,171 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     child: Text(message, style: Theme.of(context).textTheme.bodyLarge),
   );
 
-  Widget _bookingTile(BuildContext context, ToursBooking b) {
+  Widget _bookingTile(
+    BuildContext context,
+    ToursBooking b, {
+    VoidCallback? onEdit,
+    VoidCallback? onPayment,
+    VoidCallback? onShare,
+    VoidCallback? onCancel,
+    VoidCallback? onDoubleTap,
+    bool sharing = false,
+  }) {
     final Color color = b.status == ToursBookingStatus.cancelled
         ? CostaNorteBrand.error
         : b.paid
         ? CostaNorteBrand.success
         : CostaNorteBrand.goldDeep;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: CostaNorteBrand.line),
-        color: Colors.white,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            children: <Widget>[
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  color: b.serviceType == ToursServiceType.tour
-                      ? const Color(0xFFE8F0FF)
-                      : const Color(0xFFFFF3DB),
-                ),
-                child: Text(
-                  b.serviceType.label,
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: CostaNorteBrand.royalBlueDeep,
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onDoubleTap: onDoubleTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: CostaNorteBrand.line),
+          color: Colors.white,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: b.serviceType == ToursServiceType.tour
+                        ? const Color(0xFFE8F0FF)
+                        : const Color(0xFFFFF3DB),
+                  ),
+                  child: Text(
+                    b.serviceType.label,
+                    style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                      color: CostaNorteBrand.royalBlueDeep,
+                    ),
                   ),
                 ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: color.withValues(alpha: 0.14),
+                  ),
+                  child: Text(
+                    b.status == ToursBookingStatus.cancelled
+                        ? 'Cancelado'
+                        : b.paid
+                        ? 'Pago'
+                        : 'Pendente',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelMedium?.copyWith(color: color),
+                  ),
+                ),
+                const Spacer(),
+                Text(
+                  '${_time(b.startAt)} - ${_time(b.endAt)}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(b.clientName, style: Theme.of(context).textTheme.titleLarge),
+            const SizedBox(height: 4),
+            Text(
+              '${b.providerName} · ${b.guestReference}',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            if (b.providerOfferingName != null) ...<Widget>[
+              const SizedBox(height: 4),
+              Text(
+                b.providerOfferingName!,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: CostaNorteBrand.royalBlueDeep,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
-              const SizedBox(width: 8),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
+            ],
+            if (b.description != null) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(
+                b.description!,
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+            ],
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: <Widget>[
+                _pill(context, 'Valor', _money(b.amount)),
+                _pill(
+                  context,
+                  'Comissao',
+                  '${b.commissionPercent.toStringAsFixed(1)}% · ${_money(b.commissionAmount)}',
                 ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  color: color.withValues(alpha: 0.14),
-                ),
-                child: Text(
+                _pill(
+                  context,
+                  'Pagamento',
                   b.status == ToursBookingStatus.cancelled
                       ? 'Cancelado'
                       : b.paid
-                      ? 'Pago'
+                      ? '${_short(b.paymentDate ?? _today())} · ${b.paymentMethod?.label ?? 'Meio nao informado'}'
                       : 'Pendente',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelMedium?.copyWith(color: color),
                 ),
-              ),
-              const Spacer(),
-              Text(
-                '${_time(b.startAt)} - ${_time(b.endAt)}',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(b.clientName, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 4),
-          Text(
-            '${b.providerName} · ${b.guestReference}',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          if (b.providerOfferingName != null) ...<Widget>[
-            const SizedBox(height: 4),
-            Text(
-              b.providerOfferingName!,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: CostaNorteBrand.royalBlueDeep,
-                fontWeight: FontWeight.w600,
-              ),
+              ],
             ),
-          ],
-          if (b.description != null) ...<Widget>[
-            const SizedBox(height: 8),
-            Text(b.description!, style: Theme.of(context).textTheme.bodyMedium),
-          ],
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: <Widget>[
-              _pill(context, 'Valor', _money(b.amount)),
-              _pill(
-                context,
-                'Comissao',
-                '${b.commissionPercent.toStringAsFixed(1)}% · ${_money(b.commissionAmount)}',
-              ),
-              _pill(
-                context,
-                'Pagamento',
-                b.status == ToursBookingStatus.cancelled
-                    ? 'Cancelado'
-                    : b.paid
-                    ? '${_short(b.paymentDate ?? _today())} · ${b.paymentMethod?.label ?? 'Meio nao informado'}'
-                    : 'Pendente',
+            if (onEdit != null ||
+                onPayment != null ||
+                onShare != null ||
+                onCancel != null) ...<Widget>[
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: <Widget>[
+                  if (onEdit != null)
+                    OutlinedButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_rounded),
+                      label: const Text('Editar'),
+                    ),
+                  if (onPayment != null)
+                    OutlinedButton.icon(
+                      onPressed: onPayment,
+                      icon: const Icon(Icons.payments_rounded),
+                      label: const Text('Informar pago'),
+                    ),
+                  if (onShare != null)
+                    OutlinedButton.icon(
+                      onPressed: sharing ? null : onShare,
+                      icon: Icon(
+                        sharing
+                            ? Icons.hourglass_top_rounded
+                            : Icons.send_rounded,
+                      ),
+                      label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+                    ),
+                  if (onCancel != null)
+                    OutlinedButton.icon(
+                      onPressed: onCancel,
+                      icon: const Icon(Icons.cancel_schedule_send_rounded),
+                      label: const Text('Cancelar'),
+                    ),
+                ],
               ),
             ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -1533,6 +1754,90 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   );
 }
 
+enum _ToursBookingAction { edit, payment, share, cancel }
+
+class _ToursBookingActionDialog extends StatelessWidget {
+  const _ToursBookingActionDialog({
+    required this.booking,
+    required this.sharing,
+    required this.canEdit,
+    required this.canRegisterPayment,
+  });
+
+  final ToursBooking booking;
+  final bool sharing;
+  final bool canEdit;
+  final bool canRegisterPayment;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Agendamento do dia'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            booking.clientName,
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '${booking.serviceType.label} · ${_time(booking.startAt)} - ${_time(booking.endAt)}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              OutlinedButton.icon(
+                onPressed: canEdit
+                    ? () => Navigator.of(context).pop(_ToursBookingAction.edit)
+                    : null,
+                icon: const Icon(Icons.edit_rounded),
+                label: const Text('Editar'),
+              ),
+              OutlinedButton.icon(
+                onPressed: canRegisterPayment
+                    ? () =>
+                          Navigator.of(context).pop(_ToursBookingAction.payment)
+                    : null,
+                icon: const Icon(Icons.payments_rounded),
+                label: const Text('Informar pago'),
+              ),
+              OutlinedButton.icon(
+                onPressed: sharing
+                    ? null
+                    : () =>
+                          Navigator.of(context).pop(_ToursBookingAction.share),
+                icon: Icon(
+                  sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
+                ),
+                label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+              ),
+              OutlinedButton.icon(
+                onPressed: canEdit
+                    ? () =>
+                          Navigator.of(context).pop(_ToursBookingAction.cancel)
+                    : null,
+                icon: const Icon(Icons.cancel_schedule_send_rounded),
+                label: const Text('Cancelar'),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Fechar'),
+        ),
+      ],
+    );
+  }
+}
+
 class _DayCell {
   const _DayCell(this.date, this.bookings, this.inMonth);
   final DateTime date;
@@ -1546,12 +1851,14 @@ class _ToursAgendaDayCard extends StatelessWidget {
     required this.bookings,
     required this.selected,
     required this.onTap,
+    required this.onDoubleTap,
   });
 
   final DateTime date;
   final List<ToursBooking> bookings;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onDoubleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1577,6 +1884,7 @@ class _ToursAgendaDayCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(22),
       onTap: onTap,
+      onDoubleTap: onDoubleTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.all(8),
@@ -2042,14 +2350,18 @@ class _BookingDialogState extends State<_BookingDialog> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    SwitchListTile(
-                      contentPadding: EdgeInsets.zero,
-                      value: _paid,
-                      title: const Text('Registrar como pago'),
-                      onChanged: (bool value) => setState(() {
-                        _paid = value;
-                        if (!_paid) _paymentMethod = null;
-                      }),
+                    Row(
+                      children: <Widget>[
+                        const Expanded(child: Text('Registrar como pago')),
+                        _InlineStatusSwitch(
+                          value: _paid,
+                          activeLabel: 'Si',
+                          inactiveLabel: 'No',
+                          activeColor: CostaNorteBrand.success,
+                          inactiveColor: CostaNorteBrand.error,
+                          onChanged: _setPaidValue,
+                        ),
+                      ],
                     ),
                     if (_paid) ...<Widget>[
                       const SizedBox(height: 12),
@@ -2159,6 +2471,15 @@ class _BookingDialogState extends State<_BookingDialog> {
     });
   }
 
+  void _setPaidValue(bool value) {
+    setState(() {
+      _paid = value;
+      if (!_paid) {
+        _paymentMethod = null;
+      }
+    });
+  }
+
   void _submit() {
     if (!_formKey.currentState!.validate()) return;
     if (!_endAt.isAfter(_startAt)) {
@@ -2206,6 +2527,82 @@ class _BookingDialogState extends State<_BookingDialog> {
       _amount.text = selected.amount.toStringAsFixed(0);
       _description.text = selected.description ?? '';
     });
+  }
+}
+
+class _InlineStatusSwitch extends StatelessWidget {
+  const _InlineStatusSwitch({
+    required this.value,
+    required this.activeLabel,
+    required this.inactiveLabel,
+    required this.activeColor,
+    required this.inactiveColor,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final String activeLabel;
+  final String inactiveLabel;
+  final Color activeColor;
+  final Color inactiveColor;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final String label = value ? activeLabel : inactiveLabel;
+    final Color backgroundColor = value ? activeColor : inactiveColor;
+    return Semantics(
+      button: true,
+      toggled: value,
+      label: 'Registrar como pago',
+      value: label,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () => onChanged(!value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          width: 82,
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: <Widget>[
+              Align(
+                alignment: value ? Alignment.centerLeft : Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              AnimatedAlign(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 

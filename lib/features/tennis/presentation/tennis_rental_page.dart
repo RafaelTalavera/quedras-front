@@ -1,18 +1,11 @@
-import 'dart:io';
-import 'dart:typed_data';
-import 'dart:ui' as ui;
-
 import 'package:flutter/material.dart';
-import 'package:flutter/rendering.dart';
-import 'package:path_provider/path_provider.dart';
-import 'package:share_plus/share_plus.dart';
 
 import '../../../core/config/app_runtime_config.dart';
 import '../../../core/feedback/app_alerts.dart';
+import '../../../core/feedback/app_share.dart';
 import '../../../core/sync/auto_refresh_controller.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/brand_section_hero.dart';
-import '../../../core/widgets/costa_norte_logo.dart';
 import '../../courts/application/court_app_service.dart';
 import '../../courts/domain/court_models.dart';
 
@@ -225,9 +218,23 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                 OutlinedButton.icon(
                   onPressed: _saving || _dayBookings.isEmpty
                       ? null
+                      : _openEditDialog,
+                  icon: const Icon(Icons.edit_rounded),
+                  label: const Text('Editar'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _saving || _dayBookings.isEmpty
+                      ? null
                       : _openPaymentDialog,
                   icon: const Icon(Icons.payments_rounded),
                   label: const Text('Informar pago'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _saving || _dayBookings.isEmpty
+                      ? null
+                      : _openShareDialog,
+                  icon: const Icon(Icons.send_rounded),
+                  label: const Text('Compartir'),
                 ),
                 OutlinedButton.icon(
                   onPressed: _saving || _dayBookings.isEmpty
@@ -435,46 +442,12 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     });
 
     try {
-      final Uint8List receiptBytes = await _CourtBookingReceiptRenderer(
-        booking: booking,
-        context: context,
-      ).build();
-      final Directory tempDir = await getTemporaryDirectory();
-      final String filePath =
-          '${tempDir.path}/comprovante_reserva_${booking.id}_${_formatDate(booking.bookingDate)}.png';
-      final File file = File(filePath);
-      await file.writeAsBytes(receiptBytes, flush: true);
-
-      final ShareResult result = await SharePlus.instance.share(
-        ShareParams(
-          files: <XFile>[XFile(file.path, mimeType: 'image/png')],
-          fileNameOverrides: <String>[
-            'comprovante_reserva_${booking.id}.png',
-          ],
-          subject: 'Comprovante de reserva',
-        ),
-      );
-
-      if (!mounted) {
-        return;
-      }
-
-      if (result.status == ShareResultStatus.unavailable) {
-        await AppAlerts.warning(
-          context,
-          title: 'Compartilhamento indisponivel',
-          message:
-              'Nao foi possivel abrir o compartilhamento para o WhatsApp neste dispositivo.',
-        );
-      }
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      await AppAlerts.error(
+      await AppShare.shareText(
         context,
-        title: 'Falha ao enviar comprovante',
-        message: 'Nao foi possivel gerar o comprovante da reserva: $error',
+        text: _buildBookingShareMessage(booking),
+        subject: 'Reserva de quadra ${booking.customerName}',
+        failureTitle: 'Falha ao compartilhar reserva',
+        failureMessagePrefix: 'Nao foi possivel preparar os dados da reserva',
       );
     } finally {
       if (mounted) {
@@ -483,6 +456,35 @@ class _TennisRentalPageState extends State<TennisRentalPage>
         });
       }
     }
+  }
+
+  String _buildBookingShareMessage(CourtBooking booking) {
+    final String paymentLine = booking.status == CourtBookingStatus.cancelled
+        ? booking.cancellationNotes == null
+              ? 'Estado: cancelada'
+              : 'Estado: cancelada (${booking.cancellationNotes})'
+        : booking.paid
+        ? 'Pago em ${_formatShortDate(booking.paymentDate ?? booking.bookingDate)} via ${booking.paymentMethod?.label ?? 'meio nao informado'}'
+        : 'Pagamento pendente';
+    final StringBuffer buffer = StringBuffer()
+      ..writeln('Reserva de quadra Hotel Costa Norte')
+      ..writeln('Cliente: ${booking.customerName}')
+      ..writeln('Data: ${_formatShortDate(booking.bookingDate)}')
+      ..writeln(
+        'Horario: ${booking.startTime.substring(0, 5)} - ${booking.endTime.substring(0, 5)}',
+      )
+      ..writeln('Tipo: ${booking.customerType.label}')
+      ..writeln('Referencia: ${booking.customerReference}')
+      ..writeln('Quadra: ${_formatCurrency(booking.courtAmount)}')
+      ..writeln('Materiais: ${_formatCurrency(booking.materialsAmount)}')
+      ..writeln('Total: ${_formatCurrency(booking.totalAmount)}')
+      ..writeln(paymentLine);
+    if (booking.materials.isNotEmpty) {
+      buffer.writeln(
+        'Itens: ${booking.materials.map<String>((CourtBookingMaterial item) => '${item.materialLabel} x${item.quantity}').join(' | ')}',
+      );
+    }
+    return buffer.toString().trim();
   }
 
   Future<void> _reloadSummary() async {
@@ -682,6 +684,16 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                   padding: const EdgeInsets.only(bottom: 12),
                   child: _CourtBookingTile(
                     booking: booking,
+                    onDoubleTap: () => _openBookingActionDialog(booking),
+                    onEdit: _isBookingEditable(booking)
+                        ? () => _openEditDialog(booking: booking)
+                        : null,
+                    onPayment: _canRegisterPayment(booking)
+                        ? () => _openPaymentDialog(booking: booking)
+                        : null,
+                    onCancel: _isBookingEditable(booking)
+                        ? () => _openCancelDialog(booking: booking)
+                        : null,
                     sharing: _sharingBookingId == booking.id,
                     onShare: () => _shareBookingReceipt(booking),
                   ),
@@ -774,6 +786,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                       bookings: _bookingsForDate(cell.date!),
                       selected: _sameDay(cell.date!, _selectedDate),
                       onTap: () => _setSelectedDate(cell.date!),
+                      onDoubleTap: () => _openCalendarDayActions(cell.date!),
                     );
                   },
                 ),
@@ -1514,16 +1527,92 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     }
   }
 
-  Future<void> _openPaymentDialog() async {
-    final CourtBooking? booking = await _pickBooking(
-      'Selecione a reserva para informar o pagamento',
-    );
-    if (booking == null || !mounted) {
+  Future<void> _openEditDialog({CourtBooking? booking}) async {
+    final CourtBooking? selected =
+        booking ??
+        await _pickBooking(
+          'Selecione a reserva para editar',
+          canSelect: _isBookingEditable,
+          emptyMessage: 'Nao ha reservas ativas para editar neste dia.',
+        );
+    if (selected == null || !mounted) {
+      return;
+    }
+    final _CourtBookingFormResult? result =
+        await showDialog<_CourtBookingFormResult>(
+          context: context,
+          builder: (BuildContext context) => _CourtBookingDialog(
+            service: widget.courtAppService,
+            initialBooking: selected,
+          ),
+        );
+    if (result == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _saving = true;
+    });
+    try {
+      await widget.courtAppService.updateBooking(
+        selected.id,
+        result.toUpdateModel(),
+      );
+      if (!mounted) {
+        return;
+      }
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.success(
+        context,
+        title: 'Reserva atualizada',
+        message: 'A reserva da quadra foi atualizada com sucesso.',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      final String message = error.toString().replaceFirst('Bad state: ', '');
+      if (_isCourtBookingOverlapMessage(message)) {
+        await AppAlerts.warning(
+          context,
+          title: 'Horario ocupado',
+          message:
+              'Ja existe uma reserva ativa para esse horario. Ajuste o horario para continuar.',
+        );
+      } else {
+        await AppAlerts.error(
+          context,
+          title: 'Falha ao editar reserva',
+          message: message,
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openPaymentDialog({CourtBooking? booking}) async {
+    final CourtBooking? selected =
+        booking ??
+        await _pickBooking(
+          'Selecione a reserva para informar o pagamento',
+          canSelect: _canRegisterPayment,
+          emptyMessage:
+              'Todas as reservas deste dia ja estao pagas ou canceladas.',
+        );
+    if (selected == null || !mounted) {
       return;
     }
     final _PaymentResult? result = await showDialog<_PaymentResult>(
       context: context,
-      builder: (BuildContext context) => _PaymentDialog(booking: booking),
+      builder: (BuildContext context) => _PaymentDialog(booking: selected),
     );
     if (result == null) {
       return;
@@ -1533,7 +1622,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     });
     try {
       await widget.courtAppService.updatePayment(
-        booking.id,
+        selected.id,
         UpdateCourtPaymentModel(
           paymentMethod: result.method,
           paymentDate: _formatDate(result.date),
@@ -1570,11 +1659,75 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     }
   }
 
-  Future<void> _openCancelDialog() async {
+  Future<void> _openShareDialog({CourtBooking? booking}) async {
+    final CourtBooking? selected =
+        booking ??
+        await _pickBooking(
+          'Selecione a reserva para compartilhar',
+          emptyMessage: 'Nao ha reservas para compartilhar neste dia.',
+        );
+    if (selected == null || !mounted) {
+      return;
+    }
+    await _shareBookingReceipt(selected);
+  }
+
+  Future<void> _openCalendarDayActions(DateTime date) async {
+    await _setSelectedDate(date);
+    if (!mounted || _dayBookings.isEmpty) {
+      return;
+    }
     final CourtBooking? booking = await _pickBooking(
-      'Selecione a reserva para cancelar',
+      'Reservas do dia',
+      emptyMessage: 'Nao ha reservas para este dia.',
     );
     if (booking == null || !mounted) {
+      return;
+    }
+    await _openBookingActionDialog(booking);
+  }
+
+  Future<void> _openBookingActionDialog(CourtBooking booking) async {
+    final _CourtBookingAction? action = await showDialog<_CourtBookingAction>(
+      context: context,
+      builder: (BuildContext context) {
+        return _CourtBookingActionDialog(
+          booking: booking,
+          sharing: _sharingBookingId == booking.id,
+          canEdit: _isBookingEditable(booking),
+          canRegisterPayment: _canRegisterPayment(booking),
+        );
+      },
+    );
+    if (action == null || !mounted) {
+      return;
+    }
+
+    switch (action) {
+      case _CourtBookingAction.edit:
+        await _openEditDialog(booking: booking);
+        return;
+      case _CourtBookingAction.payment:
+        await _openPaymentDialog(booking: booking);
+        return;
+      case _CourtBookingAction.share:
+        await _openShareDialog(booking: booking);
+        return;
+      case _CourtBookingAction.cancel:
+        await _openCancelDialog(booking: booking);
+        return;
+    }
+  }
+
+  Future<void> _openCancelDialog({CourtBooking? booking}) async {
+    final CourtBooking? selected =
+        booking ??
+        await _pickBooking(
+          'Selecione a reserva para cancelar',
+          canSelect: _isBookingEditable,
+          emptyMessage: 'Nao ha reservas ativas para cancelar neste dia.',
+        );
+    if (selected == null || !mounted) {
       return;
     }
     final TextEditingController notesController = TextEditingController();
@@ -1610,7 +1763,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     });
     try {
       await widget.courtAppService.cancelBooking(
-        booking.id,
+        selected.id,
         CancelCourtBookingModel(cancellationNotes: notesController.text.trim()),
       );
       if (!mounted) {
@@ -1655,7 +1808,21 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     }
   }
 
-  Future<CourtBooking?> _pickBooking(String title) async {
+  Future<CourtBooking?> _pickBooking(
+    String title, {
+    bool Function(CourtBooking booking)? canSelect,
+    String? emptyMessage,
+  }) async {
+    final List<CourtBooking> items = canSelect == null
+        ? _dayBookings
+        : _dayBookings.where(canSelect).toList();
+    if (items.isEmpty) {
+      if (!mounted || emptyMessage == null) {
+        return null;
+      }
+      await AppAlerts.info(context, title: title, message: emptyMessage);
+      return null;
+    }
     return showDialog<CourtBooking>(
       context: context,
       builder: (BuildContext context) {
@@ -1663,14 +1830,14 @@ class _TennisRentalPageState extends State<TennisRentalPage>
           title: Text(title),
           content: SizedBox(
             width: 520,
-            child: _dayBookings.isEmpty
+            child: items.isEmpty
                 ? const Text('No hay reservas activas para este dia.')
                 : ListView.separated(
                     shrinkWrap: true,
-                    itemCount: _dayBookings.length,
+                    itemCount: items.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 8),
                     itemBuilder: (BuildContext context, int index) {
-                      final CourtBooking booking = _dayBookings[index];
+                      final CourtBooking booking = items[index];
                       return ListTile(
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(14),
@@ -1694,6 +1861,14 @@ class _TennisRentalPageState extends State<TennisRentalPage>
         );
       },
     );
+  }
+
+  bool _isBookingEditable(CourtBooking booking) {
+    return booking.status == CourtBookingStatus.scheduled;
+  }
+
+  bool _canRegisterPayment(CourtBooking booking) {
+    return booking.status == CourtBookingStatus.scheduled && !booking.paid;
   }
 }
 
@@ -1847,12 +2022,20 @@ class _InfoPill extends StatelessWidget {
 class _CourtBookingTile extends StatelessWidget {
   const _CourtBookingTile({
     required this.booking,
+    this.onDoubleTap,
+    this.onEdit,
+    this.onPayment,
     this.onShare,
+    this.onCancel,
     this.sharing = false,
   });
 
   final CourtBooking booking;
+  final VoidCallback? onDoubleTap;
+  final VoidCallback? onEdit;
+  final VoidCallback? onPayment;
   final VoidCallback? onShare;
+  final VoidCallback? onCancel;
   final bool sharing;
 
   @override
@@ -1860,293 +2043,234 @@ class _CourtBookingTile extends StatelessWidget {
     final Color accentColor = _statusColor(booking);
     final String detailText = _statusDescription(booking);
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: CostaNorteBrand.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  color: accentColor.withValues(alpha: 0.12),
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onDoubleTap: onDoubleTap,
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: CostaNorteBrand.line),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Container(
+                  width: 48,
+                  height: 48,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    color: accentColor.withValues(alpha: 0.12),
+                  ),
+                  child: Icon(Icons.sports_tennis_rounded, color: accentColor),
                 ),
-                child: Icon(Icons.sports_tennis_rounded, color: accentColor),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      booking.customerName,
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${booking.startTime.substring(0, 5)} - ${booking.endTime.substring(0, 5)} | ${booking.customerType.label} | ${booking.durationHours.toStringAsFixed(1)} h',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        booking.customerName,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${booking.startTime.substring(0, 5)} - ${booking.endTime.substring(0, 5)} | ${booking.customerType.label} | ${booking.durationHours.toStringAsFixed(1)} h',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: accentColor.withValues(alpha: 0.12),
+                  ),
+                  child: Text(
+                    _statusLabel(booking),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.labelMedium?.copyWith(color: accentColor),
+                  ),
                 ),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(999),
-                  color: accentColor.withValues(alpha: 0.12),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: <Widget>[
+                _InfoPill(
+                  label: 'Quadra',
+                  value: _formatCurrency(booking.courtAmount),
                 ),
-                child: Text(
-                  _statusLabel(booking),
-                  style: Theme.of(
-                    context,
-                  ).textTheme.labelMedium?.copyWith(color: accentColor),
+                _InfoPill(
+                  label: 'Materiais',
+                  value: _formatCurrency(booking.materialsAmount),
                 ),
+                _InfoPill(
+                  label: 'Total',
+                  value: _formatCurrency(booking.totalAmount),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'Referencia: ${booking.customerReference}',
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            if (booking.materials.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 6),
+              Text(
+                booking.materials
+                    .map<String>(
+                      (CourtBookingMaterial item) =>
+                          '${item.materialLabel} x${item.quantity}',
+                    )
+                    .join(' | '),
+                style: Theme.of(context).textTheme.bodySmall,
               ),
             ],
+            if (detailText.isNotEmpty) ...<Widget>[
+              const SizedBox(height: 6),
+              Text(detailText, style: Theme.of(context).textTheme.bodySmall),
+            ],
+            if (onEdit != null ||
+                onPayment != null ||
+                onShare != null ||
+                onCancel != null) ...<Widget>[
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: <Widget>[
+                  if (onEdit != null)
+                    OutlinedButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_rounded),
+                      label: const Text('Editar'),
+                    ),
+                  if (onPayment != null)
+                    OutlinedButton.icon(
+                      onPressed: onPayment,
+                      icon: const Icon(Icons.payments_rounded),
+                      label: const Text('Informar pago'),
+                    ),
+                  if (onShare != null)
+                    OutlinedButton.icon(
+                      onPressed: sharing ? null : onShare,
+                      icon: Icon(
+                        sharing
+                            ? Icons.hourglass_top_rounded
+                            : Icons.send_rounded,
+                      ),
+                      label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+                    ),
+                  if (onCancel != null)
+                    OutlinedButton.icon(
+                      onPressed: onCancel,
+                      icon: const Icon(Icons.cancel_schedule_send_rounded),
+                      label: const Text('Cancelar'),
+                    ),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+enum _CourtBookingAction { edit, payment, share, cancel }
+
+class _CourtBookingActionDialog extends StatelessWidget {
+  const _CourtBookingActionDialog({
+    required this.booking,
+    required this.sharing,
+    required this.canEdit,
+    required this.canRegisterPayment,
+  });
+
+  final CourtBooking booking;
+  final bool sharing;
+  final bool canEdit;
+  final bool canRegisterPayment;
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Reserva do dia'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            booking.customerName,
+            style: Theme.of(context).textTheme.titleMedium,
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 6),
+          Text(
+            '${booking.startTime.substring(0, 5)} - ${booking.endTime.substring(0, 5)} · ${booking.customerType.label}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
           Wrap(
             spacing: 10,
             runSpacing: 10,
             children: <Widget>[
-              _InfoPill(
-                label: 'Quadra',
-                value: _formatCurrency(booking.courtAmount),
+              OutlinedButton.icon(
+                onPressed: canEdit
+                    ? () => Navigator.of(context).pop(_CourtBookingAction.edit)
+                    : null,
+                icon: const Icon(Icons.edit_rounded),
+                label: const Text('Editar'),
               ),
-              _InfoPill(
-                label: 'Materiais',
-                value: _formatCurrency(booking.materialsAmount),
+              OutlinedButton.icon(
+                onPressed: canRegisterPayment
+                    ? () =>
+                          Navigator.of(context).pop(_CourtBookingAction.payment)
+                    : null,
+                icon: const Icon(Icons.payments_rounded),
+                label: const Text('Informar pago'),
               ),
-              _InfoPill(
-                label: 'Total',
-                value: _formatCurrency(booking.totalAmount),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          Text(
-            'Referencia: ${booking.customerReference}',
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-          if (booking.materials.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 6),
-            Text(
-              booking.materials
-                  .map<String>(
-                    (CourtBookingMaterial item) =>
-                        '${item.materialLabel} x${item.quantity}',
-                  )
-                  .join(' | '),
-              style: Theme.of(context).textTheme.bodySmall,
-            ),
-          ],
-          if (detailText.isNotEmpty) ...<Widget>[
-            const SizedBox(height: 6),
-            Text(detailText, style: Theme.of(context).textTheme.bodySmall),
-          ],
-          if (onShare != null) ...<Widget>[
-            const SizedBox(height: 14),
-            Align(
-              alignment: Alignment.centerLeft,
-              child: OutlinedButton.icon(
-                onPressed: sharing ? null : onShare,
+              OutlinedButton.icon(
+                onPressed: sharing
+                    ? null
+                    : () =>
+                          Navigator.of(context).pop(_CourtBookingAction.share),
                 icon: Icon(
                   sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
                 ),
-                label: Text(sharing ? 'Enviando...' : 'Enviar por WhatsApp'),
+                label: Text(sharing ? 'Compartindo...' : 'Compartir'),
               ),
-            ),
-          ],
+              OutlinedButton.icon(
+                onPressed: canEdit
+                    ? () =>
+                          Navigator.of(context).pop(_CourtBookingAction.cancel)
+                    : null,
+                icon: const Icon(Icons.cancel_schedule_send_rounded),
+                label: const Text('Cancelar'),
+              ),
+            ],
+          ),
         ],
       ),
-    );
-  }
-}
-
-final class _CourtBookingReceiptRenderer {
-  const _CourtBookingReceiptRenderer({
-    required this.booking,
-    required this.context,
-  });
-
-  final CourtBooking booking;
-  final BuildContext context;
-
-  Future<Uint8List> build() async {
-    const Size logicalSize = Size(960, 760);
-    const double pixelRatio = 2;
-    final RenderRepaintBoundary boundary = RenderRepaintBoundary();
-    final ui.FlutterView view = View.of(context);
-    final RenderView renderView = RenderView(
-      view: view,
-      configuration: ViewConfiguration(
-        logicalConstraints: BoxConstraints.tight(logicalSize),
-        devicePixelRatio: pixelRatio,
-      ),
-      child: RenderPositionedBox(alignment: Alignment.center, child: boundary),
-    );
-    final PipelineOwner pipelineOwner = PipelineOwner()..rootNode = renderView;
-    renderView.prepareInitialFrame();
-
-    final BuildOwner buildOwner = BuildOwner(focusManager: FocusManager());
-    final RenderObjectToWidgetElement<RenderBox> rootElement =
-        RenderObjectToWidgetAdapter<RenderBox>(
-          container: boundary,
-          child: _ReceiptRenderShell(
-            size: logicalSize,
-            theme: Theme.of(context),
-            mediaQueryData: MediaQuery.of(context).copyWith(
-              size: logicalSize,
-              devicePixelRatio: pixelRatio,
-            ),
-            child: _CourtBookingReceiptCard(booking: booking),
-          ),
-        ).attachToRenderTree(buildOwner);
-
-    buildOwner
-      ..buildScope(rootElement)
-      ..finalizeTree();
-    pipelineOwner
-      ..flushLayout()
-      ..flushCompositingBits()
-      ..flushPaint();
-
-    final ui.Image image = await boundary.toImage(pixelRatio: pixelRatio);
-    final ByteData? data = await image.toByteData(
-      format: ui.ImageByteFormat.png,
-    );
-    if (data == null) {
-      throw StateError('Nao foi possivel converter o comprovante em imagem.');
-    }
-    return data.buffer.asUint8List();
-  }
-}
-
-class _ReceiptRenderShell extends StatelessWidget {
-  const _ReceiptRenderShell({
-    required this.size,
-    required this.theme,
-    required this.mediaQueryData,
-    required this.child,
-  });
-
-  final Size size;
-  final ThemeData theme;
-  final MediaQueryData mediaQueryData;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return MediaQuery(
-      data: mediaQueryData,
-      child: Theme(
-        data: theme,
-        child: Directionality(
-          textDirection: TextDirection.ltr,
-          child: Material(
-            color: const Color(0x00000000),
-            child: SizedBox(
-              width: size.width,
-              height: size.height,
-              child: child,
-            ),
-          ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Fechar'),
         ),
-      ),
-    );
-  }
-}
-
-class _CourtBookingReceiptCard extends StatelessWidget {
-  const _CourtBookingReceiptCard({required this.booking});
-
-  final CourtBooking booking;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(28),
-      decoration: const BoxDecoration(
-        gradient: CostaNorteBrand.ambientGradient,
-      ),
-      child: Center(
-        child: Container(
-          width: 820,
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(28),
-            border: Border.all(color: CostaNorteBrand.line),
-            boxShadow: const <BoxShadow>[
-              BoxShadow(
-                color: Color(0x14000000),
-                blurRadius: 24,
-                offset: Offset(0, 12),
-              ),
-            ],
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  const CostaNorteLogo(width: 210),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 14,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(999),
-                      color: _statusColor(booking).withValues(alpha: 0.12),
-                    ),
-                    child: Text(
-                      _statusLabel(booking),
-                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                        color: _statusColor(booking),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              Text(
-                'Comprovante de reserva',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Quadras de tenis | Hotel Costa Norte',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 22),
-              _CourtBookingTile(booking: booking),
-              const SizedBox(height: 18),
-              Text(
-                'Emitido pelo Hotel Costa Norte',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
-          ),
-        ),
-      ),
+      ],
     );
   }
 }
@@ -2157,12 +2281,14 @@ class _CourtAgendaDayCard extends StatelessWidget {
     required this.bookings,
     required this.selected,
     required this.onTap,
+    required this.onDoubleTap,
   });
 
   final DateTime date;
   final List<CourtBooking> bookings;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onDoubleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -2171,6 +2297,7 @@ class _CourtAgendaDayCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(22),
       onTap: onTap,
+      onDoubleTap: onDoubleTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 160),
         padding: const EdgeInsets.all(8),
@@ -2317,9 +2444,10 @@ class _PartnerCoachSummaryAccumulator {
 }
 
 class _CourtBookingDialog extends StatefulWidget {
-  const _CourtBookingDialog({required this.service});
+  const _CourtBookingDialog({required this.service, this.initialBooking});
 
   final CourtAppService service;
+  final CourtBooking? initialBooking;
 
   @override
   State<_CourtBookingDialog> createState() => _CourtBookingDialogState();
@@ -2346,11 +2474,60 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
   @override
   void initState() {
     super.initState();
-    _nameController = TextEditingController();
-    _referenceController = TextEditingController();
-    _racketsController = TextEditingController(text: '0');
-    _ballsController = TextEditingController(text: '0');
-    _syncEndTimeWithStart();
+    final CourtBooking? booking = widget.initialBooking;
+    _customerType = booking?.customerType ?? CourtCustomerType.guest;
+    _manualCustomerName = booking?.customerName ?? '';
+    _selectedPartnerCoachName = _customerType == CourtCustomerType.partnerCoach
+        ? booking?.customerName
+        : null;
+    _paid = booking?.paid ?? false;
+    _paymentMethod = booking?.paymentMethod ?? CourtPaymentMethod.pix;
+    _startTime = booking == null
+        ? const TimeOfDay(hour: 9, minute: 0)
+        : _parseTimeOfDay(booking.startTime.substring(0, 5));
+    _endTime = booking == null
+        ? const TimeOfDay(hour: 10, minute: 0)
+        : _parseTimeOfDay(booking.endTime.substring(0, 5));
+    _bookingDate = booking?.bookingDate ?? DateTime.now();
+    final int rackets = booking == null
+        ? 0
+        : booking.materials
+              .firstWhere(
+                (CourtBookingMaterial item) =>
+                    item.materialCode == CourtMaterialCode.racket,
+                orElse: () => const CourtBookingMaterial(
+                  materialCode: CourtMaterialCode.racket,
+                  materialLabel: '',
+                  quantity: 0,
+                  unitPrice: 0,
+                  totalPrice: 0,
+                ),
+              )
+              .quantity;
+    final int balls = booking == null
+        ? 0
+        : booking.materials
+              .firstWhere(
+                (CourtBookingMaterial item) =>
+                    item.materialCode == CourtMaterialCode.ball,
+                orElse: () => const CourtBookingMaterial(
+                  materialCode: CourtMaterialCode.ball,
+                  materialLabel: '',
+                  quantity: 0,
+                  unitPrice: 0,
+                  totalPrice: 0,
+                ),
+              )
+              .quantity;
+    _nameController = TextEditingController(text: booking?.customerName ?? '');
+    _referenceController = TextEditingController(
+      text: booking?.customerReference ?? '',
+    );
+    _racketsController = TextEditingController(text: '$rackets');
+    _ballsController = TextEditingController(text: '$balls');
+    if (booking == null) {
+      _syncEndTimeWithStart();
+    }
     _loadPartnerCoaches();
   }
 
@@ -2366,7 +2543,11 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Nova reserva de quadra'),
+      title: Text(
+        widget.initialBooking == null
+            ? 'Nova reserva de quadra'
+            : 'Editar reserva de quadra',
+      ),
       content: SizedBox(
         width: 560,
         child: Form(
@@ -2509,15 +2690,18 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                   ],
                 ),
                 const SizedBox(height: 12),
-                SwitchListTile(
-                  value: _paid,
-                  onChanged: (bool value) {
-                    setState(() {
-                      _paid = value;
-                    });
-                  },
-                  title: const Text('Pagado'),
-                  contentPadding: EdgeInsets.zero,
+                Row(
+                  children: <Widget>[
+                    const Expanded(child: Text('Pagado')),
+                    _InlineStatusSwitch(
+                      value: _paid,
+                      activeLabel: 'Si',
+                      inactiveLabel: 'No',
+                      activeColor: CostaNorteBrand.success,
+                      inactiveColor: CostaNorteBrand.error,
+                      onChanged: _setPaidValue,
+                    ),
+                  ],
                 ),
                 if (_paid)
                   DropdownButtonFormField<CourtPaymentMethod>(
@@ -2589,18 +2773,27 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
 
   Future<void> _pickDate() async {
     final DateTime today = _todayDate();
+    final bool editing = widget.initialBooking != null;
     final DateTime? picked = await showDatePicker(
       context: context,
       initialDate: _bookingDate,
-      firstDate: today,
+      firstDate: editing ? DateTime(today.year - 1, 1, 1) : today,
       lastDate: DateTime(today.year + 1, today.month, today.day),
-      selectableDayPredicate: (DateTime day) => !_isBeforeToday(day),
+      selectableDayPredicate: editing
+          ? null
+          : (DateTime day) => !_isBeforeToday(day),
     );
     if (picked == null) {
       return;
     }
     setState(() {
       _bookingDate = picked;
+    });
+  }
+
+  void _setPaidValue(bool value) {
+    setState(() {
+      _paid = value;
     });
   }
 
@@ -2696,7 +2889,9 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
         _partnerCoaches = coaches;
         if (_partnerCoaches.isEmpty) {
           _selectedPartnerCoachName = null;
-          _nameController.clear();
+          if (_customerType == CourtCustomerType.partnerCoach) {
+            _nameController.clear();
+          }
         } else {
           final bool hasSelectedCoach = _partnerCoaches.any(
             (CourtPartnerCoach coach) =>
@@ -2706,7 +2901,9 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
             _selectedPartnerCoachName = _partnerCoaches.first.name;
           }
           _selectedPartnerCoachName ??= _partnerCoaches.first.name;
-          _nameController.text = _selectedPartnerCoachName!;
+          if (_customerType == CourtCustomerType.partnerCoach) {
+            _nameController.text = _selectedPartnerCoachName!;
+          }
         }
       });
     } catch (error) {
@@ -2758,6 +2955,82 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
       return;
     }
     _endTime = _parseTimeOfDay(availableEndSlots.first);
+  }
+}
+
+class _InlineStatusSwitch extends StatelessWidget {
+  const _InlineStatusSwitch({
+    required this.value,
+    required this.activeLabel,
+    required this.inactiveLabel,
+    required this.activeColor,
+    required this.inactiveColor,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final String activeLabel;
+  final String inactiveLabel;
+  final Color activeColor;
+  final Color inactiveColor;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final String label = value ? activeLabel : inactiveLabel;
+    final Color backgroundColor = value ? activeColor : inactiveColor;
+    return Semantics(
+      button: true,
+      toggled: value,
+      label: 'Pagado',
+      value: label,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () => onChanged(!value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          width: 82,
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: <Widget>[
+              Align(
+                alignment: value ? Alignment.centerLeft : Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              AnimatedAlign(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -3431,7 +3704,28 @@ class _CourtBookingFormResult {
       paymentMethod: paymentMethod,
       paymentDate: paid ? _formatDate(DateTime.now()) : null,
       paymentNotes: null,
-      materials: <CreateCourtBookingMaterialModel>[
+      materials: _materials,
+    );
+  }
+
+  UpdateCourtBookingModel toUpdateModel() {
+    return UpdateCourtBookingModel(
+      bookingDate: _formatDate(bookingDate),
+      startTime: _formatTimeOfDay(startTime),
+      endTime: _formatTimeOfDay(endTime),
+      customerName: customerName,
+      customerReference: customerReference,
+      customerType: customerType,
+      paid: paid,
+      paymentMethod: paymentMethod,
+      paymentDate: paid ? _formatDate(DateTime.now()) : null,
+      paymentNotes: null,
+      materials: _materials,
+    );
+  }
+
+  List<CreateCourtBookingMaterialModel> get _materials =>
+      <CreateCourtBookingMaterialModel>[
         if (rackets > 0)
           CreateCourtBookingMaterialModel(
             materialCode: CourtMaterialCode.racket,
@@ -3442,9 +3736,7 @@ class _CourtBookingFormResult {
             materialCode: CourtMaterialCode.ball,
             quantity: balls,
           ),
-      ],
-    );
-  }
+      ];
 }
 
 class _PaymentResult {

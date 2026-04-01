@@ -1,5 +1,17 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-04-01 | UX operativa | Quadras y Tours con switch visual de pago y cards diarias con cancelar
+- Componente afectado: Frontend (`Quadras` + `Tours e Viagens`) + documentacion funcional
+- Archivos tocados:
+  - `lib/features/tennis/presentation/tennis_rental_page.dart`
+  - `lib/features/tours/presentation/tours_travel_page.dart`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: alinear la experiencia diaria de `Quadras` y `Tours e Viagens` con una operacion mas directa desde la propia card, y hacer mas legible el estado de pago en los formularios.
+- Impacto funcional:
+  - los formularios de `Quadras` y `Tours e Viagens` reemplazan el switch simple de pago por un control visual `Si / No` con color semantico
+  - las cards de `Dia selecionado` mantienen `Editar`, `Informar pago` y `Compartir`, y ahora tambien exponen `Cancelar`
+  - la accion por card queda consistente con las acciones ya disponibles en los dialogos operativos del dia
+
 ## 2026-04-01 | UX operativa | Massagens con tipo de atendimento cerrado, share nativo y cards accionables
 - Componente afectado: Frontend (`Massagens`) + utilitario compartido de share + documentacion funcional
 - Archivos tocados:
