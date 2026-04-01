@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/config/app_runtime_config.dart';
@@ -10,6 +12,7 @@ import '../../../core/widgets/app_dialog_shell.dart';
 import '../../../core/widgets/brand_section_hero.dart';
 import '../../../core/widgets/horizontal_scrollable_container.dart';
 import '../application/massage_app_service.dart';
+import '../application/massage_provider_report_pdf_exporter.dart';
 import '../domain/massage_models.dart';
 
 const List<String> _monthLabels = <String>[
@@ -71,12 +74,14 @@ class MassageBookingPageController {
 class MassageBookingPage extends StatefulWidget {
   const MassageBookingPage({
     required this.massageAppService,
+    this.providerReportPdfExporter,
     this.controller,
     this.onSectionChanged,
     super.key,
   });
 
   final MassageAppService massageAppService;
+  final MassageProviderReportPdfExporter? providerReportPdfExporter;
   final MassageBookingPageController? controller;
   final ValueChanged<MassageBookingSection>? onSectionChanged;
 
@@ -93,6 +98,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   final GlobalKey _summaryKey = GlobalKey();
 
   late final AutoRefreshController _autoRefreshController;
+  late final MassageProviderReportPdfExporter _providerReportPdfExporter;
   List<MassageProvider> _providers = <MassageProvider>[];
   List<MassageBooking> _bookings = <MassageBooking>[];
   List<MassageProviderSummary> _providerSummaries = <MassageProviderSummary>[];
@@ -133,6 +139,9 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     _selectedProviderId = null;
     _selectedTherapistId = null;
     _selectedTime = _recommendedTimeFor(_selectedDate, null);
+    _providerReportPdfExporter =
+        widget.providerReportPdfExporter ??
+        DefaultMassageProviderReportPdfExporter();
     _autoRefreshController = AutoRefreshController(
       interval: AppRuntimeConfig.operationalRefreshInterval,
       onRefresh: () => _load(showLoading: false),
@@ -1902,23 +1911,154 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     await showDialog<void>(
       context: context,
       builder: (BuildContext context) {
-        return AlertDialog(
-          title: Text('Detalhe de ${detail.providerName}'),
-          content: SizedBox(
-            width: 860,
-            child: SingleChildScrollView(
-              child: _buildProviderReportDialogContent(context, detail),
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Fechar'),
-            ),
-          ],
+        bool exporting = false;
+        String? exportingAction;
+
+        Future<void> runExport(
+          String action,
+          Future<void> Function() operation,
+          StateSetter setDialogState,
+        ) async {
+          setDialogState(() {
+            exporting = true;
+            exportingAction = action;
+          });
+          try {
+            await operation();
+          } finally {
+            if (context.mounted) {
+              setDialogState(() {
+                exporting = false;
+                exportingAction = null;
+              });
+            }
+          }
+        }
+
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            return AlertDialog(
+              title: Text('Detalhe de ${detail.providerName}'),
+              content: SizedBox(
+                width: 860,
+                child: SingleChildScrollView(
+                  child: _buildProviderReportDialogContent(context, detail),
+                ),
+              ),
+              actions: <Widget>[
+                OutlinedButton.icon(
+                  onPressed: exporting
+                      ? null
+                      : () => runExport(
+                          'download',
+                          () => _downloadProviderReportPdf(detail),
+                          setDialogState,
+                        ),
+                  icon: const Icon(Icons.download_rounded),
+                  label: Text(
+                    exportingAction == 'download'
+                        ? 'Gerando PDF...'
+                        : 'Baixar PDF',
+                  ),
+                ),
+                FilledButton.icon(
+                  onPressed: exporting
+                      ? null
+                      : () => runExport(
+                          'share',
+                          () => _shareProviderReportPdf(detail),
+                          setDialogState,
+                        ),
+                  icon: const Icon(Icons.share_rounded),
+                  label: Text(
+                    exportingAction == 'share'
+                        ? 'Preparando...'
+                        : 'Compartilhar PDF',
+                  ),
+                ),
+                TextButton(
+                  onPressed: exporting
+                      ? null
+                      : () => Navigator.of(context).pop(),
+                  child: const Text('Fechar'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
+  }
+
+  Future<void> _downloadProviderReportPdf(
+    MassageProviderDetailReport detail,
+  ) async {
+    try {
+      final File? file = await _providerReportPdfExporter.savePdf(
+        detail: detail,
+        startDate: _reportStartDate,
+        endDate: _reportEndDate,
+      );
+      if (file == null || !mounted) {
+        return;
+      }
+      await AppAlerts.success(
+        context,
+        title: 'PDF salvo',
+        message: 'Resumo salvo em:\n${file.path}',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.error(
+        context,
+        title: 'Falha ao gerar PDF',
+        message: 'Nao foi possivel salvar o resumo do prestador: $error',
+      );
+    }
+  }
+
+  Future<void> _shareProviderReportPdf(
+    MassageProviderDetailReport detail,
+  ) async {
+    try {
+      final File file = await _providerReportPdfExporter.createTemporaryPdf(
+        detail: detail,
+        startDate: _reportStartDate,
+        endDate: _reportEndDate,
+      );
+      if (!mounted) {
+        return;
+      }
+      await AppShare.shareFiles(
+        context,
+        filePaths: <String>[file.path],
+        subject: 'Resumo de atendimentos - ${detail.providerName}',
+        text: _providerReportShareText(detail),
+        failureTitle: 'Falha ao compartilhar PDF',
+        failureMessagePrefix:
+            'Nao foi possivel compartilhar o resumo do prestador',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.error(
+        context,
+        title: 'Falha ao gerar PDF',
+        message: 'Nao foi possivel preparar o resumo do prestador: $error',
+      );
+    }
+  }
+
+  String _providerReportShareText(MassageProviderDetailReport detail) {
+    return 'Resumo de atendimentos de ${detail.providerName}\n'
+        'Periodo: ${_formatShortDateLabel(_reportStartDate)} a ${_formatShortDateLabel(_reportEndDate)}\n'
+        'Atencoes: ${detail.summary.attendedCount}\n'
+        'Pagas: ${detail.summary.paidCount}\n'
+        'Pendentes: ${detail.summary.pendingCount}\n'
+        'Cobrado: ${_formatCurrencyLabel(detail.summary.paidAmount)}';
   }
 
   Future<void> _pickReportStartDate() async {

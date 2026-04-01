@@ -25,4 +25,33 @@ final class AppShare {
       return false;
     }
   }
+
+  static Future<bool> shareFiles(
+    BuildContext context, {
+    required List<String> filePaths,
+    String? text,
+    String? subject,
+    required String failureTitle,
+    required String failureMessagePrefix,
+  }) async {
+    try {
+      await SharePlus.instance.share(
+        ShareParams(
+          text: text,
+          subject: subject,
+          files: filePaths.map(XFile.new).toList(),
+        ),
+      );
+      return true;
+    } catch (error) {
+      if (context.mounted) {
+        await AppAlerts.error(
+          context,
+          title: failureTitle,
+          message: '$failureMessagePrefix: $error',
+        );
+      }
+      return false;
+    }
+  }
 }

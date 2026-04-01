@@ -22,16 +22,29 @@ void main() {
       await tester.tap(find.text('Lancar atendimento'));
       await tester.pumpAndSettle();
 
-      await tester.enterText(find.byType(TextFormField).at(0), 'Maria');
-      await tester.enterText(find.byType(TextFormField).at(1), 'Apto 202');
-      await tester.enterText(find.byType(TextFormField).at(2), '250');
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Cliente'),
+        'Maria',
+      );
+      await tester.enterText(
+        find.widgetWithText(TextFormField, 'Valor'),
+        '250',
+      );
+      final Finder attendanceField = find.byType(
+        DropdownButtonFormField<String>,
+      ).at(1);
+      await tester.ensureVisible(attendanceField);
+      await tester.tap(attendanceField);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Huesped').last);
+      await tester.pumpAndSettle();
 
       await tester.tap(find.text('Salvar atendimento'));
       await tester.pumpAndSettle();
 
       expect(service.createdBookings.length, 1);
       expect(service.createdBookings.single.clientName, 'Maria');
-      expect(service.createdBookings.single.guestReference, 'Apto 202');
+      expect(service.createdBookings.single.guestReference, 'Huesped');
       expect(
         service.createdBookings.single.paymentMethod,
         MassagePaymentMethod.card,
@@ -39,7 +52,7 @@ void main() {
       expect(service.createdBookings.single.paymentDate, isNotNull);
       expect(find.text('Maria'), findsOneWidget);
       expect(
-        find.textContaining('Apto 202 - Relaxante - Danuska'),
+        find.textContaining('Huesped - Relaxante - Danuska'),
         findsOneWidget,
       );
     },
@@ -62,7 +75,7 @@ void main() {
 
       await tester.tap(find.text('Cancelar atendimento'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Cancelar'));
+      await tester.tap(find.text('Cancelar').last);
       await tester.pumpAndSettle();
 
       await tester.enterText(
@@ -213,6 +226,8 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('Detalhe de Danuska'), findsOneWidget);
+      expect(find.text('Baixar PDF'), findsOneWidget);
+      expect(find.text('Compartilhar PDF'), findsOneWidget);
       expect(find.text('Maria'), findsWidgets);
       expect(find.text('Ana'), findsWidgets);
     },
@@ -249,13 +264,21 @@ final class _FakeMassageAppService implements MassageAppService {
     required String dateFrom,
     required String dateTo,
   }) async {
-    final List<MassageBooking> providerBookings = _bookings
-        .where((MassageBooking booking) => booking.providerId == providerId)
-        .toList()
-      ..sort((MassageBooking a, MassageBooking b) => a.startAt.compareTo(b.startAt));
+    final List<MassageBooking> providerBookings =
+        _bookings
+            .where((MassageBooking booking) => booking.providerId == providerId)
+            .toList()
+          ..sort(
+            (MassageBooking a, MassageBooking b) =>
+                a.startAt.compareTo(b.startAt),
+          );
     final MassageProviderSummary summary =
-        (await listProviderSummaryReport(dateFrom: dateFrom, dateTo: dateTo))
-            .firstWhere((MassageProviderSummary item) => item.providerId == providerId);
+        (await listProviderSummaryReport(
+          dateFrom: dateFrom,
+          dateTo: dateTo,
+        )).firstWhere(
+          (MassageProviderSummary item) => item.providerId == providerId,
+        );
     return MassageProviderDetailReport(
       providerId: providerId,
       providerName: 'Danuska',
@@ -291,23 +314,41 @@ final class _FakeMassageAppService implements MassageAppService {
     required String dateTo,
   }) async {
     final List<MassageBooking> activeBookings = _bookings
-        .where((MassageBooking booking) => booking.status == MassageBookingStatus.scheduled)
+        .where(
+          (MassageBooking booking) =>
+              booking.status == MassageBookingStatus.scheduled,
+        )
         .toList();
-    final int paidCount = activeBookings.where((MassageBooking booking) => booking.paid).length;
-    final int pendingCount = activeBookings.where((MassageBooking booking) => !booking.paid).length;
+    final int paidCount = activeBookings
+        .where((MassageBooking booking) => booking.paid)
+        .length;
+    final int pendingCount = activeBookings
+        .where((MassageBooking booking) => !booking.paid)
+        .length;
     final double paidAmount = activeBookings
         .where((MassageBooking booking) => booking.paid)
-        .fold<double>(0, (double total, MassageBooking booking) => total + booking.amount);
+        .fold<double>(
+          0,
+          (double total, MassageBooking booking) => total + booking.amount,
+        );
     final double pendingAmount = activeBookings
         .where((MassageBooking booking) => !booking.paid)
-        .fold<double>(0, (double total, MassageBooking booking) => total + booking.amount);
+        .fold<double>(
+          0,
+          (double total, MassageBooking booking) => total + booking.amount,
+        );
     final double grossAmount = activeBookings.fold<double>(
       0,
       (double total, MassageBooking booking) => total + booking.amount,
     );
     final DateTime? lastBookingAt = _bookings.isEmpty
         ? null
-        : (_bookings.toList()..sort((MassageBooking a, MassageBooking b) => a.startAt.compareTo(b.startAt))).last.startAt;
+        : (_bookings.toList()..sort(
+                (MassageBooking a, MassageBooking b) =>
+                    a.startAt.compareTo(b.startAt),
+              ))
+              .last
+              .startAt;
     return <MassageProviderSummary>[
       MassageProviderSummary(
         providerId: 1,

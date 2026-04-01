@@ -1,5 +1,22 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-04-01 | UX operativa | Massagens con PDF descargable y compartible para resumen por prestador
+- Componente afectado: Frontend (`Massagens`) + utilitarios de share + exportacion PDF + documentacion funcional
+- Archivos tocados:
+  - `lib/features/massages/application/massage_provider_report_pdf_exporter.dart`
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `lib/core/feedback/app_share.dart`
+  - `assets/fonts/Lato-Regular.ttf`
+  - `assets/fonts/Lato-Bold.ttf`
+  - `docs/MASSAGES_PROVIDER_REPORT_PDF_STANDARD.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: completar el flujo de envio manual al prestador con un documento claro, descargable y compartible desde el propio detalle del resumen.
+- Impacto funcional:
+  - `Resumo por prestador` ahora permite generar `PDF` desde el detalle del prestador
+  - el operador puede guardar el documento con selector de archivo o compartirlo manualmente
+  - el PDF incluye identidad visual del hotel, resumen ejecutivo y detalle de atenciones
+  - la exportacion usa fuentes incrustadas para evitar fallback a `Helvetica` y soportar mejor texto Unicode
+
 ## 2026-04-01 | UX operativa | Quadras y Tours con switch visual de pago y cards diarias con cancelar
 - Componente afectado: Frontend (`Quadras` + `Tours e Viagens`) + documentacion funcional
 - Archivos tocados:
