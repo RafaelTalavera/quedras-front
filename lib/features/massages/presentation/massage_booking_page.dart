@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/config/app_runtime_config.dart';
 import '../../../core/feedback/app_alerts.dart';
+import '../../../core/feedback/app_share.dart';
 import '../../../core/sync/auto_refresh_controller.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/app_dialog_dimensions.dart';
@@ -44,6 +45,8 @@ const List<String> _treatmentTypes = <String>[
   'Banho',
   'Experiencia dupla',
 ];
+
+const List<String> _attendanceTypes = <String>['Huesped', 'Externo', 'Vip'];
 
 enum MassageBookingSection { selectedDay, monthlyAgenda, monthlySummary }
 
@@ -104,6 +107,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   bool _savingBooking = false;
   bool _savingProviders = false;
   int? _processingBookingId;
+  int? _sharingBookingId;
   String? _errorMessage;
   String? _reportErrorMessage;
   String? _selectedSummaryDetailKey;
@@ -256,9 +260,9 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                 OutlinedButton.icon(
                   onPressed: _savingBooking || _dayBookings.isEmpty
                       ? null
-                      : _openCancellationPicker,
-                  icon: const Icon(Icons.cancel_schedule_send_rounded),
-                  label: const Text('Cancelar atendimento'),
+                      : _openEditBookingPicker,
+                  icon: const Icon(Icons.edit_rounded),
+                  label: const Text('Editar'),
                 ),
                 OutlinedButton.icon(
                   onPressed: _savingBooking || _dayBookings.isEmpty
@@ -266,6 +270,25 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                       : _openPaymentPicker,
                   icon: const Icon(Icons.payments_rounded),
                   label: const Text('Informar pago'),
+                ),
+                OutlinedButton.icon(
+                  onPressed:
+                      _savingBooking ||
+                          _dayBookings.isEmpty ||
+                          _sharingBookingId != null
+                      ? null
+                      : _openSharePicker,
+                  icon: const Icon(Icons.send_rounded),
+                  label: Text(
+                    _sharingBookingId != null ? 'Compartindo...' : 'Compartir',
+                  ),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _savingBooking || _dayBookings.isEmpty
+                      ? null
+                      : _openCancellationPicker,
+                  icon: const Icon(Icons.cancel_schedule_send_rounded),
+                  label: const Text('Cancelar atendimento'),
                 ),
                 OutlinedButton.icon(
                   onPressed: _savingProviders ? null : _openProviderDialog,
@@ -1127,6 +1150,25 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                       provider: _providerName(booking.providerId),
                       therapist: _therapistName(booking),
                       processing: _processingBookingId == booking.id,
+                      sharing: _sharingBookingId == booking.id,
+                      onEdit:
+                          _processingBookingId == booking.id ||
+                              !_isBookingEditable(booking)
+                          ? null
+                          : () => _openEditBookingDialog(booking),
+                      onPayment:
+                          _processingBookingId == booking.id ||
+                              !_canRegisterPayment(booking)
+                          ? null
+                          : () => _openPaymentBookingDialog(booking),
+                      onShare: _processingBookingId == booking.id
+                          ? null
+                          : () => _shareBooking(booking),
+                      onCancel:
+                          _processingBookingId == booking.id ||
+                              !_isBookingEditable(booking)
+                          ? null
+                          : () => _openCancelBookingDialog(booking),
                     ),
                   ),
                 ),
@@ -1208,6 +1250,28 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     await _updateBooking(booking, bookingDraft);
   }
 
+  Future<void> _openEditBookingPicker() async {
+    final MassageBooking? booking = await showDialog<MassageBooking>(
+      context: context,
+      builder: (BuildContext context) {
+        return _BookingSelectionDialog(
+          title: 'Editar atendimento',
+          description:
+              'Selecione o atendimento do dia para ajustar horario, cliente, valor ou masajista.',
+          bookings: _dayBookings,
+          emptyMessage: 'Nao ha atendimentos no dia selecionado.',
+          onSelectLabel: 'Editar',
+        );
+      },
+    );
+
+    if (booking == null) {
+      return;
+    }
+
+    await _openEditBookingDialog(booking);
+  }
+
   Future<void> _openCancellationPicker() async {
     final MassageBooking? booking = await showDialog<MassageBooking>(
       context: context,
@@ -1257,6 +1321,28 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     }
 
     await _openPaymentBookingDialog(booking);
+  }
+
+  Future<void> _openSharePicker() async {
+    final MassageBooking? booking = await showDialog<MassageBooking>(
+      context: context,
+      builder: (BuildContext context) {
+        return _BookingSelectionDialog(
+          title: 'Compartir atendimento',
+          description:
+              'Selecione o atendimento do dia para compartilhar os dados do registro.',
+          bookings: _dayBookings,
+          emptyMessage: 'Nao ha atendimentos no dia selecionado.',
+          onSelectLabel: 'Compartir',
+        );
+      },
+    );
+
+    if (booking == null) {
+      return;
+    }
+
+    await _shareBooking(booking);
   }
 
   Future<void> _openProviderDialog() async {
@@ -1475,7 +1561,10 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     final _BookingAction? action = await showDialog<_BookingAction>(
       context: context,
       builder: (BuildContext context) {
-        return _BookingActionDialog(booking: booking);
+        return _BookingActionDialog(
+          booking: booking,
+          sharing: _sharingBookingId == booking.id,
+        );
       },
     );
 
@@ -1485,6 +1574,9 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         return;
       case _BookingAction.payment:
         await _openPaymentBookingDialog(booking);
+        return;
+      case _BookingAction.share:
+        await _shareBooking(booking);
         return;
       case _BookingAction.cancel:
         await _openCancelBookingDialog(booking);
@@ -1506,7 +1598,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         return _BookingSelectionDialog(
           title: 'Atendimentos do dia',
           description:
-              'Escolha um atendimento para editar o registro, informar pagamento ou cancelar a atencao.',
+              'Escolha um atendimento para editar, informar pagamento, compartilhar ou cancelar a atencao.',
           bookings: bookings,
           emptyMessage: 'Nao ha atendimentos para o dia selecionado.',
           onSelectLabel: 'Abrir acoes',
@@ -1519,6 +1611,32 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     }
 
     await _openBookingActionDialog(selected);
+  }
+
+  Future<void> _shareBooking(MassageBooking booking) async {
+    if (_sharingBookingId != null) {
+      return;
+    }
+
+    setState(() {
+      _sharingBookingId = booking.id;
+    });
+    try {
+      await AppShare.shareText(
+        context,
+        text: _buildBookingShareMessage(booking),
+        subject: 'Atendimento de massagem ${booking.clientName}',
+        failureTitle: 'Falha ao compartilhar atendimento',
+        failureMessagePrefix:
+            'Nao foi possivel preparar os dados do atendimento',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sharingBookingId = null;
+        });
+      }
+    }
   }
 
   Future<void> _openCancelBookingDialog(MassageBooking booking) async {
@@ -1917,6 +2035,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                           provider: booking.providerName,
                           therapist: booking.therapistName,
                           processing: false,
+                          sharing: false,
                         ),
                       ),
                     ),
@@ -2086,6 +2205,30 @@ class _MassageBookingPageState extends State<MassageBookingPage>
 
   bool _canRegisterPayment(MassageBooking booking) {
     return booking.status == MassageBookingStatus.scheduled && !booking.paid;
+  }
+
+  bool _isBookingEditable(MassageBooking booking) {
+    return booking.status == MassageBookingStatus.scheduled;
+  }
+
+  String _buildBookingShareMessage(MassageBooking booking) {
+    final StringBuffer buffer = StringBuffer()
+      ..writeln('Atendimento de massagem Hotel Costa Norte')
+      ..writeln('Cliente: ${booking.clientName}')
+      ..writeln('Data: ${_formatShortDateLabel(booking.bookingDate)}')
+      ..writeln('Horario: ${_timeLabel(booking.startAt)}')
+      ..writeln('Tratamento: ${booking.treatment}')
+      ..writeln('Hospede ou externo: ${booking.guestReference}')
+      ..writeln('Prestador: ${booking.providerName}')
+      ..writeln('Masajista: ${booking.therapistName}')
+      ..writeln('Valor: ${_formatCurrencyLabel(booking.amount)}')
+      ..writeln('Estado: ${_statusDescription(booking)}');
+    if ((booking.paymentNotes ?? '').trim().isNotEmpty) {
+      buffer.writeln(
+        'Observacoes do pagamento: ${booking.paymentNotes!.trim()}',
+      );
+    }
+    return buffer.toString().trim();
   }
 
   String _paymentBlockedReason(MassageBooking booking) {
@@ -2343,12 +2486,22 @@ class _BookingTile extends StatelessWidget {
     required this.provider,
     required this.therapist,
     required this.processing,
+    required this.sharing,
+    this.onEdit,
+    this.onPayment,
+    this.onShare,
+    this.onCancel,
   });
 
   final MassageBooking booking;
   final String provider;
   final String therapist;
   final bool processing;
+  final bool sharing;
+  final VoidCallback? onEdit;
+  final VoidCallback? onPayment;
+  final VoidCallback? onShare;
+  final VoidCallback? onCancel;
 
   @override
   Widget build(BuildContext context) {
@@ -2412,6 +2565,46 @@ class _BookingTile extends StatelessWidget {
               style: Theme.of(
                 context,
               ).textTheme.bodySmall?.copyWith(color: CostaNorteBrand.error),
+            ),
+          ],
+          if (onEdit != null ||
+              onPayment != null ||
+              onShare != null ||
+              onCancel != null) ...<Widget>[
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: <Widget>[
+                if (onEdit != null)
+                  OutlinedButton.icon(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_rounded),
+                    label: const Text('Editar'),
+                  ),
+                if (onPayment != null)
+                  OutlinedButton.icon(
+                    onPressed: onPayment,
+                    icon: const Icon(Icons.payments_rounded),
+                    label: const Text('Informar pago'),
+                  ),
+                if (onShare != null)
+                  OutlinedButton.icon(
+                    onPressed: sharing ? null : onShare,
+                    icon: Icon(
+                      sharing
+                          ? Icons.hourglass_top_rounded
+                          : Icons.send_rounded,
+                    ),
+                    label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+                  ),
+                if (onCancel != null)
+                  OutlinedButton.icon(
+                    onPressed: onCancel,
+                    icon: const Icon(Icons.cancel_schedule_send_rounded),
+                    label: const Text('Cancelar'),
+                  ),
+              ],
             ),
           ],
         ],
@@ -2492,13 +2685,13 @@ class _BookingDialog extends StatefulWidget {
 class _BookingDialogState extends State<_BookingDialog> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   late final TextEditingController _clientController;
-  late final TextEditingController _guestController;
   late final TextEditingController _amountController;
   late final TextEditingController _paymentNotesController;
 
   late DateTime _selectedDate;
   late String _selectedTime;
   late String _selectedTreatment;
+  String? _selectedAttendanceType;
   int? _selectedProviderId;
   int? _selectedTherapistId;
   late bool _paid;
@@ -2509,9 +2702,6 @@ class _BookingDialogState extends State<_BookingDialog> {
   void initState() {
     super.initState();
     _clientController = TextEditingController(text: widget.initialClientName);
-    _guestController = TextEditingController(
-      text: widget.initialGuestReference,
-    );
     _amountController = TextEditingController(text: widget.initialAmount);
     _paymentNotesController = TextEditingController(
       text: widget.initialPaymentNotes,
@@ -2523,6 +2713,9 @@ class _BookingDialogState extends State<_BookingDialog> {
     );
     _selectedTime = widget.initialTime;
     _selectedTreatment = widget.initialTreatment;
+    _selectedAttendanceType = widget.initialGuestReference.trim().isEmpty
+        ? null
+        : widget.initialGuestReference.trim();
     _selectedProviderId = _initialProviderId();
     _selectedTherapistId = _initialTherapistId();
     _paid = widget.initialPaid;
@@ -2533,7 +2726,6 @@ class _BookingDialogState extends State<_BookingDialog> {
   @override
   void dispose() {
     _clientController.dispose();
-    _guestController.dispose();
     _amountController.dispose();
     _paymentNotesController.dispose();
     super.dispose();
@@ -2543,6 +2735,7 @@ class _BookingDialogState extends State<_BookingDialog> {
   Widget build(BuildContext context) {
     final List<MassageProvider> selectableProviders = _selectableProviders;
     final List<MassageTherapist> selectableTherapists = _selectableTherapists;
+    final List<String> attendanceTypeOptions = _attendanceTypeOptions;
     return AppDialogShell(
       maxWidth: AppDialogDimensions.standardFormWidth,
       maxHeight: 760,
@@ -2610,16 +2803,30 @@ class _BookingDialogState extends State<_BookingDialog> {
                           : null,
                     ),
                     const SizedBox(height: 12),
-                    TextFormField(
-                      controller: _guestController,
+                    DropdownButtonFormField<String>(
+                      isExpanded: true,
+                      value: _selectedAttendanceType,
                       decoration: const InputDecoration(
-                        labelText: 'Hospede ou externo',
+                        labelText: 'Tipo de atendimento',
                         prefixIcon: Icon(Icons.hotel_rounded),
                       ),
+                      items: attendanceTypeOptions
+                          .map(
+                            (String value) => DropdownMenuItem<String>(
+                              value: value,
+                              child: Text(value),
+                            ),
+                          )
+                          .toList(),
                       validator: (String? value) =>
                           value == null || value.trim().isEmpty
-                          ? 'Informe origem ou apartamento.'
+                          ? 'Selecione o tipo de atendimento.'
                           : null,
+                      onChanged: (String? value) {
+                        setState(() {
+                          _selectedAttendanceType = value;
+                        });
+                      },
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
@@ -2727,21 +2934,18 @@ class _BookingDialogState extends State<_BookingDialog> {
                             : null;
                       },
                     ),
-                    SwitchListTile.adaptive(
-                      contentPadding: EdgeInsets.zero,
-                      title: const Text('Pagamento recebido'),
-                      value: _paid,
-                      onChanged: (bool value) {
-                        setState(() {
-                          _paid = value;
-                          _paymentMethod = value
-                              ? (_paymentMethod ?? MassagePaymentMethod.card)
-                              : null;
-                          _paymentDate = value
-                              ? (_paymentDate ?? _selectedDate)
-                              : null;
-                        });
-                      },
+                    Row(
+                      children: <Widget>[
+                        const Expanded(child: Text('Pagamento recebido')),
+                        _InlineStatusSwitch(
+                          value: _paid,
+                          activeLabel: 'Si',
+                          inactiveLabel: 'No',
+                          activeColor: CostaNorteBrand.success,
+                          inactiveColor: CostaNorteBrand.error,
+                          onChanged: _setPaidValue,
+                        ),
+                      ],
                     ),
                     if (_paid) ...<Widget>[
                       const SizedBox(height: 12),
@@ -2827,9 +3031,14 @@ class _BookingDialogState extends State<_BookingDialog> {
     }
 
     final double? amount = _parseMassageAmount(_amountController.text);
+    final String? attendanceType = _selectedAttendanceType?.trim();
     final int? providerId = _selectedProviderId;
     final int? therapistId = _selectedTherapistId;
-    if (amount == null || providerId == null || therapistId == null) {
+    if (amount == null ||
+        attendanceType == null ||
+        attendanceType.isEmpty ||
+        providerId == null ||
+        therapistId == null) {
       return;
     }
     if (_paid && (_paymentMethod == null || _paymentDate == null)) {
@@ -2841,7 +3050,7 @@ class _BookingDialogState extends State<_BookingDialog> {
         date: _selectedDate,
         time: _selectedTime,
         clientName: _clientController.text.trim(),
-        guestOrExternal: _guestController.text.trim(),
+        guestOrExternal: attendanceType,
         treatment: _selectedTreatment,
         amount: amount,
         providerId: providerId,
@@ -2893,6 +3102,16 @@ class _BookingDialogState extends State<_BookingDialog> {
     });
   }
 
+  void _setPaidValue(bool value) {
+    setState(() {
+      _paid = value;
+      _paymentMethod = value
+          ? (_paymentMethod ?? MassagePaymentMethod.card)
+          : null;
+      _paymentDate = value ? (_paymentDate ?? _selectedDate) : null;
+    });
+  }
+
   List<MassageProvider> get _selectableProviders {
     final List<MassageProvider> providers =
         widget.providers
@@ -2906,6 +3125,15 @@ class _BookingDialogState extends State<_BookingDialog> {
                 a.name.toLowerCase().compareTo(b.name.toLowerCase()),
           );
     return providers;
+  }
+
+  List<String> get _attendanceTypeOptions {
+    final List<String> options = <String>[..._attendanceTypes];
+    final String currentValue = widget.initialGuestReference.trim();
+    if (currentValue.isNotEmpty && !options.contains(currentValue)) {
+      options.add(currentValue);
+    }
+    return options;
   }
 
   List<MassageTherapist> get _selectableTherapists =>
@@ -2973,12 +3201,89 @@ class _BookingDialogState extends State<_BookingDialog> {
   }
 }
 
-enum _BookingAction { edit, payment, cancel }
+class _InlineStatusSwitch extends StatelessWidget {
+  const _InlineStatusSwitch({
+    required this.value,
+    required this.activeLabel,
+    required this.inactiveLabel,
+    required this.activeColor,
+    required this.inactiveColor,
+    required this.onChanged,
+  });
+
+  final bool value;
+  final String activeLabel;
+  final String inactiveLabel;
+  final Color activeColor;
+  final Color inactiveColor;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final String label = value ? activeLabel : inactiveLabel;
+    final Color backgroundColor = value ? activeColor : inactiveColor;
+    return Semantics(
+      button: true,
+      toggled: value,
+      label: 'Pagamento recebido',
+      value: label,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(999),
+        onTap: () => onChanged(!value),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          width: 82,
+          height: 36,
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(999),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: <Widget>[
+              Align(
+                alignment: value ? Alignment.centerLeft : Alignment.centerRight,
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10),
+                  child: Text(
+                    label,
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+              ),
+              AnimatedAlign(
+                duration: const Duration(milliseconds: 180),
+                curve: Curves.easeOut,
+                alignment: value ? Alignment.centerRight : Alignment.centerLeft,
+                child: Container(
+                  width: 28,
+                  height: 28,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+enum _BookingAction { edit, payment, share, cancel }
 
 class _BookingActionDialog extends StatelessWidget {
-  const _BookingActionDialog({required this.booking});
+  const _BookingActionDialog({required this.booking, required this.sharing});
 
   final MassageBooking booking;
+  final bool sharing;
 
   @override
   Widget build(BuildContext context) {
@@ -3002,46 +3307,46 @@ class _BookingActionDialog extends StatelessWidget {
             Text(
               'Atendimento cancelado. Apenas o historico permanece visivel.',
               style: Theme.of(context).textTheme.bodyMedium,
-            )
-          else
-            Column(
-              children: <Widget>[
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () =>
-                            Navigator.of(context).pop(_BookingAction.edit),
-                        icon: const Icon(Icons.edit_calendar_rounded),
-                        label: const Text('Editar registro'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: booking.paid
-                            ? null
-                            : () => Navigator.of(
-                                context,
-                              ).pop(_BookingAction.payment),
-                        icon: const Icon(Icons.payments_rounded),
-                        label: const Text('Informar pago'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                SizedBox(
-                  width: double.infinity,
-                  child: FilledButton.icon(
-                    onPressed: () =>
-                        Navigator.of(context).pop(_BookingAction.cancel),
-                    icon: const Icon(Icons.cancel_rounded),
-                    label: const Text('Cancelar atencao'),
-                  ),
-                ),
-              ],
             ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 12,
+            children: <Widget>[
+              OutlinedButton.icon(
+                onPressed: booking.status == MassageBookingStatus.cancelled
+                    ? null
+                    : () => Navigator.of(context).pop(_BookingAction.edit),
+                icon: const Icon(Icons.edit_calendar_rounded),
+                label: const Text('Editar registro'),
+              ),
+              OutlinedButton.icon(
+                onPressed:
+                    booking.paid ||
+                        booking.status == MassageBookingStatus.cancelled
+                    ? null
+                    : () => Navigator.of(context).pop(_BookingAction.payment),
+                icon: const Icon(Icons.payments_rounded),
+                label: const Text('Informar pago'),
+              ),
+              OutlinedButton.icon(
+                onPressed: sharing
+                    ? null
+                    : () => Navigator.of(context).pop(_BookingAction.share),
+                icon: Icon(
+                  sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
+                ),
+                label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+              ),
+              FilledButton.icon(
+                onPressed: booking.status == MassageBookingStatus.cancelled
+                    ? null
+                    : () => Navigator.of(context).pop(_BookingAction.cancel),
+                icon: const Icon(Icons.cancel_rounded),
+                label: const Text('Cancelar atencao'),
+              ),
+            ],
+          ),
           if (booking.status == MassageBookingStatus.cancelled) ...<Widget>[
             const SizedBox(height: 16),
             FilledButton(

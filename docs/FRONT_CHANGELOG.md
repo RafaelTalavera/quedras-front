@@ -1,5 +1,19 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-04-01 | UX operativa | Massagens con tipo de atendimento cerrado, share nativo y cards accionables
+- Componente afectado: Frontend (`Massagens`) + utilitario compartido de share + documentacion funcional
+- Archivos tocados:
+  - `lib/core/feedback/app_share.dart`
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: cerrar ambiguedades del formulario de alta y llevar `Massagens` al mismo patron operativo visible en tarjetas y acciones rapidas.
+- Impacto funcional:
+  - el formulario cambia `Hospede ou externo` por `Tipo de atendimento` con opciones cerradas `Huesped`, `Externo` y `Vip`
+  - el estado de pago pasa a un switch visual `Si / No` con color semantico dentro del propio control
+  - la barra superior del modulo expone un orden operativo mas claro: lanzar, editar, informar pago, compartir y cancelar
+  - las cards de `Dia selecionado` ahora permiten `Editar`, `Informar pago`, `Compartir` y `Cancelar` sin depender solo del doble click
+  - se incorpora `AppShare` como helper reutilizable para compartir texto con manejo comun de errores
+
 ## 2026-03-26 | Post Hito 12 | Tours e Viagens con resumen estandar y detalle en modal
 - Componente afectado: Frontend (`Tours e Viagens`) + integracion con backend + documentacion funcional
 - Archivos tocados:
