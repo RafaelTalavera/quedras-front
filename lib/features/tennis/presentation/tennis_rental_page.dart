@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/config/app_runtime_config.dart';
@@ -7,6 +9,7 @@ import '../../../core/sync/auto_refresh_controller.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/brand_section_hero.dart';
 import '../../courts/application/court_app_service.dart';
+import '../../courts/application/partner_coach_report_pdf_exporter.dart';
 import '../../courts/domain/court_models.dart';
 
 const List<String> _courtWeekLabels = <String>[
@@ -91,12 +94,14 @@ class TennisRentalPageController {
 class TennisRentalPage extends StatefulWidget {
   const TennisRentalPage({
     required this.courtAppService,
+    this.partnerCoachReportPdfExporter,
     this.controller,
     this.onSectionChanged,
     super.key,
   });
 
   final CourtAppService courtAppService;
+  final PartnerCoachReportPdfExporter? partnerCoachReportPdfExporter;
   final TennisRentalPageController? controller;
   final ValueChanged<TennisRentalSection>? onSectionChanged;
 
@@ -111,6 +116,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
   final GlobalKey _monthlyAgendaSectionKey = GlobalKey();
   final GlobalKey _summarySectionKey = GlobalKey();
   late final AutoRefreshController _autoRefreshController;
+  late final PartnerCoachReportPdfExporter _partnerCoachReportPdfExporter;
   late DateTime _selectedDate;
   late DateTime _reportStartDate;
   late DateTime _reportEndDate;
@@ -135,6 +141,9 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     _selectedDate = DateTime.now();
     _reportStartDate = DateTime(_selectedDate.year, _selectedDate.month, 1);
     _reportEndDate = DateTime(_selectedDate.year, _selectedDate.month + 1, 0);
+    _partnerCoachReportPdfExporter =
+        widget.partnerCoachReportPdfExporter ??
+        DefaultPartnerCoachReportPdfExporter();
     _autoRefreshController = AutoRefreshController(
       interval: AppRuntimeConfig.operationalRefreshInterval,
       onRefresh: () => _load(showLoading: false),
@@ -881,36 +890,6 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                         ),
                       ),
                       _MetricCard(
-                        selected: _selectedSummaryDetailKey == 'metric:revenue',
-                        title: _formatCurrency(summary.expectedAmount),
-                        value: _formatCurrency(summary.paidAmount),
-                        caption:
-                            '${summary.pendingCount} pendentes e ${_paymentRateLabel(summary)} de conversao',
-                        icon: Icons.payments_rounded,
-                        onTap: () => _openSummaryDetail(
-                          key: 'metric:revenue',
-                          title: 'Receita do periodo',
-                          description:
-                              'Reservas ativas do periodo com foco em valores pagos e pendentes.',
-                          bookings: activeReportBookings,
-                        ),
-                      ),
-                      _MetricCard(
-                        selected: _selectedSummaryDetailKey == 'metric:hours',
-                        title: '${summary.totalHours.toStringAsFixed(1)} h',
-                        value: _formatCurrency(summary.averageTicket),
-                        caption:
-                            'Carga horaria total e ticket medio do periodo',
-                        icon: Icons.query_builder_rounded,
-                        onTap: () => _openSummaryDetail(
-                          key: 'metric:hours',
-                          title: 'Carga horaria do periodo',
-                          description:
-                              'Reservas ativas que compoem a carga horaria total do periodo.',
-                          bookings: activeReportBookings,
-                        ),
-                      ),
-                      _MetricCard(
                         selected:
                             _selectedSummaryDetailKey == 'metric:materials',
                         title: _formatCurrency(summary.materialsAmount),
@@ -1036,6 +1015,8 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                     ],
                   ),
                   const SizedBox(height: 20),
+                  _buildPartnerCoachBreakdownSection(context, partnerCoachRows),
+                  const SizedBox(height: 18),
                   _buildSummaryBreakdownSection(
                     context,
                     selectionPrefix: 'customer-type',
@@ -1092,8 +1073,6 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                                   _paymentMethodFromBreakdownCode(item.code);
                         }).toList(),
                   ),
-                  const SizedBox(height: 18),
-                  _buildPartnerCoachBreakdownSection(context, partnerCoachRows),
                 ],
               ),
           ],
@@ -1228,6 +1207,14 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                 ],
                 rows: items.map((_PartnerCoachSummaryRow item) {
                   final String selectionKey = 'partner-coach:${item.name}';
+                  final List<CourtBooking> coachBookings = _activeReportBookings
+                      .where((CourtBooking booking) {
+                        return booking.customerType ==
+                                CourtCustomerType.partnerCoach &&
+                            booking.customerName.trim().toLowerCase() ==
+                                item.name.trim().toLowerCase();
+                      })
+                      .toList();
                   return DataRow(
                     selected: _selectedSummaryDetailKey == selectionKey,
                     onSelectChanged: (_) => _openSummaryDetail(
@@ -1235,14 +1222,11 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                       title: 'Detalhe de ${item.name}',
                       description:
                           'Reservas ativas do professor parceiro ${item.name} no periodo consultado.',
-                      bookings: _activeReportBookings.where((
-                        CourtBooking booking,
-                      ) {
-                        return booking.customerType ==
-                                CourtCustomerType.partnerCoach &&
-                            booking.customerName.trim().toLowerCase() ==
-                                item.name.trim().toLowerCase();
-                      }).toList(),
+                      bookings: coachBookings,
+                      partnerCoachReportDetail: _buildPartnerCoachReportDetail(
+                        summary: item,
+                        bookings: coachBookings,
+                      ),
                     ),
                     cells: <DataCell>[
                       DataCell(
@@ -1329,11 +1313,31 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     }).toList();
   }
 
+  PartnerCoachReportDetail _buildPartnerCoachReportDetail({
+    required _PartnerCoachSummaryRow summary,
+    required List<CourtBooking> bookings,
+  }) {
+    return PartnerCoachReportDetail(
+      coachName: summary.name,
+      summary: PartnerCoachReportSummary(
+        scheduledCount: summary.scheduledCount,
+        paidCount: summary.paidCount,
+        pendingCount: summary.pendingCount,
+        totalHours: summary.totalHours,
+        courtAmount: summary.courtAmount,
+        materialsAmount: summary.materialsAmount,
+        totalAmount: summary.totalAmount,
+      ),
+      bookings: bookings,
+    );
+  }
+
   Future<void> _openSummaryDetail({
     required String key,
     required String title,
     required String description,
     required List<CourtBooking> bookings,
+    PartnerCoachReportDetail? partnerCoachReportDetail,
   }) async {
     final List<CourtBooking> normalized = <CourtBooking>[...bookings]
       ..sort(_compareBookingsByDateTime);
@@ -1343,6 +1347,8 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     await showDialog<void>(
       context: context,
       builder: (BuildContext context) {
+        bool exporting = false;
+        String? exportingAction;
         final double totalHours = normalized.fold<double>(
           0,
           (double total, CourtBooking booking) => total + booking.durationHours,
@@ -1351,65 +1357,131 @@ class _TennisRentalPageState extends State<TennisRentalPage>
           0,
           (double total, CourtBooking booking) => total + booking.totalAmount,
         );
-        return AlertDialog(
-          title: Text(title),
-          content: SizedBox(
-            width: 860,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(
-                    description,
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                  const SizedBox(height: 14),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
+
+        Future<void> runExport(
+          String action,
+          Future<void> Function() task,
+          StateSetter setDialogState,
+        ) async {
+          setDialogState(() {
+            exporting = true;
+            exportingAction = action;
+          });
+          try {
+            await task();
+          } finally {
+            if (context.mounted) {
+              setDialogState(() {
+                exporting = false;
+                exportingAction = null;
+              });
+            }
+          }
+        }
+
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) {
+            return AlertDialog(
+              title: Text(title),
+              content: SizedBox(
+                width: 860,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      _DetailChip(
-                        label: 'Reservas',
-                        value: '${normalized.length}',
-                        icon: Icons.event_note_rounded,
+                      Text(
+                        description,
+                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
-                      _DetailChip(
-                        label: 'Horas',
-                        value: '${totalHours.toStringAsFixed(1)} h',
-                        icon: Icons.query_builder_rounded,
+                      const SizedBox(height: 14),
+                      Wrap(
+                        spacing: 10,
+                        runSpacing: 10,
+                        children: <Widget>[
+                          _DetailChip(
+                            label: 'Reservas',
+                            value: '${normalized.length}',
+                            icon: Icons.event_note_rounded,
+                          ),
+                          _DetailChip(
+                            label: 'Horas',
+                            value: '${totalHours.toStringAsFixed(1)} h',
+                            icon: Icons.query_builder_rounded,
+                          ),
+                          _DetailChip(
+                            label: 'Total',
+                            value: _formatCurrency(totalAmount),
+                            icon: Icons.payments_rounded,
+                          ),
+                        ],
                       ),
-                      _DetailChip(
-                        label: 'Total',
-                        value: _formatCurrency(totalAmount),
-                        icon: Icons.payments_rounded,
-                      ),
+                      const SizedBox(height: 14),
+                      if (normalized.isEmpty)
+                        const Text(
+                          'Nenhuma reserva encontrada para este detalhe.',
+                        )
+                      else
+                        ...normalized.map(
+                          (CourtBooking booking) => Padding(
+                            padding: const EdgeInsets.only(bottom: 12),
+                            child: _CourtBookingTile(
+                              booking: booking,
+                              sharing: _sharingBookingId == booking.id,
+                              onShare: () => _shareBookingReceipt(booking),
+                            ),
+                          ),
+                        ),
                     ],
                   ),
-                  const SizedBox(height: 14),
-                  if (normalized.isEmpty)
-                    const Text('Nenhuma reserva encontrada para este detalhe.')
-                  else
-                    ...normalized.map(
-                      (CourtBooking booking) => Padding(
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: _CourtBookingTile(
-                          booking: booking,
-                          sharing: _sharingBookingId == booking.id,
-                          onShare: () => _shareBookingReceipt(booking),
-                        ),
-                      ),
-                    ),
-                ],
+                ),
               ),
-            ),
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Fechar'),
-            ),
-          ],
+              actions: <Widget>[
+                if (partnerCoachReportDetail != null)
+                  OutlinedButton.icon(
+                    onPressed: exporting
+                        ? null
+                        : () => runExport(
+                            'download',
+                            () => _downloadPartnerCoachReportPdf(
+                              partnerCoachReportDetail,
+                            ),
+                            setDialogState,
+                          ),
+                    icon: const Icon(Icons.download_rounded),
+                    label: Text(
+                      exportingAction == 'download'
+                          ? 'Gerando PDF...'
+                          : 'Baixar PDF',
+                    ),
+                  ),
+                if (partnerCoachReportDetail != null)
+                  FilledButton.icon(
+                    onPressed: exporting
+                        ? null
+                        : () => runExport(
+                            'share',
+                            () => _sharePartnerCoachReportPdf(
+                              partnerCoachReportDetail,
+                            ),
+                            setDialogState,
+                          ),
+                    icon: const Icon(Icons.share_rounded),
+                    label: Text(
+                      exportingAction == 'share'
+                          ? 'Preparando...'
+                          : 'Compartilhar PDF',
+                    ),
+                  ),
+                TextButton(
+                  onPressed: exporting
+                      ? null
+                      : () => Navigator.of(context).pop(),
+                  child: const Text('Fechar'),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -1419,6 +1491,79 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     setState(() {
       _selectedSummaryDetailKey = null;
     });
+  }
+
+  Future<void> _downloadPartnerCoachReportPdf(
+    PartnerCoachReportDetail detail,
+  ) async {
+    try {
+      final File? file = await _partnerCoachReportPdfExporter.savePdf(
+        detail: detail,
+        startDate: _reportStartDate,
+        endDate: _reportEndDate,
+      );
+      if (file == null || !mounted) {
+        return;
+      }
+      await AppAlerts.success(
+        context,
+        title: 'PDF salvo',
+        message: 'Resumo salvo em:\n${file.path}',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.error(
+        context,
+        title: 'Falha ao gerar PDF',
+        message:
+            'Nao foi possivel salvar o resumo do professor parceiro: $error',
+      );
+    }
+  }
+
+  Future<void> _sharePartnerCoachReportPdf(
+    PartnerCoachReportDetail detail,
+  ) async {
+    try {
+      final File file = await _partnerCoachReportPdfExporter.createTemporaryPdf(
+        detail: detail,
+        startDate: _reportStartDate,
+        endDate: _reportEndDate,
+      );
+      if (!mounted) {
+        return;
+      }
+      await AppShare.shareFiles(
+        context,
+        filePaths: <String>[file.path],
+        subject: 'Resumo de quadras - ${detail.coachName}',
+        text: _partnerCoachReportShareText(detail),
+        failureTitle: 'Falha ao compartilhar PDF',
+        failureMessagePrefix:
+            'Nao foi possivel compartilhar o resumo do professor parceiro',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.error(
+        context,
+        title: 'Falha ao gerar PDF',
+        message:
+            'Nao foi possivel preparar o resumo do professor parceiro: $error',
+      );
+    }
+  }
+
+  String _partnerCoachReportShareText(PartnerCoachReportDetail detail) {
+    return 'Resumo de reservas de ${detail.coachName}\n'
+        'Periodo: ${_formatShortDate(_reportStartDate)} a ${_formatShortDate(_reportEndDate)}\n'
+        'Reservas: ${detail.summary.scheduledCount}\n'
+        'Pagas: ${detail.summary.paidCount}\n'
+        'Pendentes: ${detail.summary.pendingCount}\n'
+        'Total: ${_formatCurrency(detail.summary.totalAmount)}';
   }
 
   List<_CalendarCell> _buildCalendarCells() {
@@ -3790,13 +3935,6 @@ String _formatCurrency(double amount) {
   return 'R\$ ${amount.toStringAsFixed(0)}';
 }
 
-String _paymentRateLabel(CourtSummaryReport summary) {
-  if (summary.scheduledCount == 0) {
-    return '0%';
-  }
-  final double rate = (summary.paidCount / summary.scheduledCount) * 100;
-  return '${rate.toStringAsFixed(0)}%';
-}
 
 int _compareBookingsByDateTime(CourtBooking a, CourtBooking b) {
   final int dateComparison = a.bookingDate.compareTo(b.bookingDate);

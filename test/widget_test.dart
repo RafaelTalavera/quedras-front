@@ -72,6 +72,11 @@ class _FakeApiClient implements ApiClient {
   }
 
   @override
+  Future<ApiResponse> delete(String path, {Map<String, String>? headers}) async {
+    return const ApiResponse(statusCode: 200, body: '{}');
+  }
+
+  @override
   Future<ApiResponse> post(
     String path, {
     Map<String, String>? headers,

@@ -25,6 +25,8 @@ bool FlutterWindow::OnCreate() {
     return false;
   }
   RegisterPlugins(flutter_controller_->engine());
+  app_share_text_channel_ = std::make_unique<AppShareTextChannel>(
+      flutter_controller_->engine()->messenger(), GetHandle());
   SetChildContent(flutter_controller_->view()->GetNativeWindow());
 
   flutter_controller_->engine()->SetNextFrameCallback([&]() {
@@ -40,6 +42,9 @@ bool FlutterWindow::OnCreate() {
 }
 
 void FlutterWindow::OnDestroy() {
+  if (app_share_text_channel_) {
+    app_share_text_channel_.reset();
+  }
   if (flutter_controller_) {
     flutter_controller_ = nullptr;
   }

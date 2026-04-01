@@ -317,6 +317,11 @@ final class _FakeApiClient implements ApiClient {
   }
 
   @override
+  Future<ApiResponse> delete(String path, {Map<String, String>? headers}) {
+    return _consume('DELETE', path, body: null);
+  }
+
+  @override
   Future<ApiResponse> patch(
     String path, {
     Map<String, String>? headers,

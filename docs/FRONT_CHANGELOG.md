@@ -1,5 +1,40 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-04-01 | UX operativa | Share de texto en Windows aislado de PDFs previos y compatibilidad de tests con ApiClient.delete
+- Componente afectado: Frontend (`core/feedback` + runner de Windows + tests de red)
+- Archivos tocados:
+  - `lib/core/feedback/app_share.dart`
+  - `windows/runner/app_share_text_channel.cpp`
+  - `windows/runner/app_share_text_channel.h`
+  - `windows/runner/flutter_window.cpp`
+  - `windows/runner/flutter_window.h`
+  - `windows/runner/CMakeLists.txt`
+  - `test/core/feedback/app_share_test.dart`
+  - `test/core/network/authorized_api_client_test.dart`
+  - `test/features/massages/infrastructure/http_massage_app_service_test.dart`
+  - `test/features/reservations/infrastructure/http_reservation_app_service_test.dart`
+  - `test/widget_test.dart`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: corregir un bug de Windows donde un share de texto podia arrastrar el PDF compartido anteriormente por el plugin nativo, y alinear fakes de tests a la interfaz actual de `ApiClient`.
+- Impacto funcional:
+  - `Compartir` en cards y mensajes de texto ya no hereda archivos PDF de un share anterior en Windows
+  - `AppShare.shareText` usa un canal nativo propio en Windows y mantiene `share_plus` para el resto de plataformas
+  - los tests que usan `ApiClient` vuelven a compilar al implementar `delete(...)` en los fakes
+
+## 2026-04-01 | UX operativa | Quadras con PDF por professor parceiro y resumen priorizado por horas de profesores
+- Componente afectado: Frontend (`Quadras` + exportacion PDF + tests)
+- Archivos tocados:
+  - `lib/features/courts/application/partner_coach_report_pdf_exporter.dart`
+  - `lib/features/tennis/presentation/tennis_rental_page.dart`
+  - `test/features/courts/application/partner_coach_report_pdf_exporter_test.dart`
+  - `test/features/tennis/presentation/tennis_rental_page_test.dart`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: replicar en `Quadras` el flujo de PDF aprobado para `Massagens` y reajustar el layout del resumen para dar prioridad al detalle por profesores parceiros.
+- Impacto funcional:
+  - `Professores parceiros por nome` permite abrir detalle, guardar PDF y compartir PDF por profesor
+  - el resumen detallado ahora empieza por el bloque de profesores parceiros
+  - se eliminan del layout superior el card de `ticket medio` y el card de `pendentes ... conversao`
+
 ## 2026-04-01 | UX operativa | Massagens con PDF descargable y compartible para resumen por prestador
 - Componente afectado: Frontend (`Massagens`) + utilitarios de share + exportacion PDF + documentacion funcional
 - Archivos tocados:

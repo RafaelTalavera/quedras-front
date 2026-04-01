@@ -78,6 +78,14 @@ final class _FakeApiClient implements ApiClient {
   }
 
   @override
+  Future<ApiResponse> delete(String path, {Map<String, String>? headers}) {
+    calls.add(
+      _Call(method: 'DELETE', path: path, headers: headers, body: null),
+    );
+    return Future<ApiResponse>.value(nextResponse);
+  }
+
+  @override
   Future<ApiResponse> patch(
     String path, {
     Map<String, String>? headers,
