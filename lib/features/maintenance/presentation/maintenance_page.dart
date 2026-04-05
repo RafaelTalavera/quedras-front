@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/config/app_runtime_config.dart';
 import '../../../core/feedback/app_alerts.dart';
+import '../../../core/feedback/app_share.dart';
 import '../../../core/sync/auto_refresh_controller.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/app_dialog_dimensions.dart';
@@ -41,6 +42,8 @@ const List<String> _weekLabels = <String>[
 ];
 
 enum MaintenanceSection { selectedDay, monthlyAgenda, summary }
+
+enum _MaintenanceSelectedDayView { pending, groupedByDepartment }
 
 class MaintenancePageController {
   _MaintenancePageState? _state;
@@ -91,10 +94,13 @@ class _MaintenancePageState extends State<MaintenancePage>
   late DateTime _selectedDate;
   late DateTime _reportStartDate;
   late DateTime _reportEndDate;
+  _MaintenanceSelectedDayView _selectedDayView =
+      _MaintenanceSelectedDayView.pending;
   bool _loading = true;
   bool _refreshingData = false;
   bool _loadingSummary = false;
   bool _saving = false;
+  int? _sharingOrderId;
   String? _errorMessage;
   String? _summaryErrorMessage;
   int? _selectedOrderId;
@@ -170,22 +176,37 @@ class _MaintenancePageState extends State<MaintenancePage>
                   label: const Text('Lancar ordem'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _saving || _selectedOrder == null ? null : _editOrder,
+                  onPressed: _saving || _selectedOrder == null
+                      ? null
+                      : _editOrder,
                   icon: const Icon(Icons.edit_rounded),
                   label: const Text('Editar'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _saving || _selectedOrder == null ? null : _startOrder,
+                  onPressed: _saving || _selectedOrder == null
+                      ? null
+                      : _shareOrderToWhatsApp,
+                  icon: const Icon(Icons.send_rounded),
+                  label: const Text('Compartir'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _saving || _selectedOrder == null
+                      ? null
+                      : _startOrder,
                   icon: const Icon(Icons.play_circle_outline_rounded),
                   label: const Text('Iniciar'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _saving || _selectedOrder == null ? null : _completeOrder,
+                  onPressed: _saving || _selectedOrder == null
+                      ? null
+                      : _completeOrder,
                   icon: const Icon(Icons.task_alt_rounded),
                   label: const Text('Concluir'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _saving || _selectedOrder == null ? null : _cancelOrder,
+                  onPressed: _saving || _selectedOrder == null
+                      ? null
+                      : _cancelOrder,
                   icon: const Icon(Icons.cancel_schedule_send_rounded),
                   label: const Text('Cancelar'),
                 ),
@@ -245,12 +266,32 @@ class _MaintenancePageState extends State<MaintenancePage>
     return null;
   }
 
-  List<MaintenanceOrder> get _dayOrders => _orders
-      .where((MaintenanceOrder order) => _sameDay(order.referenceDate, _selectedDate))
-      .toList()
-    ..sort((MaintenanceOrder a, MaintenanceOrder b) {
-      return a.referenceDate.compareTo(b.referenceDate);
-    });
+  List<MaintenanceOrder> get _dayOrders =>
+      _orders
+          .where(
+            (MaintenanceOrder order) =>
+                _sameDay(order.referenceDate, _selectedDate),
+          )
+          .toList()
+        ..sort((MaintenanceOrder a, MaintenanceOrder b) {
+          return a.referenceDate.compareTo(b.referenceDate);
+        });
+
+  List<MaintenanceOrder> get _pendingDayOrders =>
+      _dayOrders
+          .where(_isPendingOrder)
+          .toList()
+        ..sort((MaintenanceOrder a, MaintenanceOrder b) {
+          return a.referenceDate.compareTo(b.referenceDate);
+        });
+
+  List<MaintenanceOrder> get _resolvedDayOrders =>
+      _dayOrders
+          .where((MaintenanceOrder order) => !_isPendingOrder(order))
+          .toList()
+        ..sort((MaintenanceOrder a, MaintenanceOrder b) {
+          return b.referenceDate.compareTo(a.referenceDate);
+        });
 
   void _handleScroll() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -355,7 +396,9 @@ class _MaintenancePageState extends State<MaintenancePage>
         _refreshingData = false;
         _loadingSummary = false;
         if (_selectedOrderId != null &&
-            !_orders.any((MaintenanceOrder order) => order.id == _selectedOrderId)) {
+            !_orders.any(
+              (MaintenanceOrder order) => order.id == _selectedOrderId,
+            )) {
           _selectedOrderId = null;
         }
       });
@@ -393,20 +436,27 @@ class _MaintenancePageState extends State<MaintenancePage>
   }
 
   Widget _buildSelectedDayCard() {
-    final int openCount = _dayOrders
-        .where((MaintenanceOrder order) => order.status == MaintenanceOrderStatus.open)
+    final int openCount = _pendingDayOrders
+        .where(
+          (MaintenanceOrder order) =>
+              order.status == MaintenanceOrderStatus.open,
+        )
         .length;
-    final int inProgressCount = _dayOrders
+    final int inProgressCount = _pendingDayOrders
         .where(
           (MaintenanceOrder order) =>
               order.status == MaintenanceOrderStatus.inProgress,
         )
         .length;
-    final int completedCount = _dayOrders
+    final int completedCount = _resolvedDayOrders
         .where(
           (MaintenanceOrder order) =>
               order.status == MaintenanceOrderStatus.completed,
         )
+        .length;
+    final int activeLocations = _pendingDayOrders
+        .map((MaintenanceOrder order) => order.locationId)
+        .toSet()
         .length;
     return Card(
       child: Padding(
@@ -444,25 +494,309 @@ class _MaintenancePageState extends State<MaintenancePage>
               spacing: 10,
               runSpacing: 10,
               children: <Widget>[
-                _metricChip('Ordens', '${_dayOrders.length}', Icons.build_rounded),
-                _metricChip('Abertas', '$openCount', Icons.pending_actions_rounded),
-                _metricChip('Em andamento', '$inProgressCount', Icons.handyman_rounded),
-                _metricChip('Concluidas', '$completedCount', Icons.task_alt_rounded),
+                _metricChip(
+                  'Pendentes',
+                  '${_pendingDayOrders.length}',
+                  Icons.pending_actions_rounded,
+                ),
+                _metricChip(
+                  'Abertas',
+                  '$openCount',
+                  Icons.assignment_late_rounded,
+                ),
+                _metricChip(
+                  'Em andamento',
+                  '$inProgressCount',
+                  Icons.handyman_rounded,
+                ),
+                _metricChip(
+                  'Concluidas',
+                  '$completedCount',
+                  Icons.task_alt_rounded,
+                ),
+                _metricChip(
+                  'Locais ativos',
+                  '$activeLocations',
+                  Icons.apartment_rounded,
+                ),
               ],
             ),
             const SizedBox(height: 18),
-            if (_dayOrders.isEmpty)
-              _emptyBox('Nao ha ordens registradas para este dia.')
-            else
-              ..._dayOrders.map(
-                (MaintenanceOrder order) => Padding(
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: _buildOrderTile(order),
+            SegmentedButton<_MaintenanceSelectedDayView>(
+              segments: const <ButtonSegment<_MaintenanceSelectedDayView>>[
+                ButtonSegment<_MaintenanceSelectedDayView>(
+                  value: _MaintenanceSelectedDayView.pending,
+                  icon: Icon(Icons.today_rounded),
+                  label: Text('Pendentes do dia'),
                 ),
-              ),
+                ButtonSegment<_MaintenanceSelectedDayView>(
+                  value: _MaintenanceSelectedDayView.groupedByDepartment,
+                  icon: Icon(Icons.apartment_rounded),
+                  label: Text('Por setor'),
+                ),
+              ],
+              selected: <_MaintenanceSelectedDayView>{_selectedDayView},
+              onSelectionChanged:
+                  (Set<_MaintenanceSelectedDayView> selection) {
+                    if (selection.isEmpty) {
+                      return;
+                    }
+                    setState(() {
+                      _selectedDayView = selection.first;
+                    });
+                  },
+            ),
+            const SizedBox(height: 18),
+            if (_selectedDayView == _MaintenanceSelectedDayView.pending)
+              _buildPendingDayView()
+            else
+              _buildGroupedDayView(),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildPendingDayView() {
+    if (_dayOrders.isEmpty) {
+      return _emptyBox('Nao ha ordens registradas para este dia.');
+    }
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'Pendencias priorizadas para o dia',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'A lista abaixo destaca o que ainda precisa de acao operacional.',
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: CostaNorteBrand.mutedInk),
+        ),
+        const SizedBox(height: 16),
+        if (_pendingDayOrders.isEmpty)
+          _emptyBox('Nao ha ordens pendentes para este dia.')
+        else
+          ..._pendingDayOrders.map(
+            (MaintenanceOrder order) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildOrderTile(
+                order,
+                onDoubleTap: () => _openOrderActionDialog(order),
+              ),
+            ),
+          ),
+        if (_resolvedDayOrders.isNotEmpty) ...<Widget>[
+          const SizedBox(height: 12),
+          Text(
+            'Ja resolvidas no dia',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 10),
+          ..._resolvedDayOrders.map(
+            (MaintenanceOrder order) => Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: _buildOrderTile(
+                order,
+                onDoubleTap: () => _openOrderActionDialog(order),
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildGroupedDayView() {
+    final Map<int, List<MaintenanceOrder>> pendingByLocation =
+        <int, List<MaintenanceOrder>>{};
+    for (final MaintenanceOrder order in _pendingDayOrders) {
+      pendingByLocation.putIfAbsent(order.locationId, () => <MaintenanceOrder>[]);
+      pendingByLocation[order.locationId]!.add(order);
+    }
+    final List<_MaintenanceDepartmentSectionData> sections =
+        _buildDepartmentSections(pendingByLocation);
+    final int affectedLocations = sections.fold<int>(
+      0,
+      (int total, _MaintenanceDepartmentSectionData section) =>
+          total + section.affectedLocations,
+    );
+    final int urgentLocations = sections.fold<int>(
+      0,
+      (int total, _MaintenanceDepartmentSectionData section) =>
+          total + section.urgentLocations,
+    );
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          'Mapa operacional por setor',
+          style: Theme.of(context).textTheme.titleMedium,
+        ),
+        const SizedBox(height: 6),
+        Text(
+          'Visualizacao dos apartamentos, areas comuns e chalets com destaque para pendencias do dia.',
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(color: CostaNorteBrand.mutedInk),
+        ),
+        const SizedBox(height: 16),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: <Widget>[
+            _metricChip(
+              'Setores ativos',
+              '${sections.where((item) => item.affectedLocations > 0).length}',
+              Icons.grid_view_rounded,
+            ),
+            _metricChip(
+              'Locais com pendencia',
+              '$affectedLocations',
+              Icons.place_rounded,
+            ),
+            _metricChip(
+              'Locais urgentes',
+              '$urgentLocations',
+              Icons.priority_high_rounded,
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        if (sections.every((item) => item.locations.isEmpty))
+          _emptyBox('Nao ha locais cadastrados para montar a visualizacao.')
+        else
+          ...sections.map(
+            (_MaintenanceDepartmentSectionData section) => Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: _buildDepartmentSection(section),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildDepartmentSection(_MaintenanceDepartmentSectionData section) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFCFCFB),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: section.tint.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Icon(section.icon, color: section.tint),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      section.title,
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      section.description,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: CostaNorteBrand.mutedInk,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              _tag(
+                section.affectedLocations == 0
+                    ? 'Sem pendencias'
+                    : '${section.affectedLocations} local(is) ativos',
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (section.locations.isEmpty)
+            _emptyBox('Nenhum local cadastrado neste setor.')
+          else ...<Widget>[
+            if (section.groups.length > 1)
+              ...section.groups.map(
+                (_MaintenanceDepartmentGroupData group) => Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        group.title,
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 10),
+                      _buildDepartmentLocationGrid(group.locations),
+                    ],
+                  ),
+                ),
+              )
+            else
+              _buildDepartmentLocationGrid(section.locations),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDepartmentLocationGrid(
+    List<_MaintenanceDepartmentLocationData> locations,
+  ) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final double maxWidth = constraints.maxWidth;
+        final int crossAxisCount = maxWidth >= 1180
+            ? 4
+            : maxWidth >= 820
+            ? 3
+            : maxWidth >= 560
+            ? 2
+            : 1;
+        const double spacing = 12;
+        final double itemWidth =
+            (maxWidth - (crossAxisCount - 1) * spacing) / crossAxisCount;
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: locations
+              .map(
+                (_MaintenanceDepartmentLocationData item) => SizedBox(
+                  width: itemWidth,
+                  child: _MaintenanceLocationCard(
+                    title: item.location.label,
+                    subtitle: item.subtitle,
+                    icon: item.icon,
+                    pendingOrders: item.pendingOrders,
+                    selected: item.pendingOrders.any(
+                      (MaintenanceOrder order) => order.id == _selectedOrderId,
+                    ),
+                    onTap: () => _openLocationDailyView(
+                      item.location,
+                      item.pendingOrders,
+                    ),
+                  ),
+                ),
+              )
+              .toList(),
+        );
+      },
     );
   }
 
@@ -514,9 +848,8 @@ class _MaintenancePageState extends State<MaintenancePage>
                       child: Center(
                         child: Text(
                           label,
-                          style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                            color: CostaNorteBrand.mutedInk,
-                          ),
+                          style: Theme.of(context).textTheme.labelLarge
+                              ?.copyWith(color: CostaNorteBrand.mutedInk),
                         ),
                       ),
                     ),
@@ -545,6 +878,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                   orders: cell.orders,
                   selected: _sameDay(date, _selectedDate),
                   onTap: () => setState(() => _selectedDate = date),
+                  onDoubleTap: () => _openDayOrderActions(date),
                 );
               },
             ),
@@ -608,7 +942,16 @@ class _MaintenancePageState extends State<MaintenancePage>
                 spacing: 10,
                 runSpacing: 10,
                 children: <Widget>[
-                  _metricChip('Abertas', '${summary.openCount}', Icons.pending_rounded),
+                  _metricChip(
+                    'Abertas',
+                    '${summary.openCount}',
+                    Icons.pending_rounded,
+                  ),
+                  _metricChip(
+                    'Atribuidas',
+                    '${summary.assignedCount}',
+                    Icons.assignment_ind_rounded,
+                  ),
                   _metricChip(
                     'Agendadas',
                     '${summary.scheduledCount}',
@@ -628,6 +971,16 @@ class _MaintenancePageState extends State<MaintenancePage>
                     'Urgentes',
                     '${summary.urgentCount}',
                     Icons.priority_high_rounded,
+                  ),
+                  _metricChip(
+                    'Sem responsavel',
+                    '${summary.unassignedCount}',
+                    Icons.person_off_rounded,
+                  ),
+                  _metricChip(
+                    'Prioridade hospede',
+                    '${summary.guestPriorityCount}',
+                    Icons.hotel_rounded,
                   ),
                   _metricChip(
                     'Resolucao media',
@@ -729,11 +1082,12 @@ class _MaintenancePageState extends State<MaintenancePage>
     );
   }
 
-  Widget _buildOrderTile(MaintenanceOrder order) {
+  Widget _buildOrderTile(MaintenanceOrder order, {VoidCallback? onDoubleTap}) {
     final bool selected = order.id == _selectedOrderId;
     return InkWell(
       borderRadius: BorderRadius.circular(18),
       onTap: () => setState(() => _selectedOrderId = order.id),
+      onDoubleTap: onDoubleTap,
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -759,15 +1113,15 @@ class _MaintenancePageState extends State<MaintenancePage>
             ),
             const SizedBox(height: 8),
             Text(
-              '${order.locationLabelSnapshot} · ${order.providerNameSnapshot}',
+              '${order.locationLabelSnapshot} Â· ${order.providerLabel}',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 6),
             Text(
               _orderScheduleLabel(order),
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: CostaNorteBrand.mutedInk,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: CostaNorteBrand.mutedInk),
             ),
             if (order.description != null) ...<Widget>[
               const SizedBox(height: 6),
@@ -779,14 +1133,48 @@ class _MaintenancePageState extends State<MaintenancePage>
               runSpacing: 8,
               children: <Widget>[
                 _tag(order.priority.label),
-                _tag(order.serviceLabelSnapshot),
-                if (order.attachments.isNotEmpty) _tag('${order.attachments.length} anexos'),
+                _tag(order.businessPriority.label),
+                _tag(order.serviceLabel),
+                if (order.assignedUsername != null)
+                  _tag('Asignado: ${order.assignedUsername}'),
+                if (order.estimatedExecutionMinutes != null)
+                  _tag('${order.estimatedExecutionMinutes} min'),
+                if (order.guestLabel != null) _tag('Hospede: ${order.guestLabel}'),
+                if (order.attachments.isNotEmpty)
+                  _tag('${order.attachments.length} anexos'),
               ],
             ),
             const SizedBox(height: 10),
             Wrap(
               spacing: 10,
+              runSpacing: 10,
               children: <Widget>[
+                OutlinedButton.icon(
+                  onPressed: () {
+                    setState(() => _selectedOrderId = order.id);
+                    _editOrder(order: order);
+                  },
+                  icon: const Icon(Icons.edit_rounded),
+                  label: const Text('Editar'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _sharingOrderId == order.id
+                      ? null
+                      : () {
+                          setState(() => _selectedOrderId = order.id);
+                          _shareOrderToWhatsApp(order: order);
+                        },
+                  icon: Icon(
+                    _sharingOrderId == order.id
+                        ? Icons.hourglass_top_rounded
+                        : Icons.send_rounded,
+                  ),
+                  label: Text(
+                    _sharingOrderId == order.id
+                        ? 'Compartindo...'
+                        : 'Compartir',
+                  ),
+                ),
                 TextButton.icon(
                   onPressed: () => _openLocationHistory(order.locationId),
                   icon: const Icon(Icons.history_rounded),
@@ -804,6 +1192,320 @@ class _MaintenancePageState extends State<MaintenancePage>
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  bool _isPendingOrder(MaintenanceOrder order) {
+    return order.status != MaintenanceOrderStatus.completed &&
+        order.status != MaintenanceOrderStatus.cancelled;
+  }
+
+  List<_MaintenanceDepartmentSectionData> _buildDepartmentSections(
+    Map<int, List<MaintenanceOrder>> pendingByLocation,
+  ) {
+    final List<MaintenanceLocation> activeLocations = _locations
+        .where((MaintenanceLocation location) => location.active)
+        .toList();
+    final List<MaintenanceLocation> apartments = <MaintenanceLocation>[];
+    final List<MaintenanceLocation> commonAreas = <MaintenanceLocation>[];
+    final List<MaintenanceLocation> chalets = <MaintenanceLocation>[];
+
+    for (final MaintenanceLocation location in activeLocations) {
+      switch (_locationCategory(location)) {
+        case _MaintenanceLocationCategory.apartment:
+          apartments.add(location);
+          break;
+        case _MaintenanceLocationCategory.commonArea:
+          commonAreas.add(location);
+          break;
+        case _MaintenanceLocationCategory.chalet:
+          chalets.add(location);
+          break;
+      }
+    }
+
+    apartments.sort(_sortLocations);
+    commonAreas.sort(_sortLocations);
+    chalets.sort(_sortLocations);
+
+    final Map<String, List<_MaintenanceDepartmentLocationData>> apartmentGroups =
+        <String, List<_MaintenanceDepartmentLocationData>>{};
+    for (final MaintenanceLocation location in apartments) {
+      final String groupLabel = _floorLabelForLocation(location);
+      apartmentGroups.putIfAbsent(
+        groupLabel,
+        () => <_MaintenanceDepartmentLocationData>[],
+      );
+      apartmentGroups[groupLabel]!.add(
+        _buildDepartmentLocationData(
+          location,
+          pendingByLocation[location.id] ?? const <MaintenanceOrder>[],
+        ),
+      );
+    }
+
+    final List<_MaintenanceDepartmentGroupData> apartmentGroupList =
+        apartmentGroups.entries
+            .map(
+              (MapEntry<String, List<_MaintenanceDepartmentLocationData>> entry) =>
+                  _MaintenanceDepartmentGroupData(
+                    title: entry.key,
+                    locations: entry.value,
+                  ),
+            )
+            .toList()
+          ..sort(
+            (
+              _MaintenanceDepartmentGroupData a,
+              _MaintenanceDepartmentGroupData b,
+            ) => _departmentGroupSortValue(a.title)
+                .compareTo(_departmentGroupSortValue(b.title)),
+          );
+
+    final List<_MaintenanceDepartmentLocationData> commonAreaLocations =
+        commonAreas
+            .map(
+              (MaintenanceLocation location) => _buildDepartmentLocationData(
+                location,
+                pendingByLocation[location.id] ?? const <MaintenanceOrder>[],
+              ),
+            )
+            .toList();
+
+    final List<_MaintenanceDepartmentLocationData> chaletLocations = chalets
+        .map(
+          (MaintenanceLocation location) => _buildDepartmentLocationData(
+            location,
+            pendingByLocation[location.id] ?? const <MaintenanceOrder>[],
+          ),
+        )
+        .toList();
+
+    return <_MaintenanceDepartmentSectionData>[
+      _MaintenanceDepartmentSectionData(
+        title: 'Apartamentos',
+        description: 'Quartos e unidades internas organizados por piso.',
+        icon: Icons.apartment_rounded,
+        tint: CostaNorteBrand.royalBlueDeep,
+        groups: apartmentGroupList,
+      ),
+      _MaintenanceDepartmentSectionData(
+        title: 'Areas comuns',
+        description: 'Lobby, circulacoes e espacos coletivos do hotel.',
+        icon: Icons.weekend_rounded,
+        tint: CostaNorteBrand.goldDeep,
+        groups: <_MaintenanceDepartmentGroupData>[
+          _MaintenanceDepartmentGroupData(
+            title: 'Espacos compartilhados',
+            locations: commonAreaLocations,
+          ),
+        ],
+      ),
+      _MaintenanceDepartmentSectionData(
+        title: 'Chalets',
+        description: 'Unidades externas com manutencao dedicada.',
+        icon: Icons.cabin_rounded,
+        tint: CostaNorteBrand.success,
+        groups: <_MaintenanceDepartmentGroupData>[
+          _MaintenanceDepartmentGroupData(
+            title: 'Conjunto de chalets',
+            locations: chaletLocations,
+          ),
+        ],
+      ),
+    ];
+  }
+
+  _MaintenanceDepartmentLocationData _buildDepartmentLocationData(
+    MaintenanceLocation location,
+    List<MaintenanceOrder> pendingOrders,
+  ) {
+    final List<MaintenanceOrder> sortedOrders = List<MaintenanceOrder>.of(
+      pendingOrders,
+    )..sort((MaintenanceOrder a, MaintenanceOrder b) {
+        return a.referenceDate.compareTo(b.referenceDate);
+      });
+    return _MaintenanceDepartmentLocationData(
+      location: location,
+      icon: _iconForLocation(location),
+      subtitle: _subtitleForLocation(location),
+      pendingOrders: sortedOrders,
+    );
+  }
+
+  _MaintenanceLocationCategory _locationCategory(MaintenanceLocation location) {
+    final String fingerprint = _locationFingerprint(location);
+    if (fingerprint.contains('chalet')) {
+      return _MaintenanceLocationCategory.chalet;
+    }
+    if (location.locationType == MaintenanceLocationType.room) {
+      return _MaintenanceLocationCategory.apartment;
+    }
+    if (RegExp(r'\b\d{3}\b').hasMatch(fingerprint) ||
+        fingerprint.contains('habitacion') ||
+        fingerprint.contains('quarto') ||
+        fingerprint.contains('apartamento') ||
+        fingerprint.contains('apto')) {
+      return _MaintenanceLocationCategory.apartment;
+    }
+    return _MaintenanceLocationCategory.commonArea;
+  }
+
+  String _floorLabelForLocation(MaintenanceLocation location) {
+    final String? floor = location.floor?.trim();
+    if (floor != null && floor.isNotEmpty) {
+      return floor;
+    }
+    final int? sequence = _locationSequence(location);
+    if (sequence != null && sequence >= 100) {
+      return 'Piso ${sequence ~/ 100}';
+    }
+    if (_locationCategory(location) == _MaintenanceLocationCategory.chalet) {
+      return 'Chalets';
+    }
+    return 'Sem piso';
+  }
+
+  String _subtitleForLocation(MaintenanceLocation location) {
+    final String code = location.code.trim();
+    final String floor = _floorLabelForLocation(location);
+    switch (_locationCategory(location)) {
+      case _MaintenanceLocationCategory.apartment:
+        if (code.isEmpty) {
+          return floor;
+        }
+        return '$floor · $code';
+      case _MaintenanceLocationCategory.chalet:
+        return code.isEmpty ? 'Unidade externa' : code;
+      case _MaintenanceLocationCategory.commonArea:
+        return code.isEmpty ? 'Area comum' : 'Area comum · $code';
+    }
+  }
+
+  IconData _iconForLocation(MaintenanceLocation location) {
+    final String fingerprint = _locationFingerprint(location);
+    if (fingerprint.contains('chalet')) {
+      return Icons.cabin_rounded;
+    }
+    if (_locationCategory(location) == _MaintenanceLocationCategory.apartment) {
+      return Icons.meeting_room_rounded;
+    }
+    if (fingerprint.contains('lobby') || fingerprint.contains('recepc')) {
+      return Icons.living_rounded;
+    }
+    if (fingerprint.contains('tv')) {
+      return Icons.tv_rounded;
+    }
+    if (fingerprint.contains('jogo')) {
+      return Icons.sports_esports_rounded;
+    }
+    if (fingerprint.contains('estacion')) {
+      return Icons.local_parking_rounded;
+    }
+    if (fingerprint.contains('escada') || fingerprint.contains('escalera')) {
+      return Icons.stairs_rounded;
+    }
+    return Icons.domain_rounded;
+  }
+
+  String _locationFingerprint(MaintenanceLocation location) {
+    return '${location.code} ${location.label}'.toLowerCase();
+  }
+
+  int _sortLocations(MaintenanceLocation a, MaintenanceLocation b) {
+    final int categoryCompare = _locationCategory(a).index.compareTo(
+      _locationCategory(b).index,
+    );
+    if (categoryCompare != 0) {
+      return categoryCompare;
+    }
+    final int floorCompare = _departmentGroupSortValue(
+      _floorLabelForLocation(a),
+    ).compareTo(_departmentGroupSortValue(_floorLabelForLocation(b)));
+    if (floorCompare != 0) {
+      return floorCompare;
+    }
+    final int? aSequence = _locationSequence(a);
+    final int? bSequence = _locationSequence(b);
+    if (aSequence != null && bSequence != null && aSequence != bSequence) {
+      return aSequence.compareTo(bSequence);
+    }
+    return a.label.compareTo(b.label);
+  }
+
+  int _departmentGroupSortValue(String label) {
+    final RegExpMatch? match = RegExp(r'(\d+)').firstMatch(label);
+    return int.tryParse(match?.group(1) ?? '') ?? 9999;
+  }
+
+  int? _locationSequence(MaintenanceLocation location) {
+    final String fingerprint = '${location.code} ${location.label}';
+    final RegExpMatch? match = RegExp(r'(\d+)').firstMatch(fingerprint);
+    return int.tryParse(match?.group(1) ?? '');
+  }
+
+  Future<void> _openLocationDailyView(
+    MaintenanceLocation location,
+    List<MaintenanceOrder> pendingOrders,
+  ) async {
+    if (pendingOrders.isEmpty) {
+      await _openLocationHistory(location.id);
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) => AlertDialog(
+        title: Text(location.label),
+        content: SizedBox(
+          width: 840,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                Text(
+                  'Pendencias de ${_fullDate(_selectedDate)}',
+                  style: Theme.of(dialogContext).textTheme.titleMedium,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Toque em uma ordem para seleciona-la. Duplo toque abre as acoes rapidas.',
+                  style: Theme.of(dialogContext).textTheme.bodyMedium?.copyWith(
+                    color: CostaNorteBrand.mutedInk,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                ...pendingOrders.map(
+                  (MaintenanceOrder order) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: _buildOrderTile(
+                      order,
+                      onDoubleTap: () {
+                        Navigator.of(dialogContext).pop();
+                        _openOrderActionDialog(order);
+                      },
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              _openLocationHistory(location.id);
+            },
+            child: const Text('Historico do local'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: const Text('Fechar'),
+          ),
+        ],
       ),
     );
   }
@@ -849,6 +1551,7 @@ class _MaintenancePageState extends State<MaintenancePage>
   Widget _statusPill(MaintenanceOrder order) {
     final Color color = switch (order.status) {
       MaintenanceOrderStatus.open => CostaNorteBrand.goldDeep,
+      MaintenanceOrderStatus.assigned => CostaNorteBrand.royalBlue,
       MaintenanceOrderStatus.scheduled => CostaNorteBrand.royalBlueDeep,
       MaintenanceOrderStatus.inProgress => CostaNorteBrand.success,
       MaintenanceOrderStatus.completed => CostaNorteBrand.success,
@@ -880,7 +1583,11 @@ class _MaintenancePageState extends State<MaintenancePage>
   }
 
   List<_MaintenanceDayCell> _calendarCells() {
-    final DateTime monthStart = DateTime(_selectedDate.year, _selectedDate.month, 1);
+    final DateTime monthStart = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      1,
+    );
     final int daysInMonth = DateTime(
       _selectedDate.year,
       _selectedDate.month + 1,
@@ -892,9 +1599,15 @@ class _MaintenancePageState extends State<MaintenancePage>
       cells.add(_MaintenanceDayCell.empty());
     }
     for (int day = 1; day <= daysInMonth; day++) {
-      final DateTime date = DateTime(_selectedDate.year, _selectedDate.month, day);
+      final DateTime date = DateTime(
+        _selectedDate.year,
+        _selectedDate.month,
+        day,
+      );
       final List<MaintenanceOrder> orders = _orders
-          .where((MaintenanceOrder order) => _sameDay(order.referenceDate, date))
+          .where(
+            (MaintenanceOrder order) => _sameDay(order.referenceDate, date),
+          )
           .toList();
       cells.add(_MaintenanceDayCell(date: date, orders: orders));
     }
@@ -998,36 +1711,75 @@ class _MaintenancePageState extends State<MaintenancePage>
   }
 
   Future<void> _createOrder() async {
-    final _MaintenanceOrderDraft? draft = await showDialog<_MaintenanceOrderDraft>(
-      context: context,
-      builder: (BuildContext context) => _MaintenanceOrderDialog(
-        locations: _locations.where((MaintenanceLocation item) => item.active).toList(),
-        providers: _providers.where((MaintenanceProvider item) => item.active).toList(),
-      ),
-    );
+    final _MaintenanceOrderDraft? draft =
+        await showDialog<_MaintenanceOrderDraft>(
+          context: context,
+          builder: (BuildContext context) => _MaintenanceOrderDialog(
+            locations: _locations
+                .where((MaintenanceLocation item) => item.active)
+                .toList(),
+            providers: _providers
+                .where((MaintenanceProvider item) => item.active)
+                .toList(),
+          ),
+        );
     if (draft == null) {
       return;
     }
     await _saveOrderDraft(draft);
   }
 
-  Future<void> _editOrder() async {
-    final MaintenanceOrder? order = _selectedOrder;
-    if (order == null) {
+  Future<void> _editOrder({MaintenanceOrder? order}) async {
+    final MaintenanceOrder? selected = order ?? _selectedOrder;
+    if (selected == null) {
       return;
     }
-    final _MaintenanceOrderDraft? draft = await showDialog<_MaintenanceOrderDraft>(
-      context: context,
-      builder: (BuildContext context) => _MaintenanceOrderDialog(
-        locations: _locations.where((MaintenanceLocation item) => item.active).toList(),
-        providers: _providers.where((MaintenanceProvider item) => item.active).toList(),
-        initialOrder: order,
-      ),
-    );
+    final _MaintenanceOrderDraft? draft =
+        await showDialog<_MaintenanceOrderDraft>(
+          context: context,
+          builder: (BuildContext context) => _MaintenanceOrderDialog(
+            locations: _locations
+                .where((MaintenanceLocation item) => item.active)
+                .toList(),
+            providers: _providers
+                .where((MaintenanceProvider item) => item.active)
+                .toList(),
+            initialOrder: selected,
+          ),
+        );
     if (draft == null) {
       return;
     }
-    await _saveOrderDraft(draft, editingOrderId: order.id);
+    await _saveOrderDraft(draft, editingOrderId: selected.id);
+  }
+
+  Future<void> _shareOrderToWhatsApp({MaintenanceOrder? order}) async {
+    final MaintenanceOrder? selected = order ?? _selectedOrder;
+    if (selected == null || _sharingOrderId != null) {
+      return;
+    }
+
+    setState(() {
+      _sharingOrderId = selected.id;
+    });
+    try {
+      await AppShare.shareText(
+        context,
+        text: _buildOrderShareMessage(selected),
+        subject: 'Ordem de manutencao ${selected.id}',
+        failureTitle: 'Falha ao compartilhar ordem',
+        failureMessagePrefix: 'Nao foi possivel preparar a mensagem da ordem',
+      );
+      if (!mounted) {
+        return;
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _sharingOrderId = null;
+        });
+      }
+    }
   }
 
   Future<void> _saveOrderDraft(
@@ -1043,7 +1795,9 @@ class _MaintenancePageState extends State<MaintenancePage>
             .maintenanceAppService
             .findConflicts(
               locationId: draft.locationId,
-              scheduledStartAt: _formatLocalDateTimeApi(draft.scheduledStartAt!),
+              scheduledStartAt: _formatLocalDateTimeApi(
+                draft.scheduledStartAt!,
+              ),
               scheduledEndAt: _formatLocalDateTimeApi(draft.scheduledEndAt!),
               excludeOrderId: editingOrderId,
             );
@@ -1246,7 +2000,9 @@ class _MaintenancePageState extends State<MaintenancePage>
         context: context,
         builder: (BuildContext context) => _LocationHistoryDialog(
           history: history,
-          locationLabel: history.isEmpty ? 'Local' : history.first.locationLabelSnapshot,
+          locationLabel: history.isEmpty
+              ? 'Local'
+              : history.first.locationLabelSnapshot,
         ),
       );
     } catch (error) {
@@ -1261,13 +2017,135 @@ class _MaintenancePageState extends State<MaintenancePage>
     }
   }
 
+  Future<void> _openDayOrderActions(DateTime date) async {
+    setState(() {
+      _selectedDate = DateTime(date.year, date.month, date.day);
+    });
+    final MaintenanceOrder? order = await _pickOrder(
+      'Ordens do dia',
+      emptyMessage: 'Nao ha ordens registradas para este dia.',
+    );
+    if (order == null || !mounted) {
+      return;
+    }
+    await _openOrderActionDialog(order);
+  }
+
+  Future<void> _openOrderActionDialog(MaintenanceOrder order) async {
+    final _MaintenanceOrderAction? action =
+        await showDialog<_MaintenanceOrderAction>(
+          context: context,
+          builder: (BuildContext context) => _MaintenanceOrderActionDialog(
+            order: order,
+            sharing: _sharingOrderId == order.id,
+          ),
+        );
+    if (action == null || !mounted) {
+      return;
+    }
+
+    setState(() {
+      _selectedOrderId = order.id;
+    });
+    switch (action) {
+      case _MaintenanceOrderAction.edit:
+        await _editOrder(order: order);
+        return;
+      case _MaintenanceOrderAction.share:
+        await _shareOrderToWhatsApp(order: order);
+        return;
+      case _MaintenanceOrderAction.start:
+        await _startOrder();
+        return;
+      case _MaintenanceOrderAction.complete:
+        await _completeOrder();
+        return;
+      case _MaintenanceOrderAction.cancel:
+        await _cancelOrder();
+        return;
+      case _MaintenanceOrderAction.attachments:
+        await _manageAttachments();
+        return;
+    }
+  }
+
+  Future<MaintenanceOrder?> _pickOrder(
+    String title, {
+    bool Function(MaintenanceOrder order)? canSelect,
+    String? emptyMessage,
+  }) async {
+    final List<MaintenanceOrder> items = canSelect == null
+        ? _dayOrders
+        : _dayOrders.where(canSelect).toList();
+    if (items.isEmpty) {
+      if (!mounted || emptyMessage == null) {
+        return null;
+      }
+      await AppAlerts.info(context, title: title, message: emptyMessage);
+      return null;
+    }
+
+    return showDialog<MaintenanceOrder>(
+      context: context,
+      builder: (BuildContext context) => SimpleDialog(
+        title: Text(title),
+        children: items
+            .map(
+              (MaintenanceOrder item) => SimpleDialogOption(
+                onPressed: () => Navigator.of(context).pop(item),
+                child: Text(
+                  '${item.title} Â· ${item.locationLabelSnapshot} Â· ${item.providerNameSnapshot}',
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  String _buildOrderShareMessage(MaintenanceOrder order) {
+    MaintenanceProvider? provider;
+    for (final MaintenanceProvider item in _providers) {
+      if (order.providerId != null && item.id == order.providerId) {
+        provider = item;
+        break;
+      }
+    }
+    final StringBuffer buffer = StringBuffer()
+      ..writeln('Ordem de manutencao Hotel Costa Norte')
+      ..writeln('Titulo: ${order.title}')
+      ..writeln('Local: ${order.locationLabelSnapshot}')
+      ..writeln('Prestador: ${order.providerLabel}')
+      ..writeln(
+        'Contato: ${provider != null && (provider.contact ?? '').isNotEmpty ? provider.contact : 'nao informado'}',
+      )
+      ..writeln('Servico: ${order.serviceLabel}')
+      ..writeln('Prioridade tecnica: ${order.priority.label}')
+      ..writeln('Prioridade operacional: ${order.businessPriority.label}')
+      ..writeln('Origem: ${order.requestOrigin.label}')
+      ..writeln('Status: ${order.status.label}')
+      ..writeln('Agenda: ${_orderScheduleLabel(order)}');
+    if (order.guestLabel != null) {
+      buffer.writeln('Hospede: ${order.guestLabel}');
+    }
+    if (order.assignedUsername != null) {
+      buffer.writeln('Asignado a: ${order.assignedUsername}');
+    }
+    if (order.estimatedExecutionMinutes != null) {
+      buffer.writeln('Tempo estimado: ${order.estimatedExecutionMinutes} min');
+    }
+    if ((order.description ?? '').trim().isNotEmpty) {
+      buffer.writeln('Descricao: ${order.description!.trim()}');
+    }
+    return buffer.toString().trim();
+  }
+
   Future<void> _openSummaryDetails(
     MaintenanceSummaryGroupBy groupBy,
     MaintenanceSummaryBreakdown breakdown,
   ) async {
     try {
-      final MaintenanceSummaryDetail detail = await widget
-          .maintenanceAppService
+      final MaintenanceSummaryDetail detail = await widget.maintenanceAppService
           .getSummaryDetails(
             groupBy: groupBy,
             code: breakdown.code,
@@ -1279,7 +2157,8 @@ class _MaintenancePageState extends State<MaintenancePage>
       }
       await showDialog<void>(
         context: context,
-        builder: (BuildContext context) => _SummaryDetailsDialog(detail: detail),
+        builder: (BuildContext context) =>
+            _SummaryDetailsDialog(detail: detail),
       );
     } catch (error) {
       if (!mounted) {
@@ -1295,10 +2174,8 @@ class _MaintenancePageState extends State<MaintenancePage>
 }
 
 class _MaintenanceDayCell {
-  const _MaintenanceDayCell({
-    required this.date,
-    required this.orders,
-  }) : inMonth = true;
+  const _MaintenanceDayCell({required this.date, required this.orders})
+    : inMonth = true;
 
   const _MaintenanceDayCell.empty()
     : date = null,
@@ -1310,18 +2187,130 @@ class _MaintenanceDayCell {
   final bool inMonth;
 }
 
+enum _MaintenanceOrderAction {
+  edit,
+  share,
+  start,
+  complete,
+  cancel,
+  attachments,
+}
+
+class _MaintenanceOrderActionDialog extends StatelessWidget {
+  const _MaintenanceOrderActionDialog({
+    required this.order,
+    required this.sharing,
+  });
+
+  final MaintenanceOrder order;
+  final bool sharing;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool canStart =
+        order.status == MaintenanceOrderStatus.open ||
+        order.status == MaintenanceOrderStatus.assigned ||
+        order.status == MaintenanceOrderStatus.scheduled;
+    final bool canComplete = order.status == MaintenanceOrderStatus.inProgress;
+    final bool canCancel =
+        order.status != MaintenanceOrderStatus.completed &&
+        order.status != MaintenanceOrderStatus.cancelled;
+    return AlertDialog(
+      title: const Text('Ordem do dia'),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(order.title, style: Theme.of(context).textTheme.titleMedium),
+          const SizedBox(height: 6),
+          Text(
+            '${order.locationLabelSnapshot} Â· ${order.providerLabel}',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              OutlinedButton.icon(
+                onPressed: () =>
+                    Navigator.of(context).pop(_MaintenanceOrderAction.edit),
+                icon: const Icon(Icons.edit_rounded),
+                label: const Text('Editar'),
+              ),
+              OutlinedButton.icon(
+                onPressed: sharing
+                    ? null
+                    : () => Navigator.of(
+                        context,
+                      ).pop(_MaintenanceOrderAction.share),
+                icon: Icon(
+                  sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
+                ),
+                label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+              ),
+              OutlinedButton.icon(
+                onPressed: canStart
+                    ? () => Navigator.of(
+                        context,
+                      ).pop(_MaintenanceOrderAction.start)
+                    : null,
+                icon: const Icon(Icons.play_circle_outline_rounded),
+                label: const Text('Iniciar'),
+              ),
+              OutlinedButton.icon(
+                onPressed: canComplete
+                    ? () => Navigator.of(
+                        context,
+                      ).pop(_MaintenanceOrderAction.complete)
+                    : null,
+                icon: const Icon(Icons.task_alt_rounded),
+                label: const Text('Concluir'),
+              ),
+              OutlinedButton.icon(
+                onPressed: canCancel
+                    ? () => Navigator.of(
+                        context,
+                      ).pop(_MaintenanceOrderAction.cancel)
+                    : null,
+                icon: const Icon(Icons.cancel_schedule_send_rounded),
+                label: const Text('Cancelar'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(
+                  context,
+                ).pop(_MaintenanceOrderAction.attachments),
+                icon: const Icon(Icons.attach_file_rounded),
+                label: const Text('Anexos'),
+              ),
+            ],
+          ),
+        ],
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Fechar'),
+        ),
+      ],
+    );
+  }
+}
+
 class _MaintenanceAgendaDayCard extends StatelessWidget {
   const _MaintenanceAgendaDayCard({
     required this.date,
     required this.orders,
     required this.selected,
     required this.onTap,
+    required this.onDoubleTap,
   });
 
   final DateTime date;
   final List<MaintenanceOrder> orders;
   final bool selected;
   final VoidCallback onTap;
+  final VoidCallback onDoubleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -1341,6 +2330,7 @@ class _MaintenanceAgendaDayCard extends StatelessWidget {
     return InkWell(
       borderRadius: BorderRadius.circular(18),
       onTap: onTap,
+      onDoubleTap: onDoubleTap,
       child: Container(
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -1353,10 +2343,17 @@ class _MaintenanceAgendaDayCard extends StatelessWidget {
           children: <Widget>[
             Row(
               children: <Widget>[
-                Text('${date.day}', style: Theme.of(context).textTheme.titleMedium),
+                Text(
+                  '${date.day}',
+                  style: Theme.of(context).textTheme.titleMedium,
+                ),
                 const Spacer(),
                 if (hasUrgent)
-                  const Icon(Icons.priority_high_rounded, size: 16, color: CostaNorteBrand.error),
+                  const Icon(
+                    Icons.priority_high_rounded,
+                    size: 16,
+                    color: CostaNorteBrand.error,
+                  ),
               ],
             ),
             const Spacer(),
@@ -1373,6 +2370,258 @@ class _MaintenanceAgendaDayCard extends StatelessWidget {
   }
 }
 
+enum _MaintenanceLocationCategory { apartment, commonArea, chalet }
+
+class _MaintenanceDepartmentSectionData {
+  const _MaintenanceDepartmentSectionData({
+    required this.title,
+    required this.description,
+    required this.icon,
+    required this.tint,
+    required this.groups,
+  });
+
+  final String title;
+  final String description;
+  final IconData icon;
+  final Color tint;
+  final List<_MaintenanceDepartmentGroupData> groups;
+
+  List<_MaintenanceDepartmentLocationData> get locations =>
+      groups
+          .expand(
+            (_MaintenanceDepartmentGroupData group) => group.locations,
+          )
+          .toList();
+
+  int get affectedLocations =>
+      locations
+          .where(
+            (_MaintenanceDepartmentLocationData item) =>
+                item.pendingOrders.isNotEmpty,
+          )
+          .length;
+
+  int get urgentLocations =>
+      locations
+          .where(
+            (_MaintenanceDepartmentLocationData item) => item.pendingOrders.any(
+              (MaintenanceOrder order) =>
+                  order.priority == MaintenancePriority.urgent,
+            ),
+          )
+          .length;
+}
+
+class _MaintenanceDepartmentGroupData {
+  const _MaintenanceDepartmentGroupData({
+    required this.title,
+    required this.locations,
+  });
+
+  final String title;
+  final List<_MaintenanceDepartmentLocationData> locations;
+}
+
+class _MaintenanceDepartmentLocationData {
+  const _MaintenanceDepartmentLocationData({
+    required this.location,
+    required this.icon,
+    required this.subtitle,
+    required this.pendingOrders,
+  });
+
+  final MaintenanceLocation location;
+  final IconData icon;
+  final String subtitle;
+  final List<MaintenanceOrder> pendingOrders;
+}
+
+class _MaintenanceLocationCard extends StatelessWidget {
+  const _MaintenanceLocationCard({
+    required this.title,
+    required this.subtitle,
+    required this.icon,
+    required this.pendingOrders,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String title;
+  final String subtitle;
+  final IconData icon;
+  final List<MaintenanceOrder> pendingOrders;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final bool hasPending = pendingOrders.isNotEmpty;
+    final bool hasUrgent = pendingOrders.any(
+      (MaintenanceOrder order) =>
+          order.priority == MaintenancePriority.urgent,
+    );
+    final bool hasGuestPriority = pendingOrders.any(
+      (MaintenanceOrder order) =>
+          order.businessPriority ==
+          MaintenanceBusinessPriority.guestPriority,
+    );
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          color: selected
+              ? CostaNorteBrand.foam
+              : hasPending
+              ? const Color(0xFFF9FBFF)
+              : Colors.white,
+          border: Border.all(
+            color: selected
+                ? CostaNorteBrand.royalBlue
+                : hasPending
+                ? CostaNorteBrand.royalBlue.withValues(alpha: 0.34)
+                : CostaNorteBrand.line,
+          ),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: CostaNorteBrand.mist,
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                  child: Icon(
+                    icon,
+                    color: CostaNorteBrand.royalBlueDeep,
+                    size: 18,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    title,
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 6,
+                  ),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: hasPending
+                        ? CostaNorteBrand.royalBlue.withValues(alpha: 0.12)
+                        : CostaNorteBrand.mist,
+                  ),
+                  child: Text(
+                    hasPending ? '${pendingOrders.length}' : '0',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      color: hasPending
+                          ? CostaNorteBrand.royalBlueDeep
+                          : CostaNorteBrand.mutedInk,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              subtitle,
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: CostaNorteBrand.mutedInk),
+            ),
+            const SizedBox(height: 12),
+            if (!hasPending)
+              Text(
+                'Sem pendencias para o dia selecionado.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: CostaNorteBrand.mutedInk,
+                ),
+              )
+            else ...<Widget>[
+              ...pendingOrders
+                  .take(2)
+                  .map(
+                    (MaintenanceOrder order) => Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Text(
+                        '- ${order.title}',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+              if (pendingOrders.length > 2)
+                Text(
+                  '+${pendingOrders.length - 2} ordem(ns) neste local',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: CostaNorteBrand.mutedInk,
+                  ),
+                ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  if (hasUrgent)
+                    _MaintenanceMiniTag(
+                      label: 'Urgente',
+                      color: CostaNorteBrand.error,
+                    ),
+                  if (hasGuestPriority)
+                    _MaintenanceMiniTag(
+                      label: 'Hospede',
+                      color: CostaNorteBrand.goldDeep,
+                    ),
+                ],
+              ),
+            ],
+            const SizedBox(height: 12),
+            Text(
+              hasPending ? 'Toque para abrir as ordens' : 'Toque para ver o historico',
+              style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: CostaNorteBrand.royalBlueDeep,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _MaintenanceMiniTag extends StatelessWidget {
+  const _MaintenanceMiniTag({required this.label, required this.color});
+
+  final String label;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(999),
+        color: color.withValues(alpha: 0.12),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
+      ),
+    );
+  }
+}
+
 class _MaintenanceOrderDraft {
   const _MaintenanceOrderDraft({
     required this.locationId,
@@ -1380,15 +2629,29 @@ class _MaintenanceOrderDraft {
     required this.title,
     required this.description,
     required this.priority,
+    required this.requestOrigin,
+    required this.requestedForGuest,
+    required this.guestName,
+    required this.guestReference,
+    required this.businessPriority,
+    required this.estimatedExecutionMinutes,
+    required this.assignedUsername,
     required this.scheduledStartAt,
     required this.scheduledEndAt,
   });
 
   final int locationId;
-  final int providerId;
+  final int? providerId;
   final String title;
   final String? description;
   final MaintenancePriority priority;
+  final MaintenanceRequestOrigin requestOrigin;
+  final bool requestedForGuest;
+  final String? guestName;
+  final String? guestReference;
+  final MaintenanceBusinessPriority businessPriority;
+  final int? estimatedExecutionMinutes;
+  final String? assignedUsername;
   final DateTime? scheduledStartAt;
   final DateTime? scheduledEndAt;
 
@@ -1399,6 +2662,13 @@ class _MaintenanceOrderDraft {
       title: title,
       description: description,
       priority: priority,
+      requestOrigin: requestOrigin,
+      requestedForGuest: requestedForGuest,
+      guestName: guestName,
+      guestReference: guestReference,
+      businessPriority: businessPriority,
+      estimatedExecutionMinutes: estimatedExecutionMinutes,
+      assignedUsername: assignedUsername,
       scheduledStartAt: scheduledStartAt == null
           ? null
           : _formatLocalDateTimeApi(scheduledStartAt!),
@@ -1415,6 +2685,13 @@ class _MaintenanceOrderDraft {
       title: title,
       description: description,
       priority: priority,
+      requestOrigin: requestOrigin,
+      requestedForGuest: requestedForGuest,
+      guestName: guestName,
+      guestReference: guestReference,
+      businessPriority: businessPriority,
+      estimatedExecutionMinutes: estimatedExecutionMinutes,
+      assignedUsername: assignedUsername,
       scheduledStartAt: scheduledStartAt == null
           ? null
           : _formatLocalDateTimeApi(scheduledStartAt!),
@@ -1437,28 +2714,39 @@ class _MaintenanceOrderDialog extends StatefulWidget {
   final MaintenanceOrder? initialOrder;
 
   @override
-  State<_MaintenanceOrderDialog> createState() => _MaintenanceOrderDialogState();
+  State<_MaintenanceOrderDialog> createState() =>
+      _MaintenanceOrderDialogState();
 }
 
 class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   late int _locationId;
-  late int _providerId;
+  int? _providerId;
   late MaintenancePriority _priority;
+  late MaintenanceRequestOrigin _requestOrigin;
+  late MaintenanceBusinessPriority _businessPriority;
   late bool _hasSchedule;
   late DateTime _date;
   late TimeOfDay _startTime;
   late TimeOfDay _endTime;
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
+  late final TextEditingController _guestNameController;
+  late final TextEditingController _guestReferenceController;
+  late final TextEditingController _assignedUsernameController;
+  late final TextEditingController _estimatedMinutesController;
 
   @override
   void initState() {
     super.initState();
     final MaintenanceOrder? order = widget.initialOrder;
     _locationId = order?.locationId ?? widget.locations.first.id;
-    _providerId = order?.providerId ?? widget.providers.first.id;
+    _providerId = order?.providerId;
     _priority = order?.priority ?? MaintenancePriority.medium;
+    _requestOrigin =
+        order?.requestOrigin ?? MaintenanceRequestOrigin.internalRole;
+    _businessPriority =
+        order?.businessPriority ?? MaintenanceBusinessPriority.internalStandard;
     _hasSchedule = order?.scheduledStartAt != null;
     final DateTime baseDate = order?.scheduledStartAt ?? DateTime.now();
     _date = DateTime(baseDate.year, baseDate.month, baseDate.day);
@@ -1467,13 +2755,29 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
         order?.scheduledEndAt ?? baseDate.add(const Duration(hours: 1));
     _endTime = TimeOfDay(hour: endDate.hour, minute: endDate.minute);
     _titleController = TextEditingController(text: order?.title ?? '');
-    _descriptionController = TextEditingController(text: order?.description ?? '');
+    _descriptionController = TextEditingController(
+      text: order?.description ?? '',
+    );
+    _guestNameController = TextEditingController(text: order?.guestName ?? '');
+    _guestReferenceController = TextEditingController(
+      text: order?.guestReference ?? '',
+    );
+    _assignedUsernameController = TextEditingController(
+      text: order?.assignedUsername ?? '',
+    );
+    _estimatedMinutesController = TextEditingController(
+      text: order?.estimatedExecutionMinutes?.toString() ?? '',
+    );
   }
 
   @override
   void dispose() {
     _titleController.dispose();
     _descriptionController.dispose();
+    _guestNameController.dispose();
+    _guestReferenceController.dispose();
+    _assignedUsernameController.dispose();
+    _estimatedMinutesController.dispose();
     super.dispose();
   }
 
@@ -1509,20 +2813,80 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
                 },
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<int>(
-                value: _providerId,
-                decoration: const InputDecoration(labelText: 'Responsavel'),
-                items: widget.providers
+              DropdownButtonFormField<MaintenanceRequestOrigin>(
+                value: _requestOrigin,
+                decoration: const InputDecoration(labelText: 'Origem do pedido'),
+                items: MaintenanceRequestOrigin.values
                     .map(
-                      (MaintenanceProvider item) => DropdownMenuItem<int>(
-                        value: item.id,
-                        child: Text('${item.name} · ${item.serviceLabel}'),
-                      ),
+                      (MaintenanceRequestOrigin item) =>
+                          DropdownMenuItem<MaintenanceRequestOrigin>(
+                            value: item,
+                            child: Text(item.label),
+                          ),
                     )
                     .toList(),
-                onChanged: (int? value) {
-                  if (value != null) setState(() => _providerId = value);
+                onChanged: (MaintenanceRequestOrigin? value) {
+                  if (value == null) {
+                    return;
+                  }
+                  setState(() {
+                    _requestOrigin = value;
+                    if (value == MaintenanceRequestOrigin.guestRequest) {
+                      _businessPriority =
+                          MaintenanceBusinessPriority.guestPriority;
+                    } else if (_businessPriority ==
+                        MaintenanceBusinessPriority.guestPriority) {
+                      _businessPriority =
+                          MaintenanceBusinessPriority.internalStandard;
+                    }
+                  });
                 },
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<MaintenanceBusinessPriority>(
+                value: _businessPriority,
+                decoration: const InputDecoration(
+                  labelText: 'Prioridade operacional',
+                ),
+                items: MaintenanceBusinessPriority.values
+                    .map(
+                      (MaintenanceBusinessPriority item) =>
+                          DropdownMenuItem<MaintenanceBusinessPriority>(
+                            value: item,
+                            child: Text(item.label),
+                          ),
+                    )
+                    .toList(),
+                onChanged: (MaintenanceBusinessPriority? value) {
+                  if (value != null) setState(() => _businessPriority = value);
+                },
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int?>(
+                value: _providerId,
+                decoration: const InputDecoration(labelText: 'Prestador'),
+                items: <DropdownMenuItem<int?>>[
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('Sem responsavel definido'),
+                  ),
+                  ...widget.providers.map(
+                    (MaintenanceProvider item) => DropdownMenuItem<int?>(
+                      value: item.id,
+                      child: Text(
+                        '${item.name} · ${item.specialty.label} · ${item.serviceLabel}',
+                      ),
+                    ),
+                  ),
+                ],
+                onChanged: (int? value) => setState(() => _providerId = value),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _assignedUsernameController,
+                decoration: const InputDecoration(
+                  labelText: 'Usuario asignado',
+                ),
               ),
               const SizedBox(height: 12),
               TextFormField(
@@ -1546,9 +2910,31 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
                 ),
               ),
               const SizedBox(height: 12),
+              if (_requestOrigin == MaintenanceRequestOrigin.guestRequest) ...<Widget>[
+                TextFormField(
+                  controller: _guestNameController,
+                  decoration: const InputDecoration(labelText: 'Nome do hospede'),
+                ),
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _guestReferenceController,
+                  decoration: const InputDecoration(
+                    labelText: 'Referencia do hospede',
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+              TextFormField(
+                controller: _estimatedMinutesController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Tempo estimado (minutos)',
+                ),
+              ),
+              const SizedBox(height: 12),
               DropdownButtonFormField<MaintenancePriority>(
                 value: _priority,
-                decoration: const InputDecoration(labelText: 'Prioridade'),
+                decoration: const InputDecoration(labelText: 'Prioridade tecnica'),
                 items: MaintenancePriority.values
                     .map(
                       (MaintenancePriority item) =>
@@ -1567,7 +2953,7 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
                 contentPadding: EdgeInsets.zero,
                 value: _hasSchedule,
                 onChanged: (bool value) => setState(() => _hasSchedule = value),
-                title: const Text('Agendar atendimento'),
+                title: const Text('Agendar atendimento no calendario'),
               ),
               if (_hasSchedule) ...<Widget>[
                 const SizedBox(height: 8),
@@ -1606,10 +2992,7 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
                     child: const Text('Cancelar'),
                   ),
                   const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _submit,
-                    child: const Text('Salvar'),
-                  ),
+                  FilledButton(onPressed: _submit, child: const Text('Salvar')),
                 ],
               ),
             ],
@@ -1658,6 +3041,38 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
     if (!_formKey.currentState!.validate()) {
       return;
     }
+
+    final String? guestName = _guestNameController.text.trim().isEmpty
+        ? null
+        : _guestNameController.text.trim();
+    final String? guestReference = _guestReferenceController.text.trim().isEmpty
+        ? null
+        : _guestReferenceController.text.trim();
+    if (_requestOrigin == MaintenanceRequestOrigin.guestRequest &&
+        guestName == null &&
+        guestReference == null) {
+      AppAlerts.warning(
+        context,
+        title: 'Dados do hospede',
+        message: 'Informe o nome ou uma referencia do hospede.',
+      );
+      return;
+    }
+
+    final String estimatedRaw = _estimatedMinutesController.text.trim();
+    final int? estimatedMinutes = estimatedRaw.isEmpty
+        ? null
+        : int.tryParse(estimatedRaw);
+    if (estimatedRaw.isNotEmpty &&
+        (estimatedMinutes == null || estimatedMinutes <= 0)) {
+      AppAlerts.warning(
+        context,
+        title: 'Tempo invalido',
+        message: 'Informe um tempo estimado em minutos maior que zero.',
+      );
+      return;
+    }
+
     DateTime? startAt;
     DateTime? endAt;
     if (_hasSchedule) {
@@ -1684,6 +3099,7 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
         return;
       }
     }
+
     Navigator.of(context).pop(
       _MaintenanceOrderDraft(
         locationId: _locationId,
@@ -1691,15 +3107,29 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         priority: _priority,
+        requestOrigin: _requestOrigin,
+        requestedForGuest:
+            _requestOrigin == MaintenanceRequestOrigin.guestRequest,
+        guestName: guestName,
+        guestReference: guestReference,
+        businessPriority: _businessPriority,
+        estimatedExecutionMinutes: startAt != null && endAt != null
+            ? endAt.difference(startAt).inMinutes
+            : estimatedMinutes,
+        assignedUsername: _assignedUsernameController.text.trim().isEmpty
+            ? null
+            : _assignedUsernameController.text.trim(),
         scheduledStartAt: startAt,
         scheduledEndAt: endAt,
       ),
     );
   }
 }
-
 class _CompletionDraft {
-  const _CompletionDraft({required this.completedAt, required this.resolutionNotes});
+  const _CompletionDraft({
+    required this.completedAt,
+    required this.resolutionNotes,
+  });
 
   final DateTime? completedAt;
   final String resolutionNotes;
@@ -1730,7 +3160,10 @@ class _CompletionDialogState extends State<_CompletionDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Concluir ordem', style: Theme.of(context).textTheme.headlineSmall),
+          Text(
+            'Concluir ordem',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
           const SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: _pickDateTime,
@@ -1835,7 +3268,10 @@ class _CancelDialogState extends State<_CancelDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Cancelar ordem', style: Theme.of(context).textTheme.headlineSmall),
+          Text(
+            'Cancelar ordem',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
           const SizedBox(height: 16),
           TextField(
             controller: _notesController,
@@ -1894,7 +3330,8 @@ class _MaintenanceCatalogsDialog extends StatefulWidget {
       _MaintenanceCatalogsDialogState();
 }
 
-class _MaintenanceCatalogsDialogState extends State<_MaintenanceCatalogsDialog> {
+class _MaintenanceCatalogsDialogState
+    extends State<_MaintenanceCatalogsDialog> {
   late List<MaintenanceLocation> _locations;
   late List<MaintenanceProvider> _providers;
 
@@ -1956,7 +3393,9 @@ class _MaintenanceCatalogsDialogState extends State<_MaintenanceCatalogsDialog> 
   Future<MaintenanceLocation> _createLocation(
     CreateMaintenanceLocationModel input,
   ) async {
-    final MaintenanceLocation location = await widget.service.createLocation(input);
+    final MaintenanceLocation location = await widget.service.createLocation(
+      input,
+    );
     setState(() {
       _locations = <MaintenanceLocation>[..._locations, location]
         ..sort((MaintenanceLocation a, MaintenanceLocation b) {
@@ -1975,15 +3414,16 @@ class _MaintenanceCatalogsDialogState extends State<_MaintenanceCatalogsDialog> 
       input,
     );
     setState(() {
-      _locations = _locations
-          .map(
-            (MaintenanceLocation item) =>
-                item.id == location.id ? location : item,
-          )
-          .toList()
-        ..sort((MaintenanceLocation a, MaintenanceLocation b) {
-          return a.label.toLowerCase().compareTo(b.label.toLowerCase());
-        });
+      _locations =
+          _locations
+              .map(
+                (MaintenanceLocation item) =>
+                    item.id == location.id ? location : item,
+              )
+              .toList()
+            ..sort((MaintenanceLocation a, MaintenanceLocation b) {
+              return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+            });
     });
     return location;
   }
@@ -1991,7 +3431,9 @@ class _MaintenanceCatalogsDialogState extends State<_MaintenanceCatalogsDialog> 
   Future<MaintenanceProvider> _createProvider(
     CreateMaintenanceProviderModel input,
   ) async {
-    final MaintenanceProvider provider = await widget.service.createProvider(input);
+    final MaintenanceProvider provider = await widget.service.createProvider(
+      input,
+    );
     setState(() {
       _providers = <MaintenanceProvider>[..._providers, provider]
         ..sort((MaintenanceProvider a, MaintenanceProvider b) {
@@ -2010,15 +3452,16 @@ class _MaintenanceCatalogsDialogState extends State<_MaintenanceCatalogsDialog> 
       input,
     );
     setState(() {
-      _providers = _providers
-          .map(
-            (MaintenanceProvider item) =>
-                item.id == provider.id ? provider : item,
-          )
-          .toList()
-        ..sort((MaintenanceProvider a, MaintenanceProvider b) {
-          return a.name.toLowerCase().compareTo(b.name.toLowerCase());
-        });
+      _providers =
+          _providers
+              .map(
+                (MaintenanceProvider item) =>
+                    item.id == provider.id ? provider : item,
+              )
+              .toList()
+            ..sort((MaintenanceProvider a, MaintenanceProvider b) {
+              return a.name.toLowerCase().compareTo(b.name.toLowerCase());
+            });
     });
     return provider;
   }
@@ -2040,7 +3483,8 @@ class _MaintenanceAttachmentsDialog extends StatefulWidget {
 
 class _MaintenanceAttachmentsDialogState
     extends State<_MaintenanceAttachmentsDialog> {
-  List<MaintenanceOrderAttachment> _attachments = const <MaintenanceOrderAttachment>[];
+  List<MaintenanceOrderAttachment> _attachments =
+      const <MaintenanceOrderAttachment>[];
   bool _loading = true;
   bool _saving = false;
 
@@ -2058,7 +3502,10 @@ class _MaintenanceAttachmentsDialogState
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Anexos da ordem', style: Theme.of(context).textTheme.headlineSmall),
+          Text(
+            'Anexos da ordem',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
           const SizedBox(height: 6),
           Text(widget.order.title),
           const SizedBox(height: 14),
@@ -2067,12 +3514,17 @@ class _MaintenanceAttachmentsDialogState
             runSpacing: 10,
             children: <Widget>[
               FilledButton.icon(
-                onPressed: _saving ? null : () => _pickAndUpload(MaintenanceAttachmentType.photo),
+                onPressed: _saving
+                    ? null
+                    : () => _pickAndUpload(MaintenanceAttachmentType.photo),
                 icon: const Icon(Icons.photo_camera_back_rounded),
                 label: const Text('Agregar foto'),
               ),
               OutlinedButton.icon(
-                onPressed: _saving ? null : () => _pickAndUpload(MaintenanceAttachmentType.attachment),
+                onPressed: _saving
+                    ? null
+                    : () =>
+                          _pickAndUpload(MaintenanceAttachmentType.attachment),
                 icon: const Icon(Icons.attach_file_rounded),
                 label: const Text('Agregar arquivo'),
               ),
@@ -2113,8 +3565,10 @@ class _MaintenanceAttachmentsDialogState
                                   Text(attachment.fileName),
                                   const SizedBox(height: 4),
                                   Text(
-                                    '${attachment.attachmentType.label} · ${attachment.fileSize} bytes',
-                                    style: Theme.of(context).textTheme.bodySmall,
+                                    '${attachment.attachmentType.label} Â· ${attachment.fileSize} bytes',
+                                    style: Theme.of(
+                                      context,
+                                    ).textTheme.bodySmall,
                                   ),
                                 ],
                               ),
@@ -2289,7 +3743,7 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
                 .map(
                   (MaintenanceLocation item) => ListTile(
                     title: Text(item.label),
-                    subtitle: Text('${item.locationType.label} · ${item.code}'),
+                    subtitle: Text('${item.locationType.label} Â· ${item.code}'),
                     trailing: Text(item.active ? 'Ativo' : 'Inativo'),
                     selected: _selected?.id == item.id,
                     onTap: () => _load(item),
@@ -2401,7 +3855,8 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
   }
 
   Future<void> _save() async {
-    if (_codeController.text.trim().isEmpty || _labelController.text.trim().isEmpty) {
+    if (_codeController.text.trim().isEmpty ||
+        _labelController.text.trim().isEmpty) {
       await AppAlerts.warning(
         context,
         title: 'Campos obrigatorios',
@@ -2478,6 +3933,8 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
   late final TextEditingController _scopeController;
   late final TextEditingController _contactController;
   MaintenanceProviderType _type = MaintenanceProviderType.internal;
+  MaintenanceProviderSpecialty _specialty =
+      MaintenanceProviderSpecialty.generalMaintenance;
   bool _active = true;
   bool _saving = false;
 
@@ -2509,7 +3966,9 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
                 .map(
                   (MaintenanceProvider item) => ListTile(
                     title: Text(item.name),
-                    subtitle: Text('${item.providerType.label} · ${item.serviceLabel}'),
+                    subtitle: Text(
+                      '${item.providerType.label} · ${item.specialty.label} · ${item.serviceLabel}',
+                    ),
                     trailing: Text(item.active ? 'Ativo' : 'Inativo'),
                     selected: _selected?.id == item.id,
                     onTap: () => _load(item),
@@ -2537,6 +3996,23 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
                     .toList(),
                 onChanged: (MaintenanceProviderType? value) {
                   if (value != null) setState(() => _type = value);
+                },
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<MaintenanceProviderSpecialty>(
+                value: _specialty,
+                decoration: const InputDecoration(labelText: 'Especialidade'),
+                items: MaintenanceProviderSpecialty.values
+                    .map(
+                      (MaintenanceProviderSpecialty item) =>
+                          DropdownMenuItem<MaintenanceProviderSpecialty>(
+                            value: item,
+                            child: Text(item.label),
+                          ),
+                    )
+                    .toList(),
+                onChanged: (MaintenanceProviderSpecialty? value) {
+                  if (value != null) setState(() => _specialty = value);
                 },
               ),
               const SizedBox(height: 12),
@@ -2600,6 +4076,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
     setState(() {
       _selected = item;
       _type = item.providerType;
+      _specialty = item.specialty;
       _nameController.text = item.name;
       _serviceLabelController.text = item.serviceLabel;
       _scopeController.text = item.scopeDescription ?? '';
@@ -2612,6 +4089,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
     setState(() {
       _selected = null;
       _type = MaintenanceProviderType.internal;
+      _specialty = MaintenanceProviderSpecialty.generalMaintenance;
       _nameController.clear();
       _serviceLabelController.clear();
       _scopeController.clear();
@@ -2636,6 +4114,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
         await widget.onCreate(
           CreateMaintenanceProviderModel(
             providerType: _type,
+            specialty: _specialty,
             name: _nameController.text,
             serviceLabel: _serviceLabelController.text,
             scopeDescription: _scopeController.text,
@@ -2648,6 +4127,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
           _selected!.id,
           UpdateMaintenanceProviderModel(
             providerType: _type,
+            specialty: _specialty,
             name: _nameController.text,
             serviceLabel: _serviceLabelController.text,
             scopeDescription: _scopeController.text,
@@ -2689,7 +4169,10 @@ class _LocationHistoryDialog extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('Historico do local', style: Theme.of(context).textTheme.headlineSmall),
+          Text(
+            'Historico do local',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
           const SizedBox(height: 6),
           Text(locationLabel),
           const SizedBox(height: 14),
@@ -2709,7 +4192,7 @@ class _LocationHistoryDialog extends StatelessWidget {
                         ),
                         title: Text(order.title),
                         subtitle: Text(
-                          '${_dateTimeLabel(order.referenceDate)} · ${order.status.label} · ${order.providerNameSnapshot}',
+                          '${_dateTimeLabel(order.referenceDate)} Â· ${order.status.label} Â· ${order.providerNameSnapshot}',
                         ),
                       );
                     },
@@ -2757,12 +4240,15 @@ class _SummaryDetailsDialog extends StatelessWidget {
           const SizedBox(height: 14),
           Expanded(
             child: detail.items.isEmpty
-                ? _emptyScrollableBox('Nenhuma ordem encontrada para esse grupo.')
+                ? _emptyScrollableBox(
+                    'Nenhuma ordem encontrada para esse grupo.',
+                  )
                 : ListView.separated(
                     itemCount: detail.items.length,
                     separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (BuildContext context, int index) {
-                      final MaintenanceSummaryDetailItem item = detail.items[index];
+                      final MaintenanceSummaryDetailItem item =
+                          detail.items[index];
                       return ListTile(
                         tileColor: Colors.white,
                         shape: RoundedRectangleBorder(
@@ -2771,9 +4257,19 @@ class _SummaryDetailsDialog extends StatelessWidget {
                         ),
                         title: Text(item.title),
                         subtitle: Text(
-                          '${item.locationLabel} · ${item.providerName} · ${item.status.label}',
+                          '${item.locationLabel} · ${item.providerName ?? 'Sem responsavel'} · ${item.status.label}',
                         ),
-                        trailing: Text(item.priority.label),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
+                          children: <Widget>[
+                            Text(item.priority.label),
+                            Text(
+                              item.businessPriority.label,
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
                       );
                     },
                   ),
@@ -2804,7 +4300,10 @@ Widget _summaryTag(String label, String value) {
         style: const TextStyle(color: CostaNorteBrand.ink),
         children: <InlineSpan>[
           TextSpan(text: '$label: '),
-          TextSpan(text: value, style: const TextStyle(fontWeight: FontWeight.w700)),
+          TextSpan(
+            text: value,
+            style: const TextStyle(fontWeight: FontWeight.w700),
+          ),
         ],
       ),
     ),
@@ -2840,12 +4339,13 @@ String _contentTypeFor(String? extension) {
 
 String _orderScheduleLabel(MaintenanceOrder order) {
   if (order.scheduledStartAt == null || order.scheduledEndAt == null) {
-    return 'Sem agenda definida · Reportada em ${_dateTimeLabel(order.reportedAt)}';
+    return 'Sem agenda definida Â· Reportada em ${_dateTimeLabel(order.reportedAt)}';
   }
   return '${_dateTimeLabel(order.scheduledStartAt!)} a ${_formatTime(order.scheduledEndAt!)}';
 }
 
-String _dateTimeLabel(DateTime value) => '${_shortDate(value)} ${_formatTime(value)}';
+String _dateTimeLabel(DateTime value) =>
+    '${_shortDate(value)} ${_formatTime(value)}';
 
 String _formatDateApi(DateTime value) =>
     '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
@@ -2875,8 +4375,6 @@ DateTime _today() {
 
 TimeOfDay _addMinutes(TimeOfDay value, int minutesToAdd) {
   final int totalMinutes = value.hour * 60 + value.minute + minutesToAdd;
-  return TimeOfDay(
-    hour: (totalMinutes ~/ 60) % 24,
-    minute: totalMinutes % 60,
-  );
+  return TimeOfDay(hour: (totalMinutes ~/ 60) % 24, minute: totalMinutes % 60);
 }
+

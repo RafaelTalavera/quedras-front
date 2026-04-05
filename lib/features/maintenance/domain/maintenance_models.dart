@@ -34,10 +34,44 @@ enum MaintenanceProviderType {
     }
     return MaintenanceProviderType.internal;
   }
+
+  static MaintenanceProviderType? tryParseNullable(String? rawValue) {
+    if (rawValue == null) {
+      return null;
+    }
+    for (final MaintenanceProviderType value in MaintenanceProviderType.values) {
+      if (value.apiValue == rawValue) {
+        return value;
+      }
+    }
+    return null;
+  }
+}
+
+enum MaintenanceProviderSpecialty {
+  generalMaintenance('GENERAL_MAINTENANCE', 'Manutencao geral'),
+  elevators('ELEVATORS', 'Elevadores'),
+  airConditioning('AIR_CONDITIONING', 'Ar-condicionado');
+
+  const MaintenanceProviderSpecialty(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+
+  static MaintenanceProviderSpecialty tryParse(String? rawValue) {
+    for (final MaintenanceProviderSpecialty value
+        in MaintenanceProviderSpecialty.values) {
+      if (value.apiValue == rawValue) {
+        return value;
+      }
+    }
+    return MaintenanceProviderSpecialty.generalMaintenance;
+  }
 }
 
 enum MaintenanceOrderStatus {
   open('OPEN', 'Aberta'),
+  assigned('ASSIGNED', 'Atribuida'),
   scheduled('SCHEDULED', 'Agendada'),
   inProgress('IN_PROGRESS', 'Em andamento'),
   completed('COMPLETED', 'Concluida'),
@@ -76,6 +110,47 @@ enum MaintenancePriority {
       }
     }
     return MaintenancePriority.medium;
+  }
+}
+
+enum MaintenanceRequestOrigin {
+  internalRole('INTERNAL_ROLE', 'Pedido interno'),
+  guestRequest('GUEST_REQUEST', 'Pedido de hospede');
+
+  const MaintenanceRequestOrigin(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+
+  static MaintenanceRequestOrigin tryParse(String? rawValue) {
+    for (final MaintenanceRequestOrigin value
+        in MaintenanceRequestOrigin.values) {
+      if (value.apiValue == rawValue) {
+        return value;
+      }
+    }
+    return MaintenanceRequestOrigin.internalRole;
+  }
+}
+
+enum MaintenanceBusinessPriority {
+  internalStandard('INTERNAL_STANDARD', 'Operacao interna'),
+  guestPriority('GUEST_PRIORITY', 'Prioridade hospede'),
+  criticalOperation('CRITICAL_OPERATION', 'Operacao critica');
+
+  const MaintenanceBusinessPriority(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+
+  static MaintenanceBusinessPriority tryParse(String? rawValue) {
+    for (final MaintenanceBusinessPriority value
+        in MaintenanceBusinessPriority.values) {
+      if (value.apiValue == rawValue) {
+        return value;
+      }
+    }
+    return MaintenanceBusinessPriority.internalStandard;
   }
 }
 
@@ -160,6 +235,7 @@ class MaintenanceProvider {
   const MaintenanceProvider({
     required this.id,
     required this.providerType,
+    required this.specialty,
     required this.name,
     required this.serviceLabel,
     required this.scopeDescription,
@@ -173,6 +249,7 @@ class MaintenanceProvider {
 
   final int id;
   final MaintenanceProviderType providerType;
+  final MaintenanceProviderSpecialty specialty;
   final String name;
   final String serviceLabel;
   final String? scopeDescription;
@@ -188,6 +265,9 @@ class MaintenanceProvider {
       id: _readInt(json, 'id') ?? 0,
       providerType: MaintenanceProviderType.tryParse(
         _readString(json, 'providerType'),
+      ),
+      specialty: MaintenanceProviderSpecialty.tryParse(
+        _readString(json, 'specialty'),
       ),
       name: _readString(json, 'name') ?? '',
       serviceLabel: _readString(json, 'serviceLabel') ?? '',
@@ -250,6 +330,16 @@ class MaintenanceOrder {
     required this.title,
     required this.description,
     required this.priority,
+    required this.requestOrigin,
+    required this.requestedForGuest,
+    required this.guestName,
+    required this.guestReference,
+    required this.requestedByUsername,
+    required this.requestedByRole,
+    required this.businessPriority,
+    required this.estimatedExecutionMinutes,
+    required this.assignedUsername,
+    required this.assignedAt,
     required this.status,
     required this.reportedAt,
     required this.scheduledStartAt,
@@ -272,13 +362,23 @@ class MaintenanceOrder {
   final MaintenanceLocationType locationTypeSnapshot;
   final String locationCodeSnapshot;
   final String locationLabelSnapshot;
-  final int providerId;
-  final MaintenanceProviderType providerTypeSnapshot;
-  final String providerNameSnapshot;
-  final String serviceLabelSnapshot;
+  final int? providerId;
+  final MaintenanceProviderType? providerTypeSnapshot;
+  final String? providerNameSnapshot;
+  final String? serviceLabelSnapshot;
   final String title;
   final String? description;
   final MaintenancePriority priority;
+  final MaintenanceRequestOrigin requestOrigin;
+  final bool requestedForGuest;
+  final String? guestName;
+  final String? guestReference;
+  final String? requestedByUsername;
+  final String? requestedByRole;
+  final MaintenanceBusinessPriority businessPriority;
+  final int? estimatedExecutionMinutes;
+  final String? assignedUsername;
+  final DateTime? assignedAt;
   final MaintenanceOrderStatus status;
   final DateTime reportedAt;
   final DateTime? scheduledStartAt;
@@ -305,15 +405,29 @@ class MaintenanceOrder {
       ),
       locationCodeSnapshot: _readString(json, 'locationCodeSnapshot') ?? '',
       locationLabelSnapshot: _readString(json, 'locationLabelSnapshot') ?? '',
-      providerId: _readInt(json, 'providerId') ?? 0,
-      providerTypeSnapshot: MaintenanceProviderType.tryParse(
+      providerId: _readInt(json, 'providerId'),
+      providerTypeSnapshot: MaintenanceProviderType.tryParseNullable(
         _readString(json, 'providerTypeSnapshot'),
       ),
-      providerNameSnapshot: _readString(json, 'providerNameSnapshot') ?? '',
-      serviceLabelSnapshot: _readString(json, 'serviceLabelSnapshot') ?? '',
+      providerNameSnapshot: _trimOrNull(_readString(json, 'providerNameSnapshot')),
+      serviceLabelSnapshot: _trimOrNull(_readString(json, 'serviceLabelSnapshot')),
       title: _readString(json, 'title') ?? '',
       description: _trimOrNull(_readString(json, 'description')),
       priority: MaintenancePriority.tryParse(_readString(json, 'priority')),
+      requestOrigin: MaintenanceRequestOrigin.tryParse(
+        _readString(json, 'requestOrigin'),
+      ),
+      requestedForGuest: json['requestedForGuest'] as bool? ?? false,
+      guestName: _trimOrNull(_readString(json, 'guestName')),
+      guestReference: _trimOrNull(_readString(json, 'guestReference')),
+      requestedByUsername: _trimOrNull(_readString(json, 'requestedByUsername')),
+      requestedByRole: _trimOrNull(_readString(json, 'requestedByRole')),
+      businessPriority: MaintenanceBusinessPriority.tryParse(
+        _readString(json, 'businessPriority'),
+      ),
+      estimatedExecutionMinutes: _readInt(json, 'estimatedExecutionMinutes'),
+      assignedUsername: _trimOrNull(_readString(json, 'assignedUsername')),
+      assignedAt: _tryParseDateTime(_readString(json, 'assignedAt')),
       status: MaintenanceOrderStatus.tryParse(_readString(json, 'status')),
       reportedAt:
           _tryParseDateTime(_readString(json, 'reportedAt')) ?? DateTime.now(),
@@ -341,6 +455,27 @@ class MaintenanceOrder {
   }
 
   DateTime get referenceDate => scheduledStartAt ?? reportedAt;
+
+  String get providerLabel =>
+      _trimOrNull(providerNameSnapshot) ?? 'Sem responsavel';
+
+  String get serviceLabel =>
+      _trimOrNull(serviceLabelSnapshot) ?? 'Servico nao definido';
+
+  bool get hasGuestContext =>
+      requestedForGuest || requestOrigin == MaintenanceRequestOrigin.guestRequest;
+
+  String? get guestLabel {
+    final String? name = _trimOrNull(guestName);
+    final String? reference = _trimOrNull(guestReference);
+    if (name == null && reference == null) {
+      return null;
+    }
+    if (name != null && reference != null) {
+      return '$name · $reference';
+    }
+    return name ?? reference;
+  }
 }
 
 class MaintenanceConflict {
@@ -358,7 +493,7 @@ class MaintenanceConflict {
   final String title;
   final MaintenanceOrderStatus status;
   final String locationLabelSnapshot;
-  final String providerNameSnapshot;
+  final String? providerNameSnapshot;
   final DateTime? scheduledStartAt;
   final DateTime? scheduledEndAt;
 
@@ -368,7 +503,7 @@ class MaintenanceConflict {
       title: _readString(json, 'title') ?? '',
       status: MaintenanceOrderStatus.tryParse(_readString(json, 'status')),
       locationLabelSnapshot: _readString(json, 'locationLabelSnapshot') ?? '',
-      providerNameSnapshot: _readString(json, 'providerNameSnapshot') ?? '',
+      providerNameSnapshot: _trimOrNull(_readString(json, 'providerNameSnapshot')),
       scheduledStartAt: _tryParseDateTime(_readString(json, 'scheduledStartAt')),
       scheduledEndAt: _tryParseDateTime(_readString(json, 'scheduledEndAt')),
     );
@@ -420,15 +555,18 @@ class MaintenanceSummaryBreakdown {
 class MaintenanceSummaryReport {
   const MaintenanceSummaryReport({
     required this.openCount,
+    required this.assignedCount,
     required this.scheduledCount,
     required this.inProgressCount,
     required this.completedCount,
     required this.cancelledCount,
     required this.internalCount,
     required this.externalCount,
+    required this.unassignedCount,
     required this.roomsCount,
     required this.commonAreasCount,
     required this.urgentCount,
+    required this.guestPriorityCount,
     required this.averageResolutionHours,
     required this.providerBreakdown,
     required this.providerTypeBreakdown,
@@ -437,15 +575,18 @@ class MaintenanceSummaryReport {
   });
 
   final int openCount;
+  final int assignedCount;
   final int scheduledCount;
   final int inProgressCount;
   final int completedCount;
   final int cancelledCount;
   final int internalCount;
   final int externalCount;
+  final int unassignedCount;
   final int roomsCount;
   final int commonAreasCount;
   final int urgentCount;
+  final int guestPriorityCount;
   final double averageResolutionHours;
   final List<MaintenanceSummaryBreakdown> providerBreakdown;
   final List<MaintenanceSummaryBreakdown> providerTypeBreakdown;
@@ -455,15 +596,18 @@ class MaintenanceSummaryReport {
   factory MaintenanceSummaryReport.fromJson(Map<String, dynamic> json) {
     return MaintenanceSummaryReport(
       openCount: _readInt(json, 'openCount') ?? 0,
+      assignedCount: _readInt(json, 'assignedCount') ?? 0,
       scheduledCount: _readInt(json, 'scheduledCount') ?? 0,
       inProgressCount: _readInt(json, 'inProgressCount') ?? 0,
       completedCount: _readInt(json, 'completedCount') ?? 0,
       cancelledCount: _readInt(json, 'cancelledCount') ?? 0,
       internalCount: _readInt(json, 'internalCount') ?? 0,
       externalCount: _readInt(json, 'externalCount') ?? 0,
+      unassignedCount: _readInt(json, 'unassignedCount') ?? 0,
       roomsCount: _readInt(json, 'roomsCount') ?? 0,
       commonAreasCount: _readInt(json, 'commonAreasCount') ?? 0,
       urgentCount: _readInt(json, 'urgentCount') ?? 0,
+      guestPriorityCount: _readInt(json, 'guestPriorityCount') ?? 0,
       averageResolutionHours:
           (json['averageResolutionHours'] as num?)?.toDouble() ?? 0,
       providerBreakdown: _readBreakdownList(json['providerBreakdown']),
@@ -484,6 +628,11 @@ class MaintenanceSummaryDetailItem {
     required this.serviceLabel,
     required this.title,
     required this.priority,
+    required this.businessPriority,
+    required this.requestOrigin,
+    required this.requestedForGuest,
+    required this.assignedUsername,
+    required this.estimatedExecutionMinutes,
     required this.status,
     required this.reportedAt,
     required this.scheduledStartAt,
@@ -495,11 +644,16 @@ class MaintenanceSummaryDetailItem {
   final int orderId;
   final MaintenanceLocationType locationType;
   final String locationLabel;
-  final MaintenanceProviderType providerType;
-  final String providerName;
-  final String serviceLabel;
+  final MaintenanceProviderType? providerType;
+  final String? providerName;
+  final String? serviceLabel;
   final String title;
   final MaintenancePriority priority;
+  final MaintenanceBusinessPriority businessPriority;
+  final MaintenanceRequestOrigin requestOrigin;
+  final bool requestedForGuest;
+  final String? assignedUsername;
+  final int? estimatedExecutionMinutes;
   final MaintenanceOrderStatus status;
   final DateTime? reportedAt;
   final DateTime? scheduledStartAt;
@@ -514,13 +668,22 @@ class MaintenanceSummaryDetailItem {
         _readString(json, 'locationType'),
       ),
       locationLabel: _readString(json, 'locationLabel') ?? '',
-      providerType: MaintenanceProviderType.tryParse(
+      providerType: MaintenanceProviderType.tryParseNullable(
         _readString(json, 'providerType'),
       ),
-      providerName: _readString(json, 'providerName') ?? '',
-      serviceLabel: _readString(json, 'serviceLabel') ?? '',
+      providerName: _trimOrNull(_readString(json, 'providerName')),
+      serviceLabel: _trimOrNull(_readString(json, 'serviceLabel')),
       title: _readString(json, 'title') ?? '',
       priority: MaintenancePriority.tryParse(_readString(json, 'priority')),
+      businessPriority: MaintenanceBusinessPriority.tryParse(
+        _readString(json, 'businessPriority'),
+      ),
+      requestOrigin: MaintenanceRequestOrigin.tryParse(
+        _readString(json, 'requestOrigin'),
+      ),
+      requestedForGuest: json['requestedForGuest'] as bool? ?? false,
+      assignedUsername: _trimOrNull(_readString(json, 'assignedUsername')),
+      estimatedExecutionMinutes: _readInt(json, 'estimatedExecutionMinutes'),
       status: MaintenanceOrderStatus.tryParse(_readString(json, 'status')),
       reportedAt: _tryParseDateTime(_readString(json, 'reportedAt')),
       scheduledStartAt: _tryParseDateTime(_readString(json, 'scheduledStartAt')),
@@ -612,6 +775,7 @@ class UpdateMaintenanceLocationModel extends CreateMaintenanceLocationModel {
 class CreateMaintenanceProviderModel {
   const CreateMaintenanceProviderModel({
     required this.providerType,
+    required this.specialty,
     required this.name,
     required this.serviceLabel,
     required this.scopeDescription,
@@ -620,6 +784,7 @@ class CreateMaintenanceProviderModel {
   });
 
   final MaintenanceProviderType providerType;
+  final MaintenanceProviderSpecialty specialty;
   final String name;
   final String serviceLabel;
   final String? scopeDescription;
@@ -629,6 +794,7 @@ class CreateMaintenanceProviderModel {
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'providerType': providerType.apiValue,
+      'specialty': specialty.apiValue,
       'name': name.trim(),
       'serviceLabel': serviceLabel.trim(),
       'scopeDescription': _trimOrNull(scopeDescription),
@@ -641,6 +807,7 @@ class CreateMaintenanceProviderModel {
 class UpdateMaintenanceProviderModel extends CreateMaintenanceProviderModel {
   const UpdateMaintenanceProviderModel({
     required super.providerType,
+    required super.specialty,
     required super.name,
     required super.serviceLabel,
     required super.scopeDescription,
@@ -656,15 +823,29 @@ class CreateMaintenanceOrderModel {
     required this.title,
     required this.description,
     required this.priority,
+    required this.requestOrigin,
+    required this.requestedForGuest,
+    required this.guestName,
+    required this.guestReference,
+    required this.businessPriority,
+    required this.estimatedExecutionMinutes,
+    required this.assignedUsername,
     required this.scheduledStartAt,
     required this.scheduledEndAt,
   });
 
   final int locationId;
-  final int providerId;
+  final int? providerId;
   final String title;
   final String? description;
   final MaintenancePriority priority;
+  final MaintenanceRequestOrigin requestOrigin;
+  final bool requestedForGuest;
+  final String? guestName;
+  final String? guestReference;
+  final MaintenanceBusinessPriority businessPriority;
+  final int? estimatedExecutionMinutes;
+  final String? assignedUsername;
   final String? scheduledStartAt;
   final String? scheduledEndAt;
 
@@ -675,6 +856,13 @@ class CreateMaintenanceOrderModel {
       'title': title.trim(),
       'description': _trimOrNull(description),
       'priority': priority.apiValue,
+      'requestOrigin': requestOrigin.apiValue,
+      'requestedForGuest': requestedForGuest,
+      'guestName': _trimOrNull(guestName),
+      'guestReference': _trimOrNull(guestReference),
+      'businessPriority': businessPriority.apiValue,
+      'estimatedExecutionMinutes': estimatedExecutionMinutes,
+      'assignedUsername': _trimOrNull(assignedUsername),
       'scheduledStartAt': _trimOrNull(scheduledStartAt),
       'scheduledEndAt': _trimOrNull(scheduledEndAt),
     };
@@ -688,6 +876,13 @@ class UpdateMaintenanceOrderModel extends CreateMaintenanceOrderModel {
     required super.title,
     required super.description,
     required super.priority,
+    required super.requestOrigin,
+    required super.requestedForGuest,
+    required super.guestName,
+    required super.guestReference,
+    required super.businessPriority,
+    required super.estimatedExecutionMinutes,
+    required super.assignedUsername,
     required super.scheduledStartAt,
     required super.scheduledEndAt,
   });

@@ -11,7 +11,7 @@ import '../../courts/application/court_app_service.dart';
 import '../../massages/application/massage_app_service.dart';
 import '../../massages/presentation/massage_booking_page.dart';
 import '../../maintenance/application/maintenance_app_service.dart';
-import '../../maintenance/presentation/maintenance_page.dart';
+import 'package:costanorte/features/maintenance/presentation/maintenance_page.dart';
 import '../../reservations/application/reservation_app_service.dart';
 import '../../settings/presentation/settings_page.dart';
 import '../../tennis/presentation/tennis_rental_page.dart';
