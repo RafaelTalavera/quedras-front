@@ -62,7 +62,7 @@ class _ShellPageState extends State<ShellPage> {
   TennisRentalSection _selectedTennisSection = TennisRentalSection.selectedDay;
   ToursTravelSection _selectedToursSection = ToursTravelSection.selectedDay;
   MaintenanceSection _selectedMaintenanceSection =
-      MaintenanceSection.selectedDay;
+      MaintenanceSection.operationalSummary;
 
   @override
   void initState() {
@@ -1581,6 +1581,8 @@ IconData _iconForToursSection(ToursTravelSection section) {
 
 String _labelForMaintenanceSection(MaintenanceSection section) {
   switch (section) {
+    case MaintenanceSection.operationalSummary:
+      return 'Resumo por local';
     case MaintenanceSection.selectedDay:
       return 'Dia selecionado';
     case MaintenanceSection.monthlyAgenda:
@@ -1592,6 +1594,8 @@ String _labelForMaintenanceSection(MaintenanceSection section) {
 
 IconData _iconForMaintenanceSection(MaintenanceSection section) {
   switch (section) {
+    case MaintenanceSection.operationalSummary:
+      return Icons.grid_view_rounded;
     case MaintenanceSection.selectedDay:
       return Icons.today_rounded;
     case MaintenanceSection.monthlyAgenda:

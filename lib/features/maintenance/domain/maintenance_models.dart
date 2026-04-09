@@ -17,6 +17,33 @@ enum MaintenanceLocationType {
   }
 }
 
+enum MaintenanceLocationCategory {
+  apartment('APARTMENT', 'Apartamento'),
+  chalet('CHALET', 'Chalet'),
+  commonArea('COMMON_AREA', 'Area comum');
+
+  const MaintenanceLocationCategory(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+
+  static MaintenanceLocationCategory tryParse(
+    String? rawValue, {
+    MaintenanceLocationType? fallbackType,
+  }) {
+    for (final MaintenanceLocationCategory value
+        in MaintenanceLocationCategory.values) {
+      if (value.apiValue == rawValue) {
+        return value;
+      }
+    }
+    if (fallbackType == MaintenanceLocationType.commonArea) {
+      return MaintenanceLocationCategory.commonArea;
+    }
+    return MaintenanceLocationCategory.apartment;
+  }
+}
+
 enum MaintenanceProviderType {
   internal('INTERNAL', 'Interno'),
   external('EXTERNAL', 'Externo');
@@ -189,6 +216,7 @@ class MaintenanceLocation {
   const MaintenanceLocation({
     required this.id,
     required this.locationType,
+    required this.locationCategory,
     required this.code,
     required this.label,
     required this.floor,
@@ -202,6 +230,7 @@ class MaintenanceLocation {
 
   final int id;
   final MaintenanceLocationType locationType;
+  final MaintenanceLocationCategory locationCategory;
   final String code;
   final String label;
   final String? floor;
@@ -215,8 +244,12 @@ class MaintenanceLocation {
   factory MaintenanceLocation.fromJson(Map<String, dynamic> json) {
     return MaintenanceLocation(
       id: _readInt(json, 'id') ?? 0,
-      locationType: MaintenanceLocationType.tryParse(
-        _readString(json, 'locationType'),
+      locationType: MaintenanceLocationType.tryParse(_readString(json, 'locationType')),
+      locationCategory: MaintenanceLocationCategory.tryParse(
+        _readString(json, 'locationCategory'),
+        fallbackType: MaintenanceLocationType.tryParse(
+          _readString(json, 'locationType'),
+        ),
       ),
       code: _readString(json, 'code') ?? '',
       label: _readString(json, 'label') ?? '',
@@ -342,6 +375,7 @@ class MaintenanceOrder {
     required this.assignedAt,
     required this.status,
     required this.reportedAt,
+    required this.expectedCompletionAt,
     required this.scheduledStartAt,
     required this.scheduledEndAt,
     required this.startedAt,
@@ -381,6 +415,7 @@ class MaintenanceOrder {
   final DateTime? assignedAt;
   final MaintenanceOrderStatus status;
   final DateTime reportedAt;
+  final DateTime? expectedCompletionAt;
   final DateTime? scheduledStartAt;
   final DateTime? scheduledEndAt;
   final DateTime? startedAt;
@@ -431,6 +466,9 @@ class MaintenanceOrder {
       status: MaintenanceOrderStatus.tryParse(_readString(json, 'status')),
       reportedAt:
           _tryParseDateTime(_readString(json, 'reportedAt')) ?? DateTime.now(),
+      expectedCompletionAt: _tryParseDateTime(
+        _readString(json, 'expectedCompletionAt'),
+      ),
       scheduledStartAt: _tryParseDateTime(_readString(json, 'scheduledStartAt')),
       scheduledEndAt: _tryParseDateTime(_readString(json, 'scheduledEndAt')),
       startedAt: _tryParseDateTime(_readString(json, 'startedAt')),
@@ -635,6 +673,7 @@ class MaintenanceSummaryDetailItem {
     required this.estimatedExecutionMinutes,
     required this.status,
     required this.reportedAt,
+    required this.expectedCompletionAt,
     required this.scheduledStartAt,
     required this.scheduledEndAt,
     required this.startedAt,
@@ -656,6 +695,7 @@ class MaintenanceSummaryDetailItem {
   final int? estimatedExecutionMinutes;
   final MaintenanceOrderStatus status;
   final DateTime? reportedAt;
+  final DateTime? expectedCompletionAt;
   final DateTime? scheduledStartAt;
   final DateTime? scheduledEndAt;
   final DateTime? startedAt;
@@ -686,6 +726,9 @@ class MaintenanceSummaryDetailItem {
       estimatedExecutionMinutes: _readInt(json, 'estimatedExecutionMinutes'),
       status: MaintenanceOrderStatus.tryParse(_readString(json, 'status')),
       reportedAt: _tryParseDateTime(_readString(json, 'reportedAt')),
+      expectedCompletionAt: _tryParseDateTime(
+        _readString(json, 'expectedCompletionAt'),
+      ),
       scheduledStartAt: _tryParseDateTime(_readString(json, 'scheduledStartAt')),
       scheduledEndAt: _tryParseDateTime(_readString(json, 'scheduledEndAt')),
       startedAt: _tryParseDateTime(_readString(json, 'startedAt')),
@@ -735,6 +778,7 @@ class MaintenanceSummaryDetail {
 class CreateMaintenanceLocationModel {
   const CreateMaintenanceLocationModel({
     required this.locationType,
+    required this.locationCategory,
     required this.code,
     required this.label,
     required this.floor,
@@ -743,6 +787,7 @@ class CreateMaintenanceLocationModel {
   });
 
   final MaintenanceLocationType locationType;
+  final MaintenanceLocationCategory locationCategory;
   final String code;
   final String label;
   final String? floor;
@@ -752,6 +797,7 @@ class CreateMaintenanceLocationModel {
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'locationType': locationType.apiValue,
+      'locationCategory': locationCategory.apiValue,
       'code': code.trim(),
       'label': label.trim(),
       'floor': _trimOrNull(floor),
@@ -764,6 +810,7 @@ class CreateMaintenanceLocationModel {
 class UpdateMaintenanceLocationModel extends CreateMaintenanceLocationModel {
   const UpdateMaintenanceLocationModel({
     required super.locationType,
+    required super.locationCategory,
     required super.code,
     required super.label,
     required super.floor,
