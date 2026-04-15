@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 
 import '../../../core/config/app_runtime_config.dart';
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/feedback/app_share.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/sync/auto_refresh_controller.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/app_dialog_dimensions.dart';
@@ -79,6 +82,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   late DateTime _reportEnd;
   bool _loading = true;
   bool _refreshingData = false;
+  bool _loadingProviders = false;
   bool _saving = false;
   bool _loadingSummary = false;
   int? _sharingBookingId;
@@ -210,41 +214,65 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       _error = null;
     });
     try {
-      final List<ToursProvider> providers = await widget.toursAppService
-          .listProviders();
-      final List<ToursBooking> bookings = await widget.toursAppService
-          .listBookings();
-      final ToursSummaryReport summaryReport = await widget.toursAppService
-          .getSummaryReport(
-            dateFrom: _formatDate(_reportStart),
-            dateTo: _formatDate(_reportEnd),
+      final Future<List<ToursBooking>> bookingsFuture = widget.toursAppService
+          .listBookings(
+            dateFrom: _formatDate(_monthStart(_selectedDate)),
+            dateTo: _formatDate(_monthEnd(_selectedDate)),
           );
+      final List<ToursBooking> bookings = await bookingsFuture;
       if (!mounted) return;
       setState(() {
-        _providers = providers;
         _bookings = bookings;
-        _summaryReport = summaryReport;
         _loading = false;
         _refreshingData = false;
       });
+      unawaited(_loadDeferredData());
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _loading = false;
         _refreshingData = false;
-        _error = error.toString().replaceFirst('Bad state: ', '');
+        _error = _describeError(error);
+      });
+    }
+  }
+
+  Future<void> _loadDeferredData() async {
+    if (!mounted) return;
+    setState(() {
+      _loadingProviders = true;
+    });
+    unawaited(_reloadSummary());
+    try {
+      final List<ToursProvider> providers = await widget.toursAppService
+          .listProviders();
+      if (!mounted) return;
+      setState(() {
+        _providers = providers;
+        _loadingProviders = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingProviders = false;
+        _error = _describeError(error);
       });
     }
   }
 
   bool get _canRefreshPage =>
-      !_loading && !_refreshingData && !_loadingSummary && !_saving;
+      !_loading &&
+      !_refreshingData &&
+      !_loadingProviders &&
+      !_loadingSummary &&
+      !_saving;
 
   bool _canAutoRefresh() {
     final ModalRoute<dynamic>? route = ModalRoute.of(context);
     return mounted &&
         !_loading &&
         !_refreshingData &&
+        !_loadingProviders &&
         !_loadingSummary &&
         !_saving &&
         (route?.isCurrent ?? true);
@@ -254,6 +282,23 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     if (!_canRefreshPage) return;
     await _load(showLoading: false);
   }
+
+  Future<void> _setSelectedDate(DateTime date) async {
+    final DateTime normalizedDate = DateTime(date.year, date.month, date.day);
+    final bool monthChanged =
+        normalizedDate.year != _selectedDate.year ||
+        normalizedDate.month != _selectedDate.month;
+    setState(() {
+      _selectedDate = normalizedDate;
+    });
+    if (monthChanged) {
+      await _load(showLoading: false);
+    }
+  }
+
+  DateTime _monthStart(DateTime date) => DateTime(date.year, date.month, 1);
+
+  DateTime _monthEnd(DateTime date) => DateTime(date.year, date.month + 1, 0);
 
   Future<void> _reloadSummary() async {
     setState(() {
@@ -275,7 +320,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       if (!mounted) return;
       setState(() {
         _loadingSummary = false;
-        _summaryError = error.toString().replaceFirst('Bad state: ', '');
+        _summaryError = _describeError(error);
       });
     }
   }
@@ -299,12 +344,15 @@ class _ToursTravelPageState extends State<ToursTravelPage>
               runSpacing: 12,
               children: <Widget>[
                 FilledButton.icon(
-                  onPressed: _saving ? null : _createBooking,
+                  onPressed: _saving || _loadingProviders
+                      ? null
+                      : _createBooking,
                   icon: const Icon(Icons.add_circle_outline_rounded),
                   label: const Text('Lancar agendamento'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _saving || _dayBookings.isEmpty
+                  onPressed:
+                      _saving || _loadingProviders || _dayBookings.isEmpty
                       ? null
                       : _editBooking,
                   icon: const Icon(Icons.edit_rounded),
@@ -332,7 +380,9 @@ class _ToursTravelPageState extends State<ToursTravelPage>
                   label: const Text('Cancelar'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _saving ? null : _manageProvider,
+                  onPressed: _saving || _loadingProviders
+                      ? null
+                      : _manageProvider,
                   icon: const Icon(Icons.business_rounded),
                   label: const Text('Fornecedores'),
                 ),
@@ -506,11 +556,9 @@ class _ToursTravelPageState extends State<ToursTravelPage>
                     ),
                     onChanged: (int? value) {
                       if (value == null) return;
-                      setState(
-                        () => _selectedDate = DateTime(
-                          _selectedDate.year,
-                          value + 1,
-                          1,
+                      unawaited(
+                        _setSelectedDate(
+                          DateTime(_selectedDate.year, value + 1, 1),
                         ),
                       );
                     },
@@ -552,7 +600,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
                   date: cell.date,
                   bookings: cell.bookings,
                   selected: _sameDay(cell.date, _selectedDate),
-                  onTap: () => setState(() => _selectedDate = cell.date),
+                  onTap: () => unawaited(_setSelectedDate(cell.date)),
                   onDoubleTap: () => _openCalendarDayActions(cell.date),
                 );
               },
@@ -1006,7 +1054,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       }
       setState(() {
         _loadingSummary = false;
-        _summaryError = error.toString().replaceFirst('Bad state: ', '');
+        _summaryError = _describeError(error);
       });
     }
   }
@@ -1295,9 +1343,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   }
 
   Future<void> _openCalendarDayActions(DateTime date) async {
-    setState(() {
-      _selectedDate = DateTime(date.year, date.month, date.day);
-    });
+    await _setSelectedDate(date);
     final ToursBooking? booking = await _pickBooking(
       'Agendamentos do dia',
       emptyMessage: 'Nao ha tours ou viagens registrados para este dia.',
@@ -1405,7 +1451,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
         await AppAlerts.error(
           context,
           title: title,
-          message: error.toString().replaceFirst('Bad state: ', ''),
+          message: _describeError(error),
         );
       }
     } finally {
@@ -1497,9 +1543,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       lastDate: DateTime(_selectedDate.year + 1, 12, 31),
     );
     if (picked != null) {
-      setState(
-        () => _selectedDate = DateTime(picked.year, picked.month, picked.day),
-      );
+      await _setSelectedDate(picked);
     }
   }
 
@@ -1596,7 +1640,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: CostaNorteBrand.line),
-          color: Colors.white,
+          color: CostaNorteBrand.mint,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -3306,6 +3350,11 @@ String _fullDate(DateTime date) =>
     '${_week[date.weekday - 1]}, ${date.day} de ${_months[date.month - 1]} de ${date.year}';
 String _money(double amount) => 'R\$ ${amount.toStringAsFixed(0)}';
 String _hours(double value) => '${value.toStringAsFixed(2)}h';
+String _describeError(Object error) => switch (error) {
+  ApiException(:final message) => message,
+  _ => error.toString().replaceFirst('Bad state: ', ''),
+};
+
 double? _number(String? rawValue) {
   if (rawValue == null) return null;
   final String normalized = rawValue
