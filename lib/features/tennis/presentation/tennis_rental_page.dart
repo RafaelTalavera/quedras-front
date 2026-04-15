@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -129,6 +130,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
   String? _summaryErrorMessage;
   String? _selectedSummaryDetailKey;
   List<CourtBooking> _bookings = <CourtBooking>[];
+  List<CourtBooking> _summaryBookings = <CourtBooking>[];
   CourtSummaryReport? _summary;
   TennisRentalSection _currentSection = TennisRentalSection.selectedDay;
 
@@ -390,24 +392,22 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       _summaryErrorMessage = null;
     });
     try {
-      final List<CourtBooking> bookings = await widget.courtAppService
-          .listBookings();
-      final CourtSummaryReport summary = await widget.courtAppService
-          .getSummaryReport(
-            dateFrom: _formatDate(_reportStartDate),
-            dateTo: _formatDate(_reportEndDate),
+      final Future<List<CourtBooking>> bookingsFuture = widget.courtAppService
+          .listBookings(
+            dateFrom: _formatDate(_monthStart(_selectedDate)),
+            dateTo: _formatDate(_monthEnd(_selectedDate)),
           );
+      final List<CourtBooking> bookings = await bookingsFuture;
       if (!mounted) {
         return;
       }
       setState(() {
         _bookings = bookings;
-        _summary = summary;
         _selectedSummaryDetailKey = null;
         _loading = false;
         _refreshingData = false;
-        _loadingSummary = false;
       });
+      unawaited(_loadDeferredSummary());
     } catch (error) {
       if (!mounted) {
         return;
@@ -415,8 +415,48 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       setState(() {
         _loading = false;
         _refreshingData = false;
-        _loadingSummary = false;
         _errorMessage = error.toString().replaceFirst('Bad state: ', '');
+      });
+    }
+  }
+
+  Future<void> _loadDeferredSummary() async {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _loadingSummary = true;
+      _summaryErrorMessage = null;
+    });
+    try {
+      final Future<List<CourtBooking>> bookingsFuture = widget.courtAppService
+          .listBookings(
+            dateFrom: _formatDate(_reportStartDate),
+            dateTo: _formatDate(_reportEndDate),
+          );
+      final Future<CourtSummaryReport> summaryFuture = widget.courtAppService
+          .getSummaryReport(
+            dateFrom: _formatDate(_reportStartDate),
+            dateTo: _formatDate(_reportEndDate),
+          );
+      final List<CourtBooking> bookings = await bookingsFuture;
+      final CourtSummaryReport summary = await summaryFuture;
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _summaryBookings = bookings;
+        _summary = summary;
+        _selectedSummaryDetailKey = null;
+        _loadingSummary = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadingSummary = false;
+        _summaryErrorMessage = error.toString().replaceFirst('Bad state: ', '');
       });
     }
   }
@@ -440,6 +480,10 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     }
     await _load(showLoading: false);
   }
+
+  DateTime _monthStart(DateTime date) => DateTime(date.year, date.month, 1);
+
+  DateTime _monthEnd(DateTime date) => DateTime(date.year, date.month + 1, 0);
 
   Future<void> _shareBookingReceipt(CourtBooking booking) async {
     if (_sharingBookingId != null) {
@@ -502,15 +546,22 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       _summaryErrorMessage = null;
     });
     try {
+      final Future<List<CourtBooking>> bookingsFuture = widget.courtAppService
+          .listBookings(
+            dateFrom: _formatDate(_reportStartDate),
+            dateTo: _formatDate(_reportEndDate),
+          );
       final CourtSummaryReport summary = await widget.courtAppService
           .getSummaryReport(
             dateFrom: _formatDate(_reportStartDate),
             dateTo: _formatDate(_reportEndDate),
           );
+      final List<CourtBooking> bookings = await bookingsFuture;
       if (!mounted) {
         return;
       }
       setState(() {
+        _summaryBookings = bookings;
         _summary = summary;
         _selectedSummaryDetailKey = null;
         _loadingSummary = false;
@@ -749,8 +800,10 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                       if (value == null) {
                         return;
                       }
-                      _setSelectedDate(
-                        DateTime(_selectedDate.year, value + 1, 1),
+                      unawaited(
+                        _setSelectedDate(
+                          DateTime(_selectedDate.year, value + 1, 1),
+                        ),
                       );
                     },
                   ),
@@ -794,7 +847,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                       date: cell.date!,
                       bookings: _bookingsForDate(cell.date!),
                       selected: _sameDay(cell.date!, _selectedDate),
-                      onTap: () => _setSelectedDate(cell.date!),
+                      onTap: () => unawaited(_setSelectedDate(cell.date!)),
                       onDoubleTap: () => _openCalendarDayActions(cell.date!),
                     );
                   },
@@ -1255,7 +1308,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
   List<_PartnerCoachSummaryRow> _buildPartnerCoachSummaryRows() {
     final Map<String, _PartnerCoachSummaryAccumulator> rowsByName =
         <String, _PartnerCoachSummaryAccumulator>{};
-    for (final CourtBooking booking in _bookings) {
+    for (final CourtBooking booking in _summaryBookings) {
       if (booking.customerType != CourtCustomerType.partnerCoach ||
           booking.status != CourtBookingStatus.scheduled ||
           !_isWithinReportPeriod(booking.bookingDate)) {
@@ -1293,7 +1346,9 @@ class _TennisRentalPageState extends State<TennisRentalPage>
   }
 
   List<CourtBooking> get _reportBookings {
-    final List<CourtBooking> items = _bookings.where((CourtBooking booking) {
+    final List<CourtBooking> items = _summaryBookings.where((
+      CourtBooking booking,
+    ) {
       return _isWithinReportPeriod(booking.bookingDate);
     }).toList()..sort(_compareBookingsByDateTime);
     return items;
@@ -2195,7 +2250,7 @@ class _CourtBookingTile extends StatelessWidget {
         width: double.infinity,
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: CostaNorteBrand.mint,
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: CostaNorteBrand.line),
         ),
@@ -3934,7 +3989,6 @@ bool _sameDay(DateTime a, DateTime b) {
 String _formatCurrency(double amount) {
   return 'R\$ ${amount.toStringAsFixed(0)}';
 }
-
 
 int _compareBookingsByDateTime(CourtBooking a, CourtBooking b) {
   final int dateComparison = a.bookingDate.compareTo(b.bookingDate);
