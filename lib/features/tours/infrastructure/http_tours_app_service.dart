@@ -4,6 +4,7 @@ import 'dart:io';
 
 import '../../../core/localization/pt_br_error_translator.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_exception.dart';
 import '../application/tours_app_service.dart';
 import '../domain/tours_models.dart';
 
@@ -25,17 +26,19 @@ final class HttpToursAppService implements ToursAppService {
     final String query = Uri(
       queryParameters: <String, String>{'dateFrom': dateFrom, 'dateTo': dateTo},
     ).query;
+    final String path = 'tours/reports/summary?$query';
     final ApiResponse response = await _runRequest(
-      () =>
-          _apiClient.get('tours/reports/summary?$query', headers: _jsonHeaders),
+      method: 'GET',
+      path: path,
+      request: () => _apiClient.get(path, headers: _jsonHeaders),
     );
-    if (!response.isSuccess) {
-      throw StateError(_extractApiErrorMessage(response));
-    }
 
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! Map) {
-      throw StateError('Formato invalido do resumo de tours e viagens.');
+      throw const ApiException(
+        'Formato invalido do resumo de tours e viagens.',
+        kind: ApiErrorKind.invalidResponse,
+      );
     }
 
     return ToursSummaryReport.fromJson(_asMap(decoded));
@@ -56,19 +59,19 @@ final class HttpToursAppService implements ToursAppService {
         'dateTo': dateTo,
       },
     ).query;
+    final String path = 'tours/reports/summary/details?$query';
     final ApiResponse response = await _runRequest(
-      () => _apiClient.get(
-        'tours/reports/summary/details?$query',
-        headers: _jsonHeaders,
-      ),
+      method: 'GET',
+      path: path,
+      request: () => _apiClient.get(path, headers: _jsonHeaders),
     );
-    if (!response.isSuccess) {
-      throw StateError(_extractApiErrorMessage(response));
-    }
 
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! Map) {
-      throw StateError('Formato invalido do detalhe do resumo de tours.');
+      throw const ApiException(
+        'Formato invalido do detalhe do resumo de tours.',
+        kind: ApiErrorKind.invalidResponse,
+      );
     }
 
     return ToursSummaryDetail.fromJson(_asMap(decoded));
@@ -80,14 +83,16 @@ final class HttpToursAppService implements ToursAppService {
         ? 'tours/providers?activeOnly=true'
         : 'tours/providers';
     final ApiResponse response = await _runRequest(
-      () => _apiClient.get(path, headers: _jsonHeaders),
+      method: 'GET',
+      path: path,
+      request: () => _apiClient.get(path, headers: _jsonHeaders),
     );
-    if (!response.isSuccess) {
-      throw StateError(_extractApiErrorMessage(response));
-    }
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! List) {
-      throw StateError('Formato invalido da lista de fornecedores.');
+      throw const ApiException(
+        'Formato invalido da lista de fornecedores.',
+        kind: ApiErrorKind.invalidResponse,
+      );
     }
     return decoded
         .map<ToursProvider>(
@@ -98,16 +103,16 @@ final class HttpToursAppService implements ToursAppService {
 
   @override
   Future<ToursProvider> createProvider(CreateToursProviderModel input) async {
+    const String path = 'tours/providers';
     final ApiResponse response = await _runRequest(
-      () => _apiClient.post(
-        'tours/providers',
+      method: 'POST',
+      path: path,
+      request: () => _apiClient.post(
+        path,
         headers: _jsonHeaders,
         body: jsonEncode(input.toJson()),
       ),
     );
-    if (!response.isSuccess) {
-      throw StateError(_extractApiErrorMessage(response));
-    }
     return ToursProvider.fromJson(_asMap(_tryDecode(response.body)));
   }
 
@@ -116,16 +121,16 @@ final class HttpToursAppService implements ToursAppService {
     int providerId,
     UpdateToursProviderModel input,
   ) async {
+    final String path = 'tours/providers/$providerId';
     final ApiResponse response = await _runRequest(
-      () => _apiClient.put(
-        'tours/providers/$providerId',
+      method: 'PUT',
+      path: path,
+      request: () => _apiClient.put(
+        path,
         headers: _jsonHeaders,
         body: jsonEncode(input.toJson()),
       ),
     );
-    if (!response.isSuccess) {
-      throw StateError(_extractApiErrorMessage(response));
-    }
     return ToursProvider.fromJson(_asMap(_tryDecode(response.body)));
   }
 
@@ -158,14 +163,16 @@ final class HttpToursAppService implements ToursAppService {
         ? 'tours/bookings'
         : 'tours/bookings?${Uri(queryParameters: query).query}';
     final ApiResponse response = await _runRequest(
-      () => _apiClient.get(path, headers: _jsonHeaders),
+      method: 'GET',
+      path: path,
+      request: () => _apiClient.get(path, headers: _jsonHeaders),
     );
-    if (!response.isSuccess) {
-      throw StateError(_extractApiErrorMessage(response));
-    }
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! List) {
-      throw StateError('Formato invalido da lista de agendamentos.');
+      throw const ApiException(
+        'Formato invalido da lista de agendamentos.',
+        kind: ApiErrorKind.invalidResponse,
+      );
     }
     return decoded
         .map<ToursBooking>(
@@ -176,16 +183,16 @@ final class HttpToursAppService implements ToursAppService {
 
   @override
   Future<ToursBooking> createBooking(CreateToursBookingModel input) async {
+    const String path = 'tours/bookings';
     final ApiResponse response = await _runRequest(
-      () => _apiClient.post(
-        'tours/bookings',
+      method: 'POST',
+      path: path,
+      request: () => _apiClient.post(
+        path,
         headers: _jsonHeaders,
         body: jsonEncode(input.toJson()),
       ),
     );
-    if (!response.isSuccess) {
-      throw StateError(_extractApiErrorMessage(response));
-    }
     return ToursBooking.fromJson(_asMap(_tryDecode(response.body)));
   }
 
@@ -194,16 +201,16 @@ final class HttpToursAppService implements ToursAppService {
     int bookingId,
     UpdateToursBookingModel input,
   ) async {
+    final String path = 'tours/bookings/$bookingId';
     final ApiResponse response = await _runRequest(
-      () => _apiClient.put(
-        'tours/bookings/$bookingId',
+      method: 'PUT',
+      path: path,
+      request: () => _apiClient.put(
+        path,
         headers: _jsonHeaders,
         body: jsonEncode(input.toJson()),
       ),
     );
-    if (!response.isSuccess) {
-      throw StateError(_extractApiErrorMessage(response));
-    }
     return ToursBooking.fromJson(_asMap(_tryDecode(response.body)));
   }
 
@@ -212,16 +219,16 @@ final class HttpToursAppService implements ToursAppService {
     int bookingId,
     UpdateToursPaymentModel input,
   ) async {
+    final String path = 'tours/bookings/$bookingId/payment';
     final ApiResponse response = await _runRequest(
-      () => _apiClient.patch(
-        'tours/bookings/$bookingId/payment',
+      method: 'PATCH',
+      path: path,
+      request: () => _apiClient.patch(
+        path,
         headers: _jsonHeaders,
         body: jsonEncode(input.toJson()),
       ),
     );
-    if (!response.isSuccess) {
-      throw StateError(_extractApiErrorMessage(response));
-    }
     return ToursBooking.fromJson(_asMap(_tryDecode(response.body)));
   }
 
@@ -230,46 +237,83 @@ final class HttpToursAppService implements ToursAppService {
     int bookingId,
     CancelToursBookingModel input,
   ) async {
+    final String path = 'tours/bookings/$bookingId/cancel';
     final ApiResponse response = await _runRequest(
-      () => _apiClient.patch(
-        'tours/bookings/$bookingId/cancel',
+      method: 'PATCH',
+      path: path,
+      request: () => _apiClient.patch(
+        path,
         headers: _jsonHeaders,
         body: jsonEncode(input.toJson()),
       ),
     );
-    if (!response.isSuccess) {
-      throw StateError(_extractApiErrorMessage(response));
-    }
     return ToursBooking.fromJson(_asMap(_tryDecode(response.body)));
   }
 
-  Future<ApiResponse> _runRequest(
-    Future<ApiResponse> Function() request,
-  ) async {
+  Future<ApiResponse> _runRequest({
+    required String method,
+    required String path,
+    required Future<ApiResponse> Function() request,
+  }) async {
     try {
-      return await request();
-    } on SocketException {
-      throw StateError(
+      final ApiResponse response = await request();
+      if (!response.isSuccess) {
+        throw ApiException(
+          _extractApiErrorMessage(response),
+          kind: ApiErrorKind.http,
+          statusCode: response.statusCode,
+          method: method,
+          path: path,
+        );
+      }
+      return response;
+    } on ApiException {
+      rethrow;
+    } on SocketException catch (error) {
+      throw ApiException(
         'Nao foi possivel conectar ao backend local. Verifique o servidor e a rede interna.',
+        kind: ApiErrorKind.network,
+        method: method,
+        path: path,
+        cause: error,
       );
-    } on TimeoutException {
-      throw StateError('Tempo esgotado ao conectar ao backend local.');
-    } on HttpException {
-      throw StateError('Erro HTTP de transporte ao consultar o backend local.');
+    } on TimeoutException catch (error) {
+      throw ApiException(
+        'Tempo esgotado ao conectar ao backend local.',
+        kind: ApiErrorKind.timeout,
+        method: method,
+        path: path,
+        cause: error,
+      );
+    } on HttpException catch (error) {
+      throw ApiException(
+        'Erro HTTP de transporte ao consultar o backend local.',
+        kind: ApiErrorKind.transport,
+        method: method,
+        path: path,
+        cause: error,
+      );
     } on FormatException catch (error) {
-      throw StateError('Resposta invalida do backend local: ${error.message}');
+      throw ApiException(
+        'Resposta invalida do backend local: ${error.message}',
+        kind: ApiErrorKind.invalidResponse,
+        method: method,
+        path: path,
+        cause: error,
+      );
     }
   }
 
   static String _extractApiErrorMessage(ApiResponse response) {
-    final Object? decoded = _tryDecode(response.body);
-    if (decoded is Map) {
-      final Object? message = decoded['message'];
+    try {
+      final String? message = _extractMessage(_tryDecode(response.body));
       if (message != null) {
-        final String asString = message.toString().trim();
-        if (asString.isNotEmpty) {
-          return PtBrErrorTranslator.translate(asString);
-        }
+        return PtBrErrorTranslator.translate(message);
+      }
+    } on FormatException {
+      final String rawBody = response.body.trim();
+      if (rawBody.isNotEmpty && !_looksLikeHtml(rawBody)) {
+        return PtBrErrorTranslator.translate(rawBody);
       }
     }
     return 'O backend local retornou HTTP ${response.statusCode}.';
@@ -290,5 +334,65 @@ final class HttpToursAppService implements ToursAppService {
       (Object? key, Object? mapValue) =>
           MapEntry<String, dynamic>(key.toString(), mapValue),
     );
+  }
+
+  static String? _extractMessage(Object? decoded) {
+    if (decoded is String) {
+      final String trimmed = decoded.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+    if (decoded is! Map) {
+      return null;
+    }
+
+    for (final String key in <String>['message', 'error', 'detail', 'title']) {
+      final String? extracted = _extractText(decoded[key]);
+      if (extracted != null) {
+        return extracted;
+      }
+    }
+
+    for (final String key in <String>['errors', 'details', 'issues']) {
+      final String? extracted = _extractText(decoded[key]);
+      if (extracted != null) {
+        return extracted;
+      }
+    }
+
+    return null;
+  }
+
+  static String? _extractText(Object? value) {
+    if (value is String) {
+      final String trimmed = value.trim();
+      return trimmed.isEmpty ? null : trimmed;
+    }
+
+    if (value is List) {
+      for (final Object? item in value) {
+        final String? extracted = _extractText(item);
+        if (extracted != null) {
+          return extracted;
+        }
+      }
+      return null;
+    }
+
+    if (value is Map) {
+      for (final Object? nestedValue in value.values) {
+        final String? extracted = _extractText(nestedValue);
+        if (extracted != null) {
+          return extracted;
+        }
+      }
+    }
+
+    return null;
+  }
+
+  static bool _looksLikeHtml(String rawBody) {
+    final String normalized = rawBody.trimLeft().toLowerCase();
+    return normalized.startsWith('<!doctype html') ||
+        normalized.startsWith('<html');
   }
 }

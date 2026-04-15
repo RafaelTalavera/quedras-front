@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:costanorte/core/network/api_client.dart';
+import 'package:costanorte/core/network/api_exception.dart';
 import 'package:costanorte/features/tours/domain/tours_models.dart';
 import 'package:costanorte/features/tours/infrastructure/http_tours_app_service.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -67,10 +68,35 @@ void main() {
         dateTo: '2026-04-01',
       ),
       throwsA(
-        isA<StateError>().having(
-          (StateError error) => error.message.toString(),
+        isA<ApiException>()
+            .having(
+              (ApiException error) => error.message,
+              'message',
+              'dateFrom must be before or equal to dateTo',
+            )
+            .having((ApiException error) => error.statusCode, 'statusCode', 400)
+            .having((ApiException error) => error.method, 'method', 'GET')
+            .having(
+              (ApiException error) => error.path,
+              'path',
+              'tours/reports/summary?dateFrom=2026-04-30&dateTo=2026-04-01',
+            ),
+      ),
+    );
+
+    final _FakeApiClient plainTextErrorClient = _FakeApiClient()
+      ..enqueue(const ApiResponse(statusCode: 500, body: 'backend exploded'));
+    final HttpToursAppService plainTextErrorService = HttpToursAppService(
+      apiClient: plainTextErrorClient,
+    );
+
+    await expectLater(
+      () => plainTextErrorService.listProviders(),
+      throwsA(
+        isA<ApiException>().having(
+          (ApiException error) => error.message,
           'message',
-          'dateFrom must be before or equal to dateTo',
+          'backend exploded',
         ),
       ),
     );
@@ -84,11 +110,22 @@ void main() {
     await expectLater(
       () => networkService.listProviders(),
       throwsA(
-        isA<StateError>().having(
-          (StateError error) => error.message.toString(),
-          'message',
-          'Nao foi possivel conectar ao backend local. Verifique o servidor e a rede interna.',
-        ),
+        isA<ApiException>()
+            .having(
+              (ApiException error) => error.message,
+              'message',
+              'Nao foi possivel conectar ao backend local. Verifique o servidor e a rede interna.',
+            )
+            .having(
+              (ApiException error) => error.kind,
+              'kind',
+              ApiErrorKind.network,
+            )
+            .having(
+              (ApiException error) => error.path,
+              'path',
+              'tours/providers',
+            ),
       ),
     );
   });

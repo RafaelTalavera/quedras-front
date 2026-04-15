@@ -4,6 +4,7 @@ import 'dart:io';
 
 import '../../../core/localization/pt_br_error_translator.dart';
 import '../../../core/network/api_client.dart';
+import '../../../core/network/api_exception.dart';
 import '../application/maintenance_app_service.dart';
 import '../domain/maintenance_models.dart';
 
@@ -23,11 +24,11 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
     final ApiResponse response = await _runRequest(
       () => _apiClient.get('maintenance/locations', headers: _jsonHeaders),
     );
-    final Object? decoded = _expectSuccessList(
+    final List<Object?> decoded = _expectSuccessList(
       response,
       invalidMessage: 'Formato invalido da lista de locais de manutencao.',
     );
-    return (decoded as List)
+    return decoded
         .map<MaintenanceLocation>(
           (Object? item) => MaintenanceLocation.fromJson(_asMap(item)),
         )
@@ -46,7 +47,10 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
       ),
     );
     return MaintenanceLocation.fromJson(
-      _expectSuccessObject(response, invalidMessage: 'Resposta invalida do local.'),
+      _expectSuccessObject(
+        response,
+        invalidMessage: 'Resposta invalida do local.',
+      ),
     );
   }
 
@@ -63,7 +67,10 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
       ),
     );
     return MaintenanceLocation.fromJson(
-      _expectSuccessObject(response, invalidMessage: 'Resposta invalida do local.'),
+      _expectSuccessObject(
+        response,
+        invalidMessage: 'Resposta invalida do local.',
+      ),
     );
   }
 
@@ -75,11 +82,11 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
         headers: _jsonHeaders,
       ),
     );
-    final Object? decoded = _expectSuccessList(
+    final List<Object?> decoded = _expectSuccessList(
       response,
       invalidMessage: 'Formato invalido do historico de manutencao.',
     );
-    return (decoded as List)
+    return decoded
         .map<MaintenanceOrder>(
           (Object? item) => MaintenanceOrder.fromJson(_asMap(item)),
         )
@@ -91,11 +98,11 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
     final ApiResponse response = await _runRequest(
       () => _apiClient.get('maintenance/providers', headers: _jsonHeaders),
     );
-    final Object? decoded = _expectSuccessList(
+    final List<Object?> decoded = _expectSuccessList(
       response,
       invalidMessage: 'Formato invalido da lista de responsaveis.',
     );
-    return (decoded as List)
+    return decoded
         .map<MaintenanceProvider>(
           (Object? item) => MaintenanceProvider.fromJson(_asMap(item)),
         )
@@ -179,11 +186,11 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
     final ApiResponse response = await _runRequest(
       () => _apiClient.get(path, headers: _jsonHeaders),
     );
-    final Object? decoded = _expectSuccessList(
+    final List<Object?> decoded = _expectSuccessList(
       response,
       invalidMessage: 'Formato invalido da lista de ordens de manutencao.',
     );
-    return (decoded as List)
+    return decoded
         .map<MaintenanceOrder>(
           (Object? item) => MaintenanceOrder.fromJson(_asMap(item)),
         )
@@ -191,7 +198,9 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
   }
 
   @override
-  Future<MaintenanceOrder> createOrder(CreateMaintenanceOrderModel input) async {
+  Future<MaintenanceOrder> createOrder(
+    CreateMaintenanceOrderModel input,
+  ) async {
     final ApiResponse response = await _runRequest(
       () => _apiClient.post(
         'maintenance/orders',
@@ -200,7 +209,10 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
       ),
     );
     return MaintenanceOrder.fromJson(
-      _expectSuccessObject(response, invalidMessage: 'Resposta invalida da ordem.'),
+      _expectSuccessObject(
+        response,
+        invalidMessage: 'Resposta invalida da ordem.',
+      ),
     );
   }
 
@@ -217,7 +229,10 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
       ),
     );
     return MaintenanceOrder.fromJson(
-      _expectSuccessObject(response, invalidMessage: 'Resposta invalida da ordem.'),
+      _expectSuccessObject(
+        response,
+        invalidMessage: 'Resposta invalida da ordem.',
+      ),
     );
   }
 
@@ -240,11 +255,11 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
         headers: _jsonHeaders,
       ),
     );
-    final Object? decoded = _expectSuccessList(
+    final List<Object?> decoded = _expectSuccessList(
       response,
       invalidMessage: 'Formato invalido da lista de conflitos.',
     );
-    return (decoded as List)
+    return decoded
         .map<MaintenanceConflict>(
           (Object? item) => MaintenanceConflict.fromJson(_asMap(item)),
         )
@@ -260,11 +275,16 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
       () => _apiClient.patch(
         'maintenance/orders/$orderId/start',
         headers: _jsonHeaders,
-        body: jsonEncode((input ?? const StartMaintenanceOrderModel()).toJson()),
+        body: jsonEncode(
+          (input ?? const StartMaintenanceOrderModel()).toJson(),
+        ),
       ),
     );
     return MaintenanceOrder.fromJson(
-      _expectSuccessObject(response, invalidMessage: 'Resposta invalida da ordem.'),
+      _expectSuccessObject(
+        response,
+        invalidMessage: 'Resposta invalida da ordem.',
+      ),
     );
   }
 
@@ -281,7 +301,10 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
       ),
     );
     return MaintenanceOrder.fromJson(
-      _expectSuccessObject(response, invalidMessage: 'Resposta invalida da ordem.'),
+      _expectSuccessObject(
+        response,
+        invalidMessage: 'Resposta invalida da ordem.',
+      ),
     );
   }
 
@@ -298,7 +321,10 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
       ),
     );
     return MaintenanceOrder.fromJson(
-      _expectSuccessObject(response, invalidMessage: 'Resposta invalida da ordem.'),
+      _expectSuccessObject(
+        response,
+        invalidMessage: 'Resposta invalida da ordem.',
+      ),
     );
   }
 
@@ -310,11 +336,11 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
         headers: _jsonHeaders,
       ),
     );
-    final Object? decoded = _expectSuccessList(
+    final List<Object?> decoded = _expectSuccessList(
       response,
       invalidMessage: 'Formato invalido da lista de anexos.',
     );
-    return (decoded as List)
+    return decoded
         .map<MaintenanceOrderAttachment>(
           (Object? item) => MaintenanceOrderAttachment.fromJson(_asMap(item)),
         )
@@ -334,7 +360,10 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
       ),
     );
     return MaintenanceOrderAttachment.fromJson(
-      _expectSuccessObject(response, invalidMessage: 'Resposta invalida do anexo.'),
+      _expectSuccessObject(
+        response,
+        invalidMessage: 'Resposta invalida do anexo.',
+      ),
     );
   }
 
@@ -347,7 +376,11 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
       ),
     );
     if (!response.isSuccess) {
-      throw StateError(_extractApiErrorMessage(response));
+      throw ApiException(
+        _extractApiErrorMessage(response),
+        kind: ApiErrorKind.http,
+        statusCode: response.statusCode,
+      );
     }
   }
 
@@ -366,7 +399,10 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
       ),
     );
     return MaintenanceSummaryReport.fromJson(
-      _expectSuccessObject(response, invalidMessage: 'Resumo invalido de manutencao.'),
+      _expectSuccessObject(
+        response,
+        invalidMessage: 'Resumo invalido de manutencao.',
+      ),
     );
   }
 
@@ -405,30 +441,46 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
     try {
       return await request();
     } on SocketException {
-      throw StateError(
+      throw const ApiException(
         'Nao foi possivel conectar ao backend local. Verifique o servidor e a rede interna.',
+        kind: ApiErrorKind.network,
       );
     } on TimeoutException {
-      throw StateError('Tempo esgotado ao conectar ao backend local.');
+      throw const ApiException(
+        'Tempo esgotado ao conectar ao backend local.',
+        kind: ApiErrorKind.timeout,
+      );
     } on HttpException {
-      throw StateError('Erro HTTP de transporte ao consultar o backend local.');
+      throw const ApiException(
+        'Erro HTTP de transporte ao consultar o backend local.',
+        kind: ApiErrorKind.transport,
+      );
     } on FormatException catch (error) {
-      throw StateError('Resposta invalida do backend local: ${error.message}');
+      throw ApiException(
+        'Resposta invalida do backend local: ${error.message}',
+        kind: ApiErrorKind.invalidResponse,
+        cause: error,
+      );
     }
   }
 
-  Object? _expectSuccessList(
+  List<Object?> _expectSuccessList(
     ApiResponse response, {
     required String invalidMessage,
   }) {
     if (!response.isSuccess) {
-      throw StateError(_extractApiErrorMessage(response));
+      throw ApiException(
+        _extractApiErrorMessage(response),
+        kind: ApiErrorKind.http,
+        statusCode: response.statusCode,
+      );
     }
     final Object? decoded = _tryDecode(response.body);
-    if (decoded is! List) {
-      throw StateError(invalidMessage);
+    final List<Object?>? items = _extractListPayload(decoded);
+    if (items == null) {
+      throw ApiException(invalidMessage, kind: ApiErrorKind.invalidResponse);
     }
-    return decoded;
+    return items;
   }
 
   Map<String, dynamic> _expectSuccessObject(
@@ -436,24 +488,43 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
     required String invalidMessage,
   }) {
     if (!response.isSuccess) {
-      throw StateError(_extractApiErrorMessage(response));
+      throw ApiException(
+        _extractApiErrorMessage(response),
+        kind: ApiErrorKind.http,
+        statusCode: response.statusCode,
+      );
     }
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! Map) {
-      throw StateError(invalidMessage);
+      throw ApiException(invalidMessage, kind: ApiErrorKind.invalidResponse);
     }
     return _asMap(decoded);
   }
 
   String _extractApiErrorMessage(ApiResponse response) {
-    final Object? decoded = _tryDecode(response.body);
-    if (decoded is Map) {
-      final Object? message = decoded['message'];
-      if (message != null) {
-        final String asString = message.toString().trim();
-        if (asString.isNotEmpty) {
-          return PtBrErrorTranslator.translate(asString);
+    try {
+      final Object? decoded = _tryDecode(response.body);
+      if (decoded is Map) {
+        for (final String key in <String>[
+          'message',
+          'error',
+          'detail',
+          'title',
+        ]) {
+          final Object? value = decoded[key];
+          if (value == null) {
+            continue;
+          }
+          final String asString = value.toString().trim();
+          if (asString.isNotEmpty) {
+            return PtBrErrorTranslator.translate(asString);
+          }
         }
+      }
+    } on FormatException {
+      final String rawBody = response.body.trim();
+      if (rawBody.isNotEmpty) {
+        return rawBody;
       }
     }
     return 'O backend local retornou HTTP ${response.statusCode}.';
@@ -474,5 +545,22 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
       (Object? key, Object? mapValue) =>
           MapEntry<String, dynamic>(key.toString(), mapValue),
     );
+  }
+
+  static List<Object?>? _extractListPayload(Object? decoded) {
+    if (decoded is List) {
+      return decoded.cast<Object?>();
+    }
+    if (decoded is! Map) {
+      return null;
+    }
+
+    for (final String key in <String>['items', 'content', 'data', 'results']) {
+      final Object? value = decoded[key];
+      if (value is List) {
+        return value.cast<Object?>();
+      }
+    }
+    return null;
   }
 }
