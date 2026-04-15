@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -12,7 +13,6 @@ import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/app_dialog_dimensions.dart';
 import '../../../core/widgets/app_dialog_shell.dart';
 import '../../../core/widgets/brand_section_hero.dart';
-import '../../../core/widgets/horizontal_scrollable_container.dart';
 import '../application/maintenance_app_service.dart';
 import '../domain/maintenance_models.dart';
 
@@ -41,12 +41,7 @@ const List<String> _weekLabels = <String>[
   'Dom',
 ];
 
-enum MaintenanceSection {
-  operationalSummary,
-  selectedDay,
-  monthlyAgenda,
-  summary,
-}
+enum MaintenanceSection { operationalSummary }
 
 class MaintenancePageController {
   _MaintenancePageState? _state;
@@ -86,25 +81,18 @@ class _MaintenancePageState extends State<MaintenancePage>
     with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _operationalSummaryKey = GlobalKey();
-  final GlobalKey _selectedDayKey = GlobalKey();
-  final GlobalKey _monthlyAgendaKey = GlobalKey();
-  final GlobalKey _summaryKey = GlobalKey();
 
   late final AutoRefreshController _autoRefreshController;
   List<MaintenanceLocation> _locations = const <MaintenanceLocation>[];
   List<MaintenanceProvider> _providers = const <MaintenanceProvider>[];
   List<MaintenanceOrder> _orders = const <MaintenanceOrder>[];
-  MaintenanceSummaryReport? _summaryReport;
   late DateTime _selectedDate;
-  late DateTime _reportStartDate;
-  late DateTime _reportEndDate;
   bool _loading = true;
   bool _refreshingData = false;
-  bool _loadingSummary = false;
+  bool _loadingProviders = false;
   bool _saving = false;
   int? _sharingOrderId;
   String? _errorMessage;
-  String? _summaryErrorMessage;
   int? _selectedOrderId;
   int? _selectedLocationId;
   MaintenanceSection _currentSection = MaintenanceSection.operationalSummary;
@@ -116,8 +104,6 @@ class _MaintenancePageState extends State<MaintenancePage>
     widget.controller?._attach(this);
     _scrollController.addListener(_handleScroll);
     _selectedDate = _today();
-    _reportStartDate = DateTime(_selectedDate.year, _selectedDate.month, 1);
-    _reportEndDate = DateTime(_selectedDate.year, _selectedDate.month + 1, 0);
     _autoRefreshController = AutoRefreshController(
       interval: AppRuntimeConfig.operationalRefreshInterval,
       onRefresh: () => _load(showLoading: false),
@@ -174,12 +160,13 @@ class _MaintenancePageState extends State<MaintenancePage>
               runSpacing: 12,
               children: <Widget>[
                 FilledButton.icon(
-                  onPressed: _saving ? null : _createOrder,
+                  onPressed: _saving || _loadingProviders ? null : _createOrder,
                   icon: const Icon(Icons.add_circle_outline_rounded),
                   label: const Text('Lancar ordem'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _saving || _selectedOrder == null
+                  onPressed:
+                      _saving || _loadingProviders || _selectedOrder == null
                       ? null
                       : _editOrder,
                   icon: const Icon(Icons.edit_rounded),
@@ -221,7 +208,9 @@ class _MaintenancePageState extends State<MaintenancePage>
                   label: const Text('Anexos'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _saving ? null : _manageCatalogs,
+                  onPressed: _saving || _loadingProviders
+                      ? null
+                      : _manageCatalogs,
                   icon: const Icon(Icons.inventory_2_rounded),
                   label: const Text('Catalogos'),
                 ),
@@ -250,12 +239,6 @@ class _MaintenancePageState extends State<MaintenancePage>
               key: _operationalSummaryKey,
               child: _buildOperationalSummaryCard(),
             ),
-            const SizedBox(height: 18),
-            KeyedSubtree(key: _selectedDayKey, child: _buildSelectedDayCard()),
-            const SizedBox(height: 18),
-            KeyedSubtree(key: _monthlyAgendaKey, child: _buildAgendaCard()),
-            const SizedBox(height: 18),
-            KeyedSubtree(key: _summaryKey, child: _buildSummaryCard()),
           ],
         ],
       ),
@@ -274,18 +257,6 @@ class _MaintenancePageState extends State<MaintenancePage>
     return null;
   }
 
-  MaintenanceLocation? get _selectedLocation {
-    if (_selectedLocationId == null) {
-      return null;
-    }
-    for (final MaintenanceLocation location in _locations) {
-      if (location.id == _selectedLocationId) {
-        return location;
-      }
-    }
-    return null;
-  }
-
   List<MaintenanceOrder> get _dayOrders =>
       _orders
           .where(
@@ -297,32 +268,6 @@ class _MaintenancePageState extends State<MaintenancePage>
           return a.referenceDate.compareTo(b.referenceDate);
         });
 
-  List<MaintenanceOrder> get _focusedDayOrders {
-    final int? locationId = _selectedLocationId;
-    if (locationId == null) {
-      return _dayOrders;
-    }
-    return _dayOrders
-        .where((MaintenanceOrder order) => order.locationId == locationId)
-        .toList();
-  }
-
-  List<MaintenanceOrder> get _focusedPendingDayOrders {
-    return _focusedDayOrders.where(_isPendingOrder).toList()
-      ..sort((MaintenanceOrder a, MaintenanceOrder b) {
-        return a.referenceDate.compareTo(b.referenceDate);
-      });
-  }
-
-  List<MaintenanceOrder> get _focusedResolvedDayOrders {
-    return _focusedDayOrders
-        .where((MaintenanceOrder order) => !_isPendingOrder(order))
-        .toList()
-      ..sort((MaintenanceOrder a, MaintenanceOrder b) {
-        return b.referenceDate.compareTo(a.referenceDate);
-      });
-  }
-
   void _handleScroll() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) {
@@ -332,9 +277,6 @@ class _MaintenancePageState extends State<MaintenancePage>
           <MaintenanceSection, BuildContext?>{
             MaintenanceSection.operationalSummary:
                 _operationalSummaryKey.currentContext,
-            MaintenanceSection.selectedDay: _selectedDayKey.currentContext,
-            MaintenanceSection.monthlyAgenda: _monthlyAgendaKey.currentContext,
-            MaintenanceSection.summary: _summaryKey.currentContext,
           };
       const double anchorY = 180;
       MaintenanceSection best = _currentSection;
@@ -360,9 +302,6 @@ class _MaintenancePageState extends State<MaintenancePage>
     final BuildContext? target = switch (section) {
       MaintenanceSection.operationalSummary =>
         _operationalSummaryKey.currentContext,
-      MaintenanceSection.selectedDay => _selectedDayKey.currentContext,
-      MaintenanceSection.monthlyAgenda => _monthlyAgendaKey.currentContext,
-      MaintenanceSection.summary => _summaryKey.currentContext,
     };
     if (target == null) {
       return;
@@ -395,40 +334,32 @@ class _MaintenancePageState extends State<MaintenancePage>
         _refreshingData = true;
       }
       _errorMessage = null;
-      _summaryErrorMessage = null;
     });
     try {
+      final DateTime selectedDate = _today();
       final String monthStart = _formatDateApi(
-        DateTime(_selectedDate.year, _selectedDate.month, 1),
+        DateTime(selectedDate.year, selectedDate.month, 1),
       );
       final String monthEnd = _formatDateApi(
-        DateTime(_selectedDate.year, _selectedDate.month + 1, 0),
+        DateTime(selectedDate.year, selectedDate.month + 1, 0),
       );
-      final List<MaintenanceLocation> locations = await widget
+      final Future<List<MaintenanceLocation>> locationsFuture = widget
           .maintenanceAppService
           .listLocations();
-      final List<MaintenanceProvider> providers = await widget
+      final Future<List<MaintenanceOrder>> ordersFuture = widget
           .maintenanceAppService
-          .listProviders();
-      final List<MaintenanceOrder> orders = await widget.maintenanceAppService
           .listOrders(dateFrom: monthStart, dateTo: monthEnd);
-      final MaintenanceSummaryReport summaryReport = await widget
-          .maintenanceAppService
-          .getSummaryReport(
-            dateFrom: _formatDateApi(_reportStartDate),
-            dateTo: _formatDateApi(_reportEndDate),
-          );
+      final List<MaintenanceLocation> locations = await locationsFuture;
+      final List<MaintenanceOrder> orders = await ordersFuture;
       if (!mounted) {
         return;
       }
       setState(() {
+        _selectedDate = selectedDate;
         _locations = locations;
-        _providers = providers;
         _orders = orders;
-        _summaryReport = summaryReport;
         _loading = false;
         _refreshingData = false;
-        _loadingSummary = false;
         if (_selectedOrderId != null &&
             !_orders.any(
               (MaintenanceOrder order) => order.id == _selectedOrderId,
@@ -443,6 +374,7 @@ class _MaintenancePageState extends State<MaintenancePage>
           _selectedLocationId = null;
         }
       });
+      unawaited(_loadProviders());
     } catch (error) {
       if (!mounted) {
         return;
@@ -450,21 +382,49 @@ class _MaintenancePageState extends State<MaintenancePage>
       setState(() {
         _loading = false;
         _refreshingData = false;
-        _loadingSummary = false;
+        _errorMessage = error.toString().replaceFirst('Bad state: ', '');
+      });
+    }
+  }
+
+  Future<void> _loadProviders() async {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _loadingProviders = true;
+    });
+    try {
+      final List<MaintenanceProvider> providers = await widget
+          .maintenanceAppService
+          .listProviders();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _providers = providers;
+        _loadingProviders = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadingProviders = false;
         _errorMessage = error.toString().replaceFirst('Bad state: ', '');
       });
     }
   }
 
   bool get _canRefreshPage =>
-      !_loading && !_refreshingData && !_loadingSummary && !_saving;
+      !_loading && !_refreshingData && !_loadingProviders && !_saving;
 
   bool _canAutoRefresh() {
     final ModalRoute<dynamic>? route = ModalRoute.of(context);
     return mounted &&
         !_loading &&
         !_refreshingData &&
-        !_loadingSummary &&
+        !_loadingProviders &&
         !_saving &&
         (route?.isCurrent ?? true);
   }
@@ -474,120 +434,6 @@ class _MaintenancePageState extends State<MaintenancePage>
       return;
     }
     await _load(showLoading: false);
-  }
-
-  Widget _buildSelectedDayCard() {
-    final MaintenanceLocation? selectedLocation = _selectedLocation;
-    final int openCount = _focusedPendingDayOrders
-        .where(
-          (MaintenanceOrder order) =>
-              order.status == MaintenanceOrderStatus.open,
-        )
-        .length;
-    final int inProgressCount = _focusedPendingDayOrders
-        .where(
-          (MaintenanceOrder order) =>
-              order.status == MaintenanceOrderStatus.inProgress,
-        )
-        .length;
-    final int completedCount = _focusedResolvedDayOrders
-        .where(
-          (MaintenanceOrder order) =>
-              order.status == MaintenanceOrderStatus.completed,
-        )
-        .length;
-    final int activeLocations = _focusedPendingDayOrders
-        .map((MaintenanceOrder order) => order.locationId)
-        .toSet()
-        .length;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: <Widget>[
-                      Text(
-                        selectedLocation == null
-                            ? 'Dia selecionado'
-                            : 'Dia selecionado em foco',
-                        style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        selectedLocation == null
-                            ? _fullDate(_selectedDate)
-                            : '${_fullDate(_selectedDate)} - ${selectedLocation.label}',
-                        style: Theme.of(context).textTheme.bodyLarge,
-                      ),
-                    ],
-                  ),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _pickSelectedDate,
-                  icon: const Icon(Icons.edit_calendar_rounded),
-                  label: const Text('Alterar dia'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            if (selectedLocation != null) ...<Widget>[
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: <Widget>[
-                  _tag('Local: ${selectedLocation.label}'),
-                  OutlinedButton.icon(
-                    onPressed: () => setState(() => _selectedLocationId = null),
-                    icon: const Icon(Icons.layers_clear_rounded),
-                    label: const Text('Ver todos os locais'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-            ],
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: <Widget>[
-                _metricChip(
-                  selectedLocation == null ? 'Pendentes' : 'Pendentes do local',
-                  '${_focusedPendingDayOrders.length}',
-                  Icons.pending_actions_rounded,
-                ),
-                _metricChip(
-                  'Abertas',
-                  '$openCount',
-                  Icons.assignment_late_rounded,
-                ),
-                _metricChip(
-                  'Em andamento',
-                  '$inProgressCount',
-                  Icons.handyman_rounded,
-                ),
-                _metricChip(
-                  'Concluidas',
-                  '$completedCount',
-                  Icons.task_alt_rounded,
-                ),
-                _metricChip(
-                  selectedLocation == null ? 'Locais ativos' : 'Locais em foco',
-                  '$activeLocations',
-                  Icons.apartment_rounded,
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            _buildPendingDayView(),
-          ],
-        ),
-      ),
-    );
   }
 
   Widget _buildOperationalSummaryCard() {
@@ -713,66 +559,6 @@ class _MaintenancePageState extends State<MaintenancePage>
           ],
         ),
       ),
-    );
-  }
-
-  Widget _buildPendingDayView() {
-    if (_focusedDayOrders.isEmpty) {
-      return _emptyBox(
-        _selectedLocation == null
-            ? 'Nao ha ordens registradas para este dia.'
-            : 'Nao ha ordens registradas para este local no dia selecionado.',
-      );
-    }
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: <Widget>[
-        Text(
-          'Pendencias priorizadas para o dia',
-          style: Theme.of(context).textTheme.titleMedium,
-        ),
-        const SizedBox(height: 6),
-        Text(
-          'A lista abaixo destaca o que ainda precisa de acao operacional.',
-          style: Theme.of(
-            context,
-          ).textTheme.bodyMedium?.copyWith(color: CostaNorteBrand.mutedInk),
-        ),
-        const SizedBox(height: 16),
-        if (_focusedPendingDayOrders.isEmpty)
-          _emptyBox(
-            _selectedLocation == null
-                ? 'Nao ha ordens pendentes para este dia.'
-                : 'Nao ha ordens pendentes para este local neste dia.',
-          )
-        else
-          ..._focusedPendingDayOrders.map(
-            (MaintenanceOrder order) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _buildOrderTile(
-                order,
-                onDoubleTap: () => _openOrderActionDialog(order),
-              ),
-            ),
-          ),
-        if (_focusedResolvedDayOrders.isNotEmpty) ...<Widget>[
-          const SizedBox(height: 12),
-          Text(
-            'Ja resolvidas no dia',
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-          const SizedBox(height: 10),
-          ..._focusedResolvedDayOrders.map(
-            (MaintenanceOrder order) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: _buildOrderTile(
-                order,
-                onDoubleTap: () => _openOrderActionDialog(order),
-              ),
-            ),
-          ),
-        ],
-      ],
     );
   }
 
@@ -944,288 +730,6 @@ class _MaintenancePageState extends State<MaintenancePage>
     );
   }
 
-  Widget _buildAgendaCard() {
-    final List<_MaintenanceDayCell> cells = _calendarCells();
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Text(
-                  'Agenda mensal',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const Spacer(),
-                SizedBox(
-                  width: 260,
-                  child: DropdownButtonFormField<int>(
-                    value: _selectedDate.month - 1,
-                    decoration: const InputDecoration(
-                      labelText: 'Mes da agenda',
-                      prefixIcon: Icon(Icons.calendar_month_rounded),
-                    ),
-                    items: List<DropdownMenuItem<int>>.generate(
-                      _monthLabels.length,
-                      (int index) => DropdownMenuItem<int>(
-                        value: index,
-                        child: Text(_monthLabels[index]),
-                      ),
-                    ),
-                    onChanged: (int? value) {
-                      if (value == null) {
-                        return;
-                      }
-                      _changeMonth(value + 1);
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: _weekLabels
-                  .map(
-                    (String label) => Expanded(
-                      child: Center(
-                        child: Text(
-                          label,
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(color: CostaNorteBrand.mutedInk),
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-            const SizedBox(height: 10),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: cells.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-                mainAxisExtent: 92,
-              ),
-              itemBuilder: (BuildContext context, int index) {
-                final _MaintenanceDayCell cell = cells[index];
-                if (!cell.inMonth) {
-                  return const SizedBox.shrink();
-                }
-                final DateTime date = cell.date!;
-                return _MaintenanceAgendaDayCard(
-                  date: date,
-                  orders: cell.orders,
-                  selected: _sameDay(date, _selectedDate),
-                  onTap: () => setState(() => _selectedDate = date),
-                  onDoubleTap: () => _openDayOrderActions(date),
-                );
-              },
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildSummaryCard() {
-    final MaintenanceSummaryReport? summary = _summaryReport;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text(
-              'Resumo do periodo',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Consolidado por estado, responsavel e tipo de local no periodo consultado.',
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: <Widget>[
-                OutlinedButton.icon(
-                  onPressed: _loadingSummary ? null : _pickReportStart,
-                  icon: const Icon(Icons.date_range_rounded),
-                  label: Text('Inicio: ${_shortDate(_reportStartDate)}'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _loadingSummary ? null : _pickReportEnd,
-                  icon: const Icon(Icons.event_rounded),
-                  label: Text('Fim: ${_shortDate(_reportEndDate)}'),
-                ),
-                FilledButton.icon(
-                  onPressed: _loadingSummary ? null : _reloadSummary,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: Text(_loadingSummary ? 'Buscando...' : 'Buscar'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            if (_summaryErrorMessage != null) ...<Widget>[
-              Text(
-                _summaryErrorMessage!,
-                style: TextStyle(color: Colors.red.shade700),
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (summary == null)
-              _emptyBox('O resumo ainda nao esta disponivel.')
-            else ...<Widget>[
-              Wrap(
-                spacing: 10,
-                runSpacing: 10,
-                children: <Widget>[
-                  _metricChip(
-                    'Abertas',
-                    '${summary.openCount}',
-                    Icons.pending_rounded,
-                  ),
-                  _metricChip(
-                    'Atribuidas',
-                    '${summary.assignedCount}',
-                    Icons.assignment_ind_rounded,
-                  ),
-                  _metricChip(
-                    'Agendadas',
-                    '${summary.scheduledCount}',
-                    Icons.calendar_month_rounded,
-                  ),
-                  _metricChip(
-                    'Em andamento',
-                    '${summary.inProgressCount}',
-                    Icons.handyman_rounded,
-                  ),
-                  _metricChip(
-                    'Concluidas',
-                    '${summary.completedCount}',
-                    Icons.task_alt_rounded,
-                  ),
-                  _metricChip(
-                    'Urgentes',
-                    '${summary.urgentCount}',
-                    Icons.priority_high_rounded,
-                  ),
-                  _metricChip(
-                    'Sem responsavel',
-                    '${summary.unassignedCount}',
-                    Icons.person_off_rounded,
-                  ),
-                  _metricChip(
-                    'Prioridade hospede',
-                    '${summary.guestPriorityCount}',
-                    Icons.hotel_rounded,
-                  ),
-                  _metricChip(
-                    'Resolucao media',
-                    '${summary.averageResolutionHours.toStringAsFixed(1)}h',
-                    Icons.timer_outlined,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              _buildBreakdownBlock(
-                title: 'Por responsavel',
-                groupBy: MaintenanceSummaryGroupBy.provider,
-                items: summary.providerBreakdown,
-              ),
-              const SizedBox(height: 16),
-              _buildBreakdownBlock(
-                title: 'Por tipo de responsavel',
-                groupBy: MaintenanceSummaryGroupBy.providerType,
-                items: summary.providerTypeBreakdown,
-              ),
-              const SizedBox(height: 16),
-              _buildBreakdownBlock(
-                title: 'Por tipo de local',
-                groupBy: MaintenanceSummaryGroupBy.locationType,
-                items: summary.locationTypeBreakdown,
-              ),
-              const SizedBox(height: 16),
-              _buildBreakdownBlock(
-                title: 'Por estado',
-                groupBy: MaintenanceSummaryGroupBy.status,
-                items: summary.statusBreakdown,
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBreakdownBlock({
-    required String title,
-    required MaintenanceSummaryGroupBy groupBy,
-    required List<MaintenanceSummaryBreakdown> items,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: const Color(0xFFFCFCFB),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: CostaNorteBrand.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(title, style: Theme.of(context).textTheme.titleLarge),
-          const SizedBox(height: 12),
-          if (items.isEmpty)
-            _emptyBox('Nenhum dado encontrado para esse agrupamento.')
-          else
-            HorizontalScrollableContainer(
-              child: DataTable(
-                columnSpacing: 16,
-                columns: const <DataColumn>[
-                  DataColumn(label: Text('Grupo')),
-                  DataColumn(label: Text('Total')),
-                  DataColumn(label: Text('Abertas')),
-                  DataColumn(label: Text('Agendadas')),
-                  DataColumn(label: Text('Em andamento')),
-                  DataColumn(label: Text('Concluidas')),
-                  DataColumn(label: Text('Canceladas')),
-                  DataColumn(label: Text('Urgentes')),
-                ],
-                rows: items
-                    .map(
-                      (MaintenanceSummaryBreakdown item) => DataRow(
-                        cells: <DataCell>[
-                          DataCell(
-                            InkWell(
-                              onTap: () => _openSummaryDetails(groupBy, item),
-                              child: Text(item.label),
-                            ),
-                          ),
-                          DataCell(Text('${item.totalCount}')),
-                          DataCell(Text('${item.openCount}')),
-                          DataCell(Text('${item.scheduledCount}')),
-                          DataCell(Text('${item.inProgressCount}')),
-                          DataCell(Text('${item.completedCount}')),
-                          DataCell(Text('${item.cancelledCount}')),
-                          DataCell(Text('${item.urgentCount}')),
-                        ],
-                      ),
-                    )
-                    .toList(),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildOrderTile(MaintenanceOrder order, {VoidCallback? onDoubleTap}) {
     final bool selected = order.id == _selectedOrderId;
     return InkWell(
@@ -1236,9 +740,10 @@ class _MaintenancePageState extends State<MaintenancePage>
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(18),
-          color: selected ? CostaNorteBrand.foam : Colors.white,
+          color: selected ? const Color(0xFFFFF8E7) : CostaNorteBrand.mint,
           border: Border.all(
-            color: selected ? CostaNorteBrand.royalBlue : CostaNorteBrand.line,
+            color: selected ? CostaNorteBrand.goldDeep : CostaNorteBrand.line,
+            width: selected ? 1.4 : 1,
           ),
         ),
         child: Column(
@@ -1339,11 +844,6 @@ class _MaintenancePageState extends State<MaintenancePage>
         ),
       ),
     );
-  }
-
-  bool _isPendingOrder(MaintenanceOrder order) {
-    return order.status != MaintenanceOrderStatus.completed &&
-        order.status != MaintenanceOrderStatus.cancelled;
   }
 
   List<_MaintenanceDepartmentSectionData> _buildDepartmentSections(
@@ -1616,7 +1116,7 @@ class _MaintenancePageState extends State<MaintenancePage>
     setState(() {
       _selectedLocationId = location.id;
       if (_selectedLocationId != null &&
-          !_focusedDayOrders.any(
+          !dayOrders.any(
             (MaintenanceOrder order) => order.id == _selectedOrderId,
           )) {
         _selectedOrderId = dayOrders.isEmpty ? null : dayOrders.first.id;
@@ -1678,7 +1178,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                       (MaintenanceOrder order) => Padding(
                         padding: const EdgeInsets.only(bottom: 10),
                         child: ListTile(
-                          tileColor: Colors.white,
+                          tileColor: CostaNorteBrand.mint,
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16),
                             side: const BorderSide(color: CostaNorteBrand.line),
@@ -1784,134 +1284,6 @@ class _MaintenancePageState extends State<MaintenancePage>
       ),
       child: Text(text, style: Theme.of(context).textTheme.labelSmall),
     );
-  }
-
-  List<_MaintenanceDayCell> _calendarCells() {
-    final DateTime monthStart = DateTime(
-      _selectedDate.year,
-      _selectedDate.month,
-      1,
-    );
-    final int daysInMonth = DateTime(
-      _selectedDate.year,
-      _selectedDate.month + 1,
-      0,
-    ).day;
-    final int leadingEmpty = monthStart.weekday - 1;
-    final List<_MaintenanceDayCell> cells = <_MaintenanceDayCell>[];
-    for (int index = 0; index < leadingEmpty; index++) {
-      cells.add(_MaintenanceDayCell.empty());
-    }
-    for (int day = 1; day <= daysInMonth; day++) {
-      final DateTime date = DateTime(
-        _selectedDate.year,
-        _selectedDate.month,
-        day,
-      );
-      final List<MaintenanceOrder> orders = _orders
-          .where(
-            (MaintenanceOrder order) => _sameDay(order.referenceDate, date),
-          )
-          .toList();
-      cells.add(_MaintenanceDayCell(date: date, orders: orders));
-    }
-    while (cells.length % 7 != 0) {
-      cells.add(_MaintenanceDayCell.empty());
-    }
-    return cells;
-  }
-
-  Future<void> _changeMonth(int month) async {
-    final DateTime nextDate = DateTime(_selectedDate.year, month, 1);
-    setState(() {
-      _selectedDate = nextDate;
-    });
-    await _load();
-  }
-
-  Future<void> _pickSelectedDate() async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _selectedDate,
-      firstDate: DateTime(_selectedDate.year - 1, 1, 1),
-      lastDate: DateTime(_selectedDate.year + 1, 12, 31),
-    );
-    if (picked == null) {
-      return;
-    }
-    final bool monthChanged = picked.month != _selectedDate.month;
-    setState(() {
-      _selectedDate = picked;
-    });
-    if (monthChanged) {
-      await _load();
-    }
-  }
-
-  Future<void> _pickReportStart() async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _reportStartDate,
-      firstDate: DateTime(_selectedDate.year - 2, 1, 1),
-      lastDate: DateTime(_selectedDate.year + 2, 12, 31),
-    );
-    if (picked == null) {
-      return;
-    }
-    setState(() {
-      _reportStartDate = picked;
-      if (_reportStartDate.isAfter(_reportEndDate)) {
-        _reportEndDate = _reportStartDate;
-      }
-    });
-  }
-
-  Future<void> _pickReportEnd() async {
-    final DateTime? picked = await showDatePicker(
-      context: context,
-      initialDate: _reportEndDate,
-      firstDate: DateTime(_selectedDate.year - 2, 1, 1),
-      lastDate: DateTime(_selectedDate.year + 2, 12, 31),
-    );
-    if (picked == null) {
-      return;
-    }
-    setState(() {
-      _reportEndDate = picked;
-      if (_reportEndDate.isBefore(_reportStartDate)) {
-        _reportStartDate = _reportEndDate;
-      }
-    });
-  }
-
-  Future<void> _reloadSummary() async {
-    setState(() {
-      _loadingSummary = true;
-      _summaryErrorMessage = null;
-    });
-    try {
-      final MaintenanceSummaryReport summaryReport = await widget
-          .maintenanceAppService
-          .getSummaryReport(
-            dateFrom: _formatDateApi(_reportStartDate),
-            dateTo: _formatDateApi(_reportEndDate),
-          );
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _summaryReport = summaryReport;
-        _loadingSummary = false;
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _loadingSummary = false;
-        _summaryErrorMessage = error.toString().replaceFirst('Bad state: ', '');
-      });
-    }
   }
 
   Future<void> _createOrder() async {
@@ -2221,20 +1593,6 @@ class _MaintenancePageState extends State<MaintenancePage>
     }
   }
 
-  Future<void> _openDayOrderActions(DateTime date) async {
-    setState(() {
-      _selectedDate = DateTime(date.year, date.month, date.day);
-    });
-    final MaintenanceOrder? order = await _pickOrder(
-      'Ordens do dia',
-      emptyMessage: 'Nao ha ordens registradas para este dia.',
-    );
-    if (order == null || !mounted) {
-      return;
-    }
-    await _openOrderActionDialog(order);
-  }
-
   Future<void> _openOrderActionDialog(MaintenanceOrder order) async {
     final _MaintenanceOrderAction? action =
         await showDialog<_MaintenanceOrderAction>(
@@ -2273,7 +1631,7 @@ class _MaintenancePageState extends State<MaintenancePage>
     }
   }
 
-  Future<MaintenanceOrder?> _pickOrder(
+  Future<MaintenanceOrder?> pickOrderForDay(
     String title, {
     bool Function(MaintenanceOrder order)? canSelect,
     String? emptyMessage,
@@ -2343,52 +1701,6 @@ class _MaintenancePageState extends State<MaintenancePage>
     }
     return buffer.toString().trim();
   }
-
-  Future<void> _openSummaryDetails(
-    MaintenanceSummaryGroupBy groupBy,
-    MaintenanceSummaryBreakdown breakdown,
-  ) async {
-    try {
-      final MaintenanceSummaryDetail detail = await widget.maintenanceAppService
-          .getSummaryDetails(
-            groupBy: groupBy,
-            code: breakdown.code,
-            dateFrom: _formatDateApi(_reportStartDate),
-            dateTo: _formatDateApi(_reportEndDate),
-          );
-      if (!mounted) {
-        return;
-      }
-      await showDialog<void>(
-        context: context,
-        builder: (BuildContext context) =>
-            _SummaryDetailsDialog(detail: detail),
-      );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      await AppAlerts.error(
-        context,
-        title: 'Detalhe do resumo',
-        message: error.toString().replaceFirst('Bad state: ', ''),
-      );
-    }
-  }
-}
-
-class _MaintenanceDayCell {
-  const _MaintenanceDayCell({required this.date, required this.orders})
-    : inMonth = true;
-
-  const _MaintenanceDayCell.empty()
-    : date = null,
-      orders = const <MaintenanceOrder>[],
-      inMonth = false;
-
-  final DateTime? date;
-  final List<MaintenanceOrder> orders;
-  final bool inMonth;
 }
 
 enum _MaintenanceOrderAction {
@@ -2497,79 +1809,6 @@ class _MaintenanceOrderActionDialog extends StatelessWidget {
           child: const Text('Fechar'),
         ),
       ],
-    );
-  }
-}
-
-class _MaintenanceAgendaDayCard extends StatelessWidget {
-  const _MaintenanceAgendaDayCard({
-    required this.date,
-    required this.orders,
-    required this.selected,
-    required this.onTap,
-    required this.onDoubleTap,
-  });
-
-  final DateTime date;
-  final List<MaintenanceOrder> orders;
-  final bool selected;
-  final VoidCallback onTap;
-  final VoidCallback onDoubleTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final bool hasUrgent = orders.any(
-      (MaintenanceOrder order) => order.priority == MaintenancePriority.urgent,
-    );
-    final Color background = selected
-        ? const Color(0xFFFFF3D8)
-        : orders.isNotEmpty
-        ? const Color(0xFFEAF1FF)
-        : Colors.white;
-    final Color border = selected
-        ? CostaNorteBrand.goldDeep
-        : orders.isNotEmpty
-        ? CostaNorteBrand.royalBlue
-        : CostaNorteBrand.line;
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      onDoubleTap: onDoubleTap,
-      child: Container(
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: background,
-          borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: border),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Text(
-                  '${date.day}',
-                  style: Theme.of(context).textTheme.titleMedium,
-                ),
-                const Spacer(),
-                if (hasUrgent)
-                  const Icon(
-                    Icons.priority_high_rounded,
-                    size: 16,
-                    color: CostaNorteBrand.error,
-                  ),
-              ],
-            ),
-            const Spacer(),
-            Text(
-              '${orders.length} ordem(ns)',
-              style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                color: CostaNorteBrand.mutedInk,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 }
@@ -2717,12 +1956,15 @@ class _MaintenanceLocationCard extends StatelessWidget {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
           color: selected
-              ? CostaNorteBrand.foam
+              ? const Color(0xFFFFF8E7)
+              : dayOrders.isNotEmpty
+              ? CostaNorteBrand.mint
               : visualState == _MaintenanceLocationVisualState.neutral
               ? Colors.white
               : Colors.white,
           border: Border.all(
-            color: selected ? CostaNorteBrand.royalBlue : palette.borderColor,
+            color: selected ? CostaNorteBrand.goldDeep : palette.borderColor,
+            width: selected ? 1.4 : 1,
           ),
         ),
         child: Column(
@@ -4507,105 +3749,6 @@ class _LocationHistoryDialog extends StatelessWidget {
       ),
     );
   }
-}
-
-class _SummaryDetailsDialog extends StatelessWidget {
-  const _SummaryDetailsDialog({required this.detail});
-
-  final MaintenanceSummaryDetail detail;
-
-  @override
-  Widget build(BuildContext context) {
-    return AppDialogShell(
-      maxWidth: 940,
-      maxHeight: 680,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Text(detail.label, style: Theme.of(context).textTheme.headlineSmall),
-          const SizedBox(height: 12),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              _summaryTag('Total', '${detail.summary.totalCount}'),
-              _summaryTag('Abertas', '${detail.summary.openCount}'),
-              _summaryTag('Agendadas', '${detail.summary.scheduledCount}'),
-              _summaryTag('Em andamento', '${detail.summary.inProgressCount}'),
-              _summaryTag('Concluidas', '${detail.summary.completedCount}'),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Expanded(
-            child: detail.items.isEmpty
-                ? _emptyScrollableBox(
-                    'Nenhuma ordem encontrada para esse grupo.',
-                  )
-                : ListView.separated(
-                    itemCount: detail.items.length,
-                    separatorBuilder: (_, _) => const SizedBox(height: 10),
-                    itemBuilder: (BuildContext context, int index) {
-                      final MaintenanceSummaryDetailItem item =
-                          detail.items[index];
-                      return ListTile(
-                        tileColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(16),
-                          side: const BorderSide(color: CostaNorteBrand.line),
-                        ),
-                        title: Text(item.title),
-                        subtitle: Text(
-                          '${item.locationLabel} · ${item.providerName ?? 'Sem responsavel'} · ${item.status.label}',
-                        ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: <Widget>[
-                            Text(item.priority.label),
-                            Text(
-                              item.businessPriority.label,
-                              style: Theme.of(context).textTheme.bodySmall,
-                            ),
-                          ],
-                        ),
-                      );
-                    },
-                  ),
-          ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Fechar'),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-Widget _summaryTag(String label, String value) {
-  return Container(
-    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-    decoration: BoxDecoration(
-      borderRadius: BorderRadius.circular(16),
-      color: CostaNorteBrand.mist,
-      border: Border.all(color: CostaNorteBrand.line),
-    ),
-    child: RichText(
-      text: TextSpan(
-        style: const TextStyle(color: CostaNorteBrand.ink),
-        children: <InlineSpan>[
-          TextSpan(text: '$label: '),
-          TextSpan(
-            text: value,
-            style: const TextStyle(fontWeight: FontWeight.w700),
-          ),
-        ],
-      ),
-    ),
-  );
 }
 
 Widget _emptyScrollableBox(String message) {

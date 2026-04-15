@@ -48,14 +48,11 @@ class ShellPage extends StatefulWidget {
 
 class _ShellPageState extends State<ShellPage> {
   late AppSection _selectedSection;
+  final Set<AppSection> _loadedSections = <AppSection>{};
   late final MassageBookingPageController _massageBookingPageController;
   late final TennisRentalPageController _tennisRentalPageController;
   late final ToursTravelPageController _toursTravelPageController;
   late final MaintenancePageController _maintenancePageController;
-  late final Widget _massageBookingPage;
-  late final Widget _tennisRentalPage;
-  late final Widget _toursTravelPage;
-  late final Widget _maintenancePage;
   bool _redirectingToLogin = false;
   MassageBookingSection _selectedMassageSection =
       MassageBookingSection.selectedDay;
@@ -72,26 +69,7 @@ class _ShellPageState extends State<ShellPage> {
     _tennisRentalPageController = TennisRentalPageController();
     _toursTravelPageController = ToursTravelPageController();
     _maintenancePageController = MaintenancePageController();
-    _massageBookingPage = MassageBookingPage(
-      massageAppService: widget.massageAppService,
-      controller: _massageBookingPageController,
-      onSectionChanged: _handleMassageSectionChanged,
-    );
-    _tennisRentalPage = TennisRentalPage(
-      courtAppService: widget.courtAppService,
-      controller: _tennisRentalPageController,
-      onSectionChanged: _handleTennisSectionChanged,
-    );
-    _toursTravelPage = ToursTravelPage(
-      toursAppService: widget.toursAppService,
-      controller: _toursTravelPageController,
-      onSectionChanged: _handleToursSectionChanged,
-    );
-    _maintenancePage = MaintenancePage(
-      maintenanceAppService: widget.maintenanceAppService,
-      controller: _maintenancePageController,
-      onSectionChanged: _handleMaintenanceSectionChanged,
-    );
+    _ensureSectionLoaded(_selectedSection);
     widget.sessionController.addListener(_handleSessionChanged);
   }
 
@@ -103,6 +81,7 @@ class _ShellPageState extends State<ShellPage> {
       widget.sessionController.addListener(_handleSessionChanged);
     }
     if (oldWidget.section != widget.section) {
+      _ensureSectionLoaded(widget.section);
       _selectedSection = widget.section;
     }
   }
@@ -203,16 +182,51 @@ class _ShellPageState extends State<ShellPage> {
   Widget _buildContent() {
     return IndexedStack(
       index: _selectedSection.index,
-      children: <Widget>[
-        _massageBookingPage,
-        _tennisRentalPage,
-        _toursTravelPage,
-        _maintenancePage,
-        SingleChildScrollView(
-          child: SettingsPage(session: widget.sessionController.session),
-        ),
-      ],
+      children: AppSection.values
+          .map(_buildSectionPage)
+          .toList(growable: false),
     );
+  }
+
+  Widget _buildSectionPage(AppSection section) {
+    if (!_loadedSections.contains(section)) {
+      return const SizedBox.shrink();
+    }
+
+    switch (section) {
+      case AppSection.massageBooking:
+        return MassageBookingPage(
+          massageAppService: widget.massageAppService,
+          controller: _massageBookingPageController,
+          onSectionChanged: _handleMassageSectionChanged,
+        );
+      case AppSection.tennisRental:
+        return TennisRentalPage(
+          courtAppService: widget.courtAppService,
+          controller: _tennisRentalPageController,
+          onSectionChanged: _handleTennisSectionChanged,
+        );
+      case AppSection.toursTravel:
+        return ToursTravelPage(
+          toursAppService: widget.toursAppService,
+          controller: _toursTravelPageController,
+          onSectionChanged: _handleToursSectionChanged,
+        );
+      case AppSection.maintenance:
+        return MaintenancePage(
+          maintenanceAppService: widget.maintenanceAppService,
+          controller: _maintenancePageController,
+          onSectionChanged: _handleMaintenanceSectionChanged,
+        );
+      case AppSection.settings:
+        return SingleChildScrollView(
+          child: SettingsPage(session: widget.sessionController.session),
+        );
+    }
+  }
+
+  void _ensureSectionLoaded(AppSection section) {
+    _loadedSections.add(section);
   }
 
   void _goToSection(AppSection section) {
@@ -221,6 +235,7 @@ class _ShellPageState extends State<ShellPage> {
     }
 
     setState(() {
+      _ensureSectionLoaded(section);
       _selectedSection = section;
     });
   }
@@ -228,6 +243,7 @@ class _ShellPageState extends State<ShellPage> {
   Future<void> _goToTennisSection(TennisRentalSection section) async {
     if (_selectedSection != AppSection.tennisRental) {
       setState(() {
+        _ensureSectionLoaded(AppSection.tennisRental);
         _selectedSection = AppSection.tennisRental;
         _selectedTennisSection = section;
       });
@@ -246,6 +262,7 @@ class _ShellPageState extends State<ShellPage> {
   Future<void> _goToMassageSection(MassageBookingSection section) async {
     if (_selectedSection != AppSection.massageBooking) {
       setState(() {
+        _ensureSectionLoaded(AppSection.massageBooking);
         _selectedSection = AppSection.massageBooking;
         _selectedMassageSection = section;
       });
@@ -264,6 +281,7 @@ class _ShellPageState extends State<ShellPage> {
   Future<void> _goToToursSection(ToursTravelSection section) async {
     if (_selectedSection != AppSection.toursTravel) {
       setState(() {
+        _ensureSectionLoaded(AppSection.toursTravel);
         _selectedSection = AppSection.toursTravel;
         _selectedToursSection = section;
       });
@@ -282,6 +300,7 @@ class _ShellPageState extends State<ShellPage> {
   Future<void> _goToMaintenanceSection(MaintenanceSection section) async {
     if (_selectedSection != AppSection.maintenance) {
       setState(() {
+        _ensureSectionLoaded(AppSection.maintenance);
         _selectedSection = AppSection.maintenance;
         _selectedMaintenanceSection = section;
       });
@@ -1583,12 +1602,6 @@ String _labelForMaintenanceSection(MaintenanceSection section) {
   switch (section) {
     case MaintenanceSection.operationalSummary:
       return 'Resumo por local';
-    case MaintenanceSection.selectedDay:
-      return 'Dia selecionado';
-    case MaintenanceSection.monthlyAgenda:
-      return 'Agenda mensal';
-    case MaintenanceSection.summary:
-      return 'Resumo do periodo';
   }
 }
 
@@ -1596,11 +1609,5 @@ IconData _iconForMaintenanceSection(MaintenanceSection section) {
   switch (section) {
     case MaintenanceSection.operationalSummary:
       return Icons.grid_view_rounded;
-    case MaintenanceSection.selectedDay:
-      return Icons.today_rounded;
-    case MaintenanceSection.monthlyAgenda:
-      return Icons.calendar_month_rounded;
-    case MaintenanceSection.summary:
-      return Icons.analytics_rounded;
   }
 }

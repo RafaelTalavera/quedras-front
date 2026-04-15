@@ -13,6 +13,7 @@ final class CostaNorteBrand {
   static const Color sand = Color(0xFFFFF7E1);
   static const Color mist = Color(0xFFF3F7FE);
   static const Color foam = Color(0xFFE7EFFC);
+  static const Color mint = Color(0xFFE8F7EE);
   static const Color line = Color(0x1F4F75B3);
   static const Color success = Color(0xFF2F7D32);
   static const Color error = Color(0xFFB3261E);
