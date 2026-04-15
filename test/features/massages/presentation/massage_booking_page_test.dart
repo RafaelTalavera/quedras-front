@@ -30,9 +30,9 @@ void main() {
         find.widgetWithText(TextFormField, 'Valor'),
         '250',
       );
-      final Finder attendanceField = find.byType(
-        DropdownButtonFormField<String>,
-      ).at(1);
+      final Finder attendanceField = find
+          .byType(DropdownButtonFormField<String>)
+          .at(1);
       await tester.ensureVisible(attendanceField);
       await tester.tap(attendanceField);
       await tester.pumpAndSettle();
@@ -430,6 +430,8 @@ final class _FakeMassageAppService implements MassageAppService {
   @override
   Future<List<MassageBooking>> listBookings({
     String? bookingDate,
+    String? dateFrom,
+    String? dateTo,
     String? clientName,
     String? guestReference,
     int? providerId,

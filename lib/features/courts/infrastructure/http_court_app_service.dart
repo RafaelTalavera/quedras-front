@@ -158,12 +158,20 @@ final class HttpCourtAppService implements CourtAppService {
   @override
   Future<List<CourtBooking>> listBookings({
     String? bookingDate,
+    String? dateFrom,
+    String? dateTo,
     CourtCustomerType? customerType,
     bool? paid,
   }) async {
     final Map<String, String> query = <String, String>{};
     if (bookingDate != null && bookingDate.isNotEmpty) {
       query['bookingDate'] = bookingDate;
+    }
+    if (dateFrom != null && dateFrom.isNotEmpty) {
+      query['dateFrom'] = dateFrom;
+    }
+    if (dateTo != null && dateTo.isNotEmpty) {
+      query['dateTo'] = dateTo;
     }
     if (customerType != null) {
       query['customerType'] = customerType.apiValue;

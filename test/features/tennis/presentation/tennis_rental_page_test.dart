@@ -57,6 +57,8 @@ final class _FakeCourtAppService implements CourtAppService {
   @override
   Future<List<CourtBooking>> listBookings({
     String? bookingDate,
+    String? dateFrom,
+    String? dateTo,
     CourtCustomerType? customerType,
     bool? paid,
   }) async {

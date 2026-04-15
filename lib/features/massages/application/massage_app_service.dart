@@ -34,6 +34,8 @@ abstract interface class MassageAppService {
 
   Future<List<MassageBooking>> listBookings({
     String? bookingDate,
+    String? dateFrom,
+    String? dateTo,
     String? clientName,
     String? guestReference,
     int? providerId,

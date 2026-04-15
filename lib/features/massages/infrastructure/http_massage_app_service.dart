@@ -33,7 +33,9 @@ final class HttpMassageAppService implements MassageAppService {
     if (!response.isSuccess) {
       throw StateError(_extractApiErrorMessage(response));
     }
-    return MassageProviderDetailReport.fromJson(_asMap(_tryDecode(response.body)));
+    return MassageProviderDetailReport.fromJson(
+      _asMap(_tryDecode(response.body)),
+    );
   }
 
   @override
@@ -84,6 +86,8 @@ final class HttpMassageAppService implements MassageAppService {
   @override
   Future<List<MassageBooking>> listBookings({
     String? bookingDate,
+    String? dateFrom,
+    String? dateTo,
     String? clientName,
     String? guestReference,
     int? providerId,
@@ -92,6 +96,12 @@ final class HttpMassageAppService implements MassageAppService {
     final Map<String, String> query = <String, String>{};
     if (bookingDate != null && bookingDate.isNotEmpty) {
       query['bookingDate'] = bookingDate;
+    }
+    if (dateFrom != null && dateFrom.isNotEmpty) {
+      query['dateFrom'] = dateFrom;
+    }
+    if (dateTo != null && dateTo.isNotEmpty) {
+      query['dateTo'] = dateTo;
     }
     if (clientName != null && clientName.trim().isNotEmpty) {
       query['clientName'] = clientName.trim();

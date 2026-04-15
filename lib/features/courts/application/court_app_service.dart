@@ -28,6 +28,8 @@ abstract interface class CourtAppService {
 
   Future<List<CourtBooking>> listBookings({
     String? bookingDate,
+    String? dateFrom,
+    String? dateTo,
     CourtCustomerType? customerType,
     bool? paid,
   });
