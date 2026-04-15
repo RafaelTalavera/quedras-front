@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -109,6 +110,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   late DateTime _reportEndDate;
   bool _loading = true;
   bool _refreshingData = false;
+  bool _loadingProviders = false;
   bool _loadingReport = false;
   bool _savingBooking = false;
   bool _savingProviders = false;
@@ -260,14 +262,19 @@ class _MassageBookingPageState extends State<MassageBookingPage>
               runSpacing: 12,
               children: <Widget>[
                 FilledButton.icon(
-                  onPressed: _savingBooking ? null : _openCreateBookingDialog,
+                  onPressed: _savingBooking || _loadingProviders
+                      ? null
+                      : _openCreateBookingDialog,
                   icon: const Icon(Icons.add_circle_outline_rounded),
                   label: Text(
                     _savingBooking ? 'Salvando...' : 'Lancar atendimento',
                   ),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _savingBooking || _dayBookings.isEmpty
+                  onPressed:
+                      _savingBooking ||
+                          _loadingProviders ||
+                          _dayBookings.isEmpty
                       ? null
                       : _openEditBookingPicker,
                   icon: const Icon(Icons.edit_rounded),
@@ -300,7 +307,9 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                   label: const Text('Cancelar atendimento'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _savingProviders ? null : _openProviderDialog,
+                  onPressed: _savingProviders || _loadingProviders
+                      ? null
+                      : _openProviderDialog,
                   icon: const Icon(Icons.groups_2_rounded),
                   label: Text(_savingProviders ? 'Salvando...' : 'Prestadores'),
                 ),
@@ -436,27 +445,18 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       _errorMessage = null;
     });
     try {
-      final List<MassageProvider> providers = await widget.massageAppService
-          .listProviders();
-      final List<MassageBooking> bookings = await widget.massageAppService
-          .listBookings();
-      final List<MassageProviderSummary> providerSummaries = await widget
+      final Future<List<MassageBooking>> bookingsFuture = widget
           .massageAppService
-          .listProviderSummaryReport(
-            dateFrom: _formatDateApi(_reportStartDate),
-            dateTo: _formatDateApi(_reportEndDate),
+          .listBookings(
+            dateFrom: _formatDateApi(_monthStart(_selectedDate)),
+            dateTo: _formatDateApi(_monthEnd(_selectedDate)),
           );
+      final List<MassageBooking> bookings = await bookingsFuture;
       if (!mounted) {
         return;
       }
       setState(() {
-        _providers = providers;
         _bookings = bookings;
-        _providerSummaries = providerSummaries;
-        _selectedSummaryDetailKey = null;
-        _selectedSummaryProviderId = null;
-        _reportErrorMessage = null;
-        _syncSelectedProviderAndTherapist();
         _selectedTime = _recommendedTimeFor(
           _selectedDate,
           _selectedTherapistId,
@@ -464,6 +464,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         _loading = false;
         _refreshingData = false;
       });
+      unawaited(_loadDeferredData());
     } catch (error) {
       if (!mounted) {
         return;
@@ -476,9 +477,44 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     }
   }
 
+  Future<void> _loadDeferredData() async {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _loadingProviders = true;
+    });
+    unawaited(_reloadProviderReport());
+    try {
+      final List<MassageProvider> providers = await widget.massageAppService
+          .listProviders();
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _providers = providers;
+        _syncSelectedProviderAndTherapist();
+        _selectedTime = _recommendedTimeFor(
+          _selectedDate,
+          _selectedTherapistId,
+        );
+        _loadingProviders = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadingProviders = false;
+        _errorMessage = error.toString().replaceFirst('Bad state: ', '');
+      });
+    }
+  }
+
   bool get _canRefreshPage =>
       !_loading &&
       !_refreshingData &&
+      !_loadingProviders &&
       !_savingBooking &&
       !_savingProviders &&
       !_loadingReport;
@@ -488,6 +524,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     return mounted &&
         !_loading &&
         !_refreshingData &&
+        !_loadingProviders &&
         !_savingBooking &&
         !_savingProviders &&
         !_loadingReport &&
@@ -500,6 +537,25 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     }
     await _load(showLoading: false);
   }
+
+  Future<void> _setSelectedDate(DateTime date, {int? monthOverride}) async {
+    final DateTime normalizedDate = DateTime(date.year, date.month, date.day);
+    final bool monthChanged =
+        normalizedDate.year != _selectedDate.year ||
+        normalizedDate.month != _selectedDate.month;
+    setState(() {
+      _selectedDate = normalizedDate;
+      _selectedMonth = monthOverride ?? (normalizedDate.month - 1);
+      _selectedTime = _recommendedTimeFor(normalizedDate, _selectedTherapistId);
+    });
+    if (monthChanged) {
+      await _load(showLoading: false);
+    }
+  }
+
+  DateTime _monthStart(DateTime date) => DateTime(date.year, date.month, 1);
+
+  DateTime _monthEnd(DateTime date) => DateTime(date.year, date.month + 1, 0);
 
   Widget _buildSummarySection(BuildContext context) {
     return Container(
@@ -1052,14 +1108,9 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                         value + 1,
                         1,
                       );
-                      setState(() {
-                        _selectedMonth = value;
-                        _selectedDate = nextDate;
-                        _selectedTime = _recommendedTimeFor(
-                          nextDate,
-                          _selectedTherapistId,
-                        );
-                      });
+                      unawaited(
+                        _setSelectedDate(nextDate, monthOverride: value),
+                      );
                     },
                   ),
                 ),
@@ -1104,15 +1155,9 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                       date: date,
                       selected: _sameDay(date, _selectedDate),
                       bookings: _bookingsFor(date),
-                      onTap: () {
-                        setState(() {
-                          _selectedDate = date;
-                          _selectedTime = _recommendedTimeFor(
-                            date,
-                            _selectedTherapistId,
-                          );
-                        });
-                      },
+                      onTap: () => unawaited(
+                        _setSelectedDate(date, monthOverride: date.month - 1),
+                      ),
                       onDoubleTap: () => _openCalendarDayActions(date),
                     );
                   },
@@ -1407,6 +1452,9 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     });
 
     try {
+      final bool monthChanged =
+          bookingDraft.date.year != _selectedDate.year ||
+          bookingDraft.date.month != _selectedDate.month;
       final MassageBooking created = await widget.massageAppService
           .createBooking(
             CreateMassageBookingModel(
@@ -1456,6 +1504,9 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         title: 'Atendimento salvo',
         message: 'Atendimento salvo para ${bookingDraft.clientName}.',
       );
+      if (monthChanged) {
+        await _load(showLoading: false);
+      }
       await _reloadProviderReport();
     } catch (error) {
       if (!mounted) {
@@ -1497,6 +1548,9 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     });
 
     try {
+      final bool monthChanged =
+          bookingDraft.date.year != _selectedDate.year ||
+          bookingDraft.date.month != _selectedDate.month;
       final MassageBooking updated = await widget.massageAppService
           .updateBooking(
             original.id,
@@ -1548,6 +1602,9 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         title: 'Atendimento atualizado',
         message: 'Atendimento atualizado para ${bookingDraft.clientName}.',
       );
+      if (monthChanged) {
+        await _load(showLoading: false);
+      }
       await _reloadProviderReport();
     } catch (error) {
       if (!mounted) {
