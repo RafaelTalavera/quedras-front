@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import '../../../core/localization/pt_br_error_translator.dart';
 import '../../../core/network/api_client.dart';
@@ -11,8 +10,8 @@ final class HttpCourtAppService implements CourtAppService {
   HttpCourtAppService({required ApiClient apiClient}) : _apiClient = apiClient;
 
   static const Map<String, String> _jsonHeaders = <String, String>{
-    HttpHeaders.contentTypeHeader: 'application/json',
-    HttpHeaders.acceptHeader: 'application/json',
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
   };
 
   final ApiClient _apiClient;
@@ -293,16 +292,14 @@ final class HttpCourtAppService implements CourtAppService {
   ) async {
     try {
       return await request();
-    } on SocketException {
-      throw StateError(
-        'Nao foi possivel conectar ao backend local. Verifique o servidor e a rede interna.',
-      );
     } on TimeoutException {
-      throw StateError('Tempo esgotado ao conectar ao backend local.');
-    } on HttpException {
-      throw StateError('Erro HTTP de transporte ao consultar o backend local.');
+      throw StateError('Tempo esgotado ao conectar ao backend configurado.');
     } on FormatException catch (error) {
-      throw StateError('Resposta invalida do backend local: ${error.message}');
+      throw StateError('Resposta invalida do backend configurado: ${error.message}');
+    } on Exception {
+      throw StateError(
+        'Nao foi possivel conectar ao backend configurado. Verifique a URL e a conectividade.',
+      );
     }
   }
 
@@ -317,7 +314,7 @@ final class HttpCourtAppService implements CourtAppService {
         }
       }
     }
-    return 'O backend local retornou HTTP ${response.statusCode}.';
+    return 'O backend configurado retornou HTTP ${response.statusCode}.';
   }
 
   static Object? _tryDecode(String rawBody) {

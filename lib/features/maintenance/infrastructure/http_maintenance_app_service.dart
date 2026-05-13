@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import '../../../core/localization/pt_br_error_translator.dart';
 import '../../../core/network/api_client.dart';
@@ -13,8 +12,8 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
     : _apiClient = apiClient;
 
   static const Map<String, String> _jsonHeaders = <String, String>{
-    HttpHeaders.contentTypeHeader: 'application/json',
-    HttpHeaders.acceptHeader: 'application/json',
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
   };
 
   final ApiClient _apiClient;
@@ -440,25 +439,21 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
   ) async {
     try {
       return await request();
-    } on SocketException {
-      throw const ApiException(
-        'Nao foi possivel conectar ao backend local. Verifique o servidor e a rede interna.',
-        kind: ApiErrorKind.network,
-      );
     } on TimeoutException {
       throw const ApiException(
-        'Tempo esgotado ao conectar ao backend local.',
+        'Tempo esgotado ao conectar ao backend configurado.',
         kind: ApiErrorKind.timeout,
-      );
-    } on HttpException {
-      throw const ApiException(
-        'Erro HTTP de transporte ao consultar o backend local.',
-        kind: ApiErrorKind.transport,
       );
     } on FormatException catch (error) {
       throw ApiException(
-        'Resposta invalida do backend local: ${error.message}',
+        'Resposta invalida do backend configurado: ${error.message}',
         kind: ApiErrorKind.invalidResponse,
+        cause: error,
+      );
+    } on Exception catch (error) {
+      throw ApiException(
+        'Nao foi possivel conectar ao backend configurado. Verifique a URL e a conectividade.',
+        kind: ApiErrorKind.network,
         cause: error,
       );
     }
@@ -527,7 +522,7 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
         return rawBody;
       }
     }
-    return 'O backend local retornou HTTP ${response.statusCode}.';
+    return 'O backend configurado retornou HTTP ${response.statusCode}.';
   }
 
   static Object? _tryDecode(String rawBody) {

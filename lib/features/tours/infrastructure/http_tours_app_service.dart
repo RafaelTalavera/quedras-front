@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:io';
 
 import '../../../core/localization/pt_br_error_translator.dart';
 import '../../../core/network/api_client.dart';
@@ -12,8 +11,8 @@ final class HttpToursAppService implements ToursAppService {
   HttpToursAppService({required ApiClient apiClient}) : _apiClient = apiClient;
 
   static const Map<String, String> _jsonHeaders = <String, String>{
-    HttpHeaders.contentTypeHeader: 'application/json',
-    HttpHeaders.acceptHeader: 'application/json',
+    'Content-Type': 'application/json',
+    'Accept': 'application/json',
   };
 
   final ApiClient _apiClient;
@@ -269,34 +268,26 @@ final class HttpToursAppService implements ToursAppService {
       return response;
     } on ApiException {
       rethrow;
-    } on SocketException catch (error) {
-      throw ApiException(
-        'Nao foi possivel conectar ao backend local. Verifique o servidor e a rede interna.',
-        kind: ApiErrorKind.network,
-        method: method,
-        path: path,
-        cause: error,
-      );
     } on TimeoutException catch (error) {
       throw ApiException(
-        'Tempo esgotado ao conectar ao backend local.',
+        'Tempo esgotado ao conectar ao backend configurado.',
         kind: ApiErrorKind.timeout,
-        method: method,
-        path: path,
-        cause: error,
-      );
-    } on HttpException catch (error) {
-      throw ApiException(
-        'Erro HTTP de transporte ao consultar o backend local.',
-        kind: ApiErrorKind.transport,
         method: method,
         path: path,
         cause: error,
       );
     } on FormatException catch (error) {
       throw ApiException(
-        'Resposta invalida do backend local: ${error.message}',
+        'Resposta invalida do backend configurado: ${error.message}',
         kind: ApiErrorKind.invalidResponse,
+        method: method,
+        path: path,
+        cause: error,
+      );
+    } on Exception catch (error) {
+      throw ApiException(
+        'Nao foi possivel conectar ao backend configurado. Verifique a URL e a conectividade.',
+        kind: ApiErrorKind.network,
         method: method,
         path: path,
         cause: error,
@@ -316,7 +307,7 @@ final class HttpToursAppService implements ToursAppService {
         return PtBrErrorTranslator.translate(rawBody);
       }
     }
-    return 'O backend local retornou HTTP ${response.statusCode}.';
+    return 'O backend configurado retornou HTTP ${response.statusCode}.';
   }
 
   static Object? _tryDecode(String rawBody) {

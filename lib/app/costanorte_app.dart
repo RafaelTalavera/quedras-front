@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../core/config/backend_config.dart';
 import '../core/network/api_client.dart';
+import '../core/network/api_client_factory.dart';
 import '../core/network/authorized_api_client.dart';
-import '../core/network/local_http_client.dart';
 import '../core/theme/costa_norte_brand.dart';
 import '../features/auth/application/auth_app_service.dart';
 import '../features/auth/application/session_controller.dart';
@@ -70,7 +70,7 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
     super.initState();
     _sessionController = widget._sessionController ?? SessionController();
     _rawApiClient =
-        widget._apiClient ?? LocalHttpClient(baseUrl: BackendConfig.apiBaseUrl);
+        widget._apiClient ?? createApiClient(baseUrl: BackendConfig.apiBaseUrl);
     _authorizedApiClient = AuthorizedApiClient(
       delegate: _rawApiClient,
       authorizationHeaderProvider: () => _sessionController.authorizationHeader,

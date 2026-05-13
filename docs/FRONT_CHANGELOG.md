@@ -1,5 +1,40 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-05-13 | Infra web | Bootstrap web, cliente HTTP de navegador y backend configurable por origen o URL publicada
+- Componente afectado: Frontend (`core/network`, configuracion base, dashboard tecnico, documentacion de ejecucion)
+- Archivos tocados:
+  - `lib/app/costanorte_app.dart`
+  - `lib/core/config/backend_config.dart`
+  - `lib/core/config/default_api_base_url.dart`
+  - `lib/core/config/default_api_base_url_io.dart`
+  - `lib/core/config/default_api_base_url_web.dart`
+  - `lib/core/network/api_client_factory.dart`
+  - `lib/core/network/api_client_factory_io.dart`
+  - `lib/core/network/api_client_factory_web.dart`
+  - `lib/core/network/browser_http_client.dart`
+  - `lib/core/network/authorized_api_client.dart`
+  - `lib/features/auth/infrastructure/http_auth_app_service.dart`
+  - `lib/features/courts/infrastructure/http_court_app_service.dart`
+  - `lib/features/dashboard/presentation/dashboard_page.dart`
+  - `lib/features/maintenance/infrastructure/http_maintenance_app_service.dart`
+  - `lib/features/massages/infrastructure/http_massage_app_service.dart`
+  - `lib/features/reservations/infrastructure/http_reservation_app_service.dart`
+  - `lib/features/tours/infrastructure/http_tours_app_service.dart`
+  - `web/index.html`
+  - `web/manifest.json`
+  - `README.md`
+  - `docs/INSTALACION_FRONTEND_HOTEL.md`
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: permitir despliegue web del frontend sin depender de `localhost`, dejando la resolucion del backend alineada al origen publicado o a una URL explicita por `--dart-define`.
+- Impacto funcional:
+  - el proyecto ya incluye plataforma `web/` y compila para navegador
+  - la app crea un cliente HTTP especifico para browser y conserva cliente nativo para Windows
+  - en web, si no se informa `COSTANORTE_API_BASE_URL`, el frontend consume por defecto `/api/v1` sobre el mismo origen publicado
+  - si el backend vive en otro dominio o path, el frontend acepta `COSTANORTE_API_BASE_URL=https://.../api/v1`
+  - mensajes operativos y pantalla tecnica dejan de hablar de `backend local` y pasan a `backend configurado`
+  - validacion ejecutada: `flutter analyze` OK y `flutter build web --debug` OK
+
 ## 2026-04-01 | UX operativa | Share de texto en Windows aislado de PDFs previos y compatibilidad de tests con ApiClient.delete
 - Componente afectado: Frontend (`core/feedback` + runner de Windows + tests de red)
 - Archivos tocados:

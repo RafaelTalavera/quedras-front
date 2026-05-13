@@ -2,20 +2,29 @@
 
 ## Estado general frontend
 - Proyecto: COSTANORTE Frontend
-- Estado: En progreso (snapshot operativo post Hito 12, con `Massagens` y `Quadras` ya en uso local)
-- Ultimo hito trabajado: Post Hito 12 - consolidacion comercial, `Massagens` por prestador/masajista y operacion real de `Quadras`
-- Ultima actualizacion: 2026-03-24
+- Estado: En progreso (snapshot operativo post Hito 12, con soporte inicial de despliegue web habilitado)
+- Ultimo hito trabajado: Infra web y resolucion de backend por origen publicado o URL configurada
+- Ultima actualizacion: 2026-05-13
 - Fuente de verdad global: `C:/Users/Public/Documents/Proyectos/quadras/docs/TABLERO_PROGRESO.md`
-- Proximo paso frontend: pasar a una etapa de mejora sobre experiencia operativa, consistencia de mensajes y cierre de contratos backend pendientes.
+- Proximo paso frontend: completar comportamiento web en flujos de archivos/PDF y validar despliegue real contra backend publicado.
 
 ## Snapshot actual de desarrollo
-- Fecha de corte: 2026-03-24
+- Fecha de corte: 2026-05-13
 - `Quadras` ya opera con backend autenticado real para listar reservas, lanzar reservas, informar pago, cancelar y administrar tarifas/materiales.
 - Se validaron lanzamientos de prueba persistidos en base para `Hospede`, `Externo` y `VIP` el dia `2026-03-25`.
 - `Massagens` ya opera con relacion `prestador -> masajista`, resumen por prestador y acciones operativas integradas en la pantalla principal.
 - `Tours e Viagens` ya consume el resumen estandar de periodo desde backend y abre detalle por fila en ventana modal.
 - La autenticacion JWT sigue en memoria y protege modulos internos del sistema.
-- El frente inmediato de mejora es endurecer validaciones y UX operacional, en especial mensajes al usuario, reglas de agenda y alineacion frontend-backend donde aun hay diferencias.
+- El frontend ya compila para web y resuelve el backend publicado por mismo origen (`/api/v1`) o por `COSTANORTE_API_BASE_URL`.
+- El frente inmediato de mejora es endurecer validaciones y UX operacional, y adaptar para web los flujos que aun dependen de archivos locales o temporales.
+
+## Actualizacion Infra Web
+- Fecha: 2026-05-13
+- El proyecto ya incluye bootstrap oficial de Flutter Web.
+- El arranque usa una fabrica de `ApiClient` por plataforma.
+- En navegador, la base URL por defecto es relativa al origen publicado: `/api/v1`.
+- Si el backend publicado vive fuera del mismo origen, el despliegue debe informar `COSTANORTE_API_BASE_URL`.
+- Validaciones ejecutadas en esta fase: `flutter analyze`, `flutter build web --debug`.
 
 ## Hitos frontend
 | Hito | Nombre | Estado frontend | Tests | Documentacion | Commit | Observaciones |
@@ -65,6 +74,8 @@
 - Documento de detalle: `docs/MASSAGES_SUMMARY_REPORT_PLAN.md`.
 
 ## Pendientes inmediatos frontend
+- Adaptar en web los flujos de exportacion PDF, archivos temporales y descargas para `Massagens`, `Quadras` y `Manutencao`.
+- Validar funcionalmente el despliegue web contra backend real con mismo origen o CORS habilitado.
 - Cerrar y validar contrato backend especifico para `Massagens` con estructura real de `therapists`, `status`, edicion, cancelacion y auditoria por usuario.
 - Validar funcionalmente el nuevo resumen estandar de `Tours e Viagens` contra datos reales del hotel.
 - Verificar en backend que JWT quede persistido como autor real en `createdBy/updatedBy/cancelledBy`.

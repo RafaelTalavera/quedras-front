@@ -1,9 +1,9 @@
-import 'dart:io';
-
 import 'api_client.dart';
 
 typedef AuthorizationHeaderProvider = String? Function();
 typedef UnauthorizedCallback = void Function();
+
+const String _authorizationHeader = 'Authorization';
 
 final class AuthorizedApiClient implements ApiClient {
   AuthorizedApiClient({
@@ -88,14 +88,13 @@ final class AuthorizedApiClient implements ApiClient {
       return headers;
     }
 
-    if (headers != null &&
-        headers.containsKey(HttpHeaders.authorizationHeader)) {
+    if (headers != null && headers.containsKey(_authorizationHeader)) {
       return headers;
     }
 
     return <String, String>{
       ...?headers,
-      HttpHeaders.authorizationHeader: authorization,
+      _authorizationHeader: authorization,
     };
   }
 }
