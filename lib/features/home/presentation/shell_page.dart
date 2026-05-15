@@ -1524,7 +1524,7 @@ String _labelForMassageSection(MassageBookingSection section) {
     case MassageBookingSection.monthlyAgenda:
       return 'Agenda mensal';
     case MassageBookingSection.monthlySummary:
-      return 'Resumo do mes';
+      return 'Periodo';
   }
 }
 
@@ -1561,7 +1561,7 @@ String _labelForTennisSection(TennisRentalSection section) {
     case TennisRentalSection.monthlyAgenda:
       return 'Agenda mensal';
     case TennisRentalSection.summary:
-      return 'Resumo do periodo';
+      return 'Periodo';
   }
 }
 
@@ -1583,7 +1583,7 @@ String _labelForToursSection(ToursTravelSection section) {
     case ToursTravelSection.monthlyAgenda:
       return 'Agenda mensal';
     case ToursTravelSection.summary:
-      return 'Resumo do periodo';
+      return 'Periodo';
   }
 }
 

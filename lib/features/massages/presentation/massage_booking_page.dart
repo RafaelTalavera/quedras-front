@@ -93,9 +93,6 @@ class MassageBookingPage extends StatefulWidget {
 class _MassageBookingPageState extends State<MassageBookingPage>
     with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
-  final GlobalKey _selectedDaySectionKey = GlobalKey();
-  final GlobalKey _monthlyAgendaSectionKey = GlobalKey();
-  final GlobalKey _monthlySummarySectionKey = GlobalKey();
   final GlobalKey _summaryKey = GlobalKey();
 
   late final AutoRefreshController _autoRefreshController;
@@ -110,17 +107,22 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   late DateTime _reportEndDate;
   bool _loading = true;
   bool _refreshingData = false;
+  bool _loadingAgenda = false;
   bool _loadingProviders = false;
   bool _loadingReport = false;
   bool _savingBooking = false;
   bool _savingProviders = false;
+  bool _providersLoaded = false;
   int? _processingBookingId;
   int? _sharingBookingId;
   String? _errorMessage;
+  String? _agendaErrorMessage;
   String? _reportErrorMessage;
   String? _selectedSummaryDetailKey;
   int? _selectedSummaryProviderId;
   MassageBookingSection _currentSection = MassageBookingSection.selectedDay;
+  String? _loadedAgendaKey;
+  String? _loadedReportKey;
 
   String _selectedTreatment = _treatmentTypes.first;
   int? _selectedProviderId;
@@ -133,7 +135,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.controller?._attach(this);
-    _scrollController.addListener(_handleScroll);
     _selectedDate = DateTime.now();
     _selectedMonth = _selectedDate.month - 1;
     _reportStartDate = DateTime(_selectedDate.year, _selectedDate.month, 1);
@@ -146,16 +147,11 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         DefaultMassageProviderReportPdfExporter();
     _autoRefreshController = AutoRefreshController(
       interval: AppRuntimeConfig.operationalRefreshInterval,
-      onRefresh: () => _load(showLoading: false),
+      onRefresh: () => _refreshActiveData(showLoading: false),
       canRefresh: _canAutoRefresh,
     );
     _autoRefreshController.start();
     _load();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _notifyCurrentSection();
-      }
-    });
   }
 
   @override
@@ -172,9 +168,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     WidgetsBinding.instance.removeObserver(this);
     _autoRefreshController.dispose();
     widget.controller?._detach(this);
-    _scrollController
-      ..removeListener(_handleScroll)
-      ..dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -182,7 +176,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _autoRefreshController.handleLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      _load(showLoading: false);
+      unawaited(_refreshActiveData(showLoading: false));
     }
   }
 
@@ -262,56 +256,39 @@ class _MassageBookingPageState extends State<MassageBookingPage>
               runSpacing: 12,
               children: <Widget>[
                 FilledButton.icon(
-                  onPressed: _savingBooking || _loadingProviders
-                      ? null
-                      : _openCreateBookingDialog,
+                  onPressed: _savingBooking ? null : _openCreateBookingDialog,
                   icon: const Icon(Icons.add_circle_outline_rounded),
                   label: Text(
                     _savingBooking ? 'Salvando...' : 'Lancar atendimento',
                   ),
                 ),
                 OutlinedButton.icon(
-                  onPressed:
-                      _savingBooking ||
-                          _loadingProviders ||
-                          _dayBookings.isEmpty
+                  onPressed: _loading
                       ? null
-                      : _openEditBookingPicker,
-                  icon: const Icon(Icons.edit_rounded),
-                  label: const Text('Editar'),
+                      : () => _showSection(MassageBookingSection.monthlyAgenda),
+                  icon: const Icon(Icons.calendar_month_rounded),
+                  label: const Text('Agenda mensal'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _savingBooking || _dayBookings.isEmpty
+                  onPressed: _loading
                       ? null
-                      : _openPaymentPicker,
-                  icon: const Icon(Icons.payments_rounded),
-                  label: const Text('Informar pago'),
-                ),
-                OutlinedButton.icon(
-                  onPressed:
-                      _savingBooking ||
-                          _dayBookings.isEmpty ||
-                          _sharingBookingId != null
-                      ? null
-                      : _openSharePicker,
-                  icon: const Icon(Icons.send_rounded),
-                  label: Text(
-                    _sharingBookingId != null ? 'Compartindo...' : 'Compartir',
-                  ),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _savingBooking || _dayBookings.isEmpty
-                      ? null
-                      : _openCancellationPicker,
-                  icon: const Icon(Icons.cancel_schedule_send_rounded),
-                  label: const Text('Cancelar atendimento'),
+                      : () =>
+                            _showSection(MassageBookingSection.monthlySummary),
+                  icon: const Icon(Icons.analytics_rounded),
+                  label: const Text('Periodo'),
                 ),
                 OutlinedButton.icon(
                   onPressed: _savingProviders || _loadingProviders
                       ? null
                       : _openProviderDialog,
                   icon: const Icon(Icons.groups_2_rounded),
-                  label: Text(_savingProviders ? 'Salvando...' : 'Prestadores'),
+                  label: Text(
+                    _loadingProviders
+                        ? 'Carregando...'
+                        : _savingProviders
+                        ? 'Salvando...'
+                        : 'Prestadores',
+                  ),
                 ),
                 OutlinedButton.icon(
                   onPressed: _canRefreshPage ? _refreshPage : null,
@@ -333,95 +310,11 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                 child: CircularProgressIndicator(),
               ),
             )
-          else ...<Widget>[
-            KeyedSubtree(
-              key: _selectedDaySectionKey,
-              child: _buildDetailPanel(context),
-            ),
-            const SizedBox(height: 18),
-            KeyedSubtree(
-              key: _monthlyAgendaSectionKey,
-              child: _buildAgendaPanel(context),
-            ),
-            const SizedBox(height: 18),
-            KeyedSubtree(
-              key: _monthlySummarySectionKey,
-              child: _buildSummarySection(context),
-            ),
-          ],
+          else
+            _buildDetailPanel(context),
         ],
       ),
     );
-  }
-
-  void _handleScroll() {
-    _notifyCurrentSection();
-  }
-
-  Future<void> _scrollToSection(MassageBookingSection section) async {
-    final BuildContext? targetContext = _sectionKeyFor(section).currentContext;
-    if (targetContext == null) {
-      return;
-    }
-    await Scrollable.ensureVisible(
-      targetContext,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
-      alignment: 0.02,
-    );
-    _setCurrentSection(section);
-  }
-
-  GlobalKey _sectionKeyFor(MassageBookingSection section) {
-    switch (section) {
-      case MassageBookingSection.selectedDay:
-        return _selectedDaySectionKey;
-      case MassageBookingSection.monthlyAgenda:
-        return _monthlyAgendaSectionKey;
-      case MassageBookingSection.monthlySummary:
-        return _monthlySummarySectionKey;
-    }
-  }
-
-  void _notifyCurrentSection() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _setCurrentSection(_resolveCurrentSection());
-    });
-  }
-
-  MassageBookingSection _resolveCurrentSection() {
-    final Map<MassageBookingSection, GlobalKey> sectionKeys =
-        <MassageBookingSection, GlobalKey>{
-          MassageBookingSection.selectedDay: _selectedDaySectionKey,
-          MassageBookingSection.monthlyAgenda: _monthlyAgendaSectionKey,
-          MassageBookingSection.monthlySummary: _monthlySummarySectionKey,
-        };
-    const double anchorY = 180;
-    MassageBookingSection bestSection = _currentSection;
-    double? bestDistance;
-
-    for (final MapEntry<MassageBookingSection, GlobalKey> entry
-        in sectionKeys.entries) {
-      final BuildContext? sectionContext = entry.value.currentContext;
-      if (sectionContext == null) {
-        continue;
-      }
-      final RenderObject? renderObject = sectionContext.findRenderObject();
-      if (renderObject is! RenderBox) {
-        continue;
-      }
-      final double sectionTop = renderObject.localToGlobal(Offset.zero).dy;
-      final double distance = (sectionTop - anchorY).abs();
-      if (bestDistance == null || distance < bestDistance) {
-        bestDistance = distance;
-        bestSection = entry.key;
-      }
-    }
-
-    return bestSection;
   }
 
   void _setCurrentSection(MassageBookingSection section) {
@@ -430,6 +323,32 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     }
     _currentSection = section;
     widget.onSectionChanged?.call(section);
+  }
+
+  Future<void> _scrollToSection(MassageBookingSection section) async {
+    await _showSection(section);
+  }
+
+  Future<void> _showSection(MassageBookingSection section) async {
+    if (section == MassageBookingSection.monthlyAgenda) {
+      await _openAgendaDialog();
+      return;
+    }
+    if (section == MassageBookingSection.monthlySummary) {
+      await _openSummaryDialog();
+      return;
+    }
+    _setCurrentSection(section);
+    if (section == MassageBookingSection.selectedDay) {
+      if (_scrollController.hasClients) {
+        await _scrollController.animateTo(
+          0,
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+        );
+      }
+      return;
+    }
   }
 
   Future<void> _load({bool showLoading = true}) async {
@@ -447,16 +366,17 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     try {
       final Future<List<MassageBooking>> bookingsFuture = widget
           .massageAppService
-          .listBookings(
-            dateFrom: _formatDateApi(_monthStart(_selectedDate)),
-            dateTo: _formatDateApi(_monthEnd(_selectedDate)),
-          );
+          .listBookings(bookingDate: _formatDateApi(_selectedDate));
       final List<MassageBooking> bookings = await bookingsFuture;
       if (!mounted) {
         return;
       }
       setState(() {
-        _bookings = bookings;
+        _replaceCachedBookings(
+          startDate: _selectedDate,
+          endDate: _selectedDate,
+          bookings: bookings,
+        );
         _selectedTime = _recommendedTimeFor(
           _selectedDate,
           _selectedTherapistId,
@@ -464,7 +384,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         _loading = false;
         _refreshingData = false;
       });
-      unawaited(_loadDeferredData());
     } catch (error) {
       if (!mounted) {
         return;
@@ -472,40 +391,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       setState(() {
         _loading = false;
         _refreshingData = false;
-        _errorMessage = error.toString().replaceFirst('Bad state: ', '');
-      });
-    }
-  }
-
-  Future<void> _loadDeferredData() async {
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _loadingProviders = true;
-    });
-    unawaited(_reloadProviderReport());
-    try {
-      final List<MassageProvider> providers = await widget.massageAppService
-          .listProviders();
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _providers = providers;
-        _syncSelectedProviderAndTherapist();
-        _selectedTime = _recommendedTimeFor(
-          _selectedDate,
-          _selectedTherapistId,
-        );
-        _loadingProviders = false;
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _loadingProviders = false;
         _errorMessage = error.toString().replaceFirst('Bad state: ', '');
       });
     }
@@ -514,6 +399,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   bool get _canRefreshPage =>
       !_loading &&
       !_refreshingData &&
+      !_loadingAgenda &&
       !_loadingProviders &&
       !_savingBooking &&
       !_savingProviders &&
@@ -524,6 +410,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     return mounted &&
         !_loading &&
         !_refreshingData &&
+        !_loadingAgenda &&
         !_loadingProviders &&
         !_savingBooking &&
         !_savingProviders &&
@@ -535,11 +422,22 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     if (!_canRefreshPage) {
       return;
     }
-    await _load(showLoading: false);
+    await _refreshActiveData(showLoading: false);
+  }
+
+  Future<void> _refreshActiveData({bool showLoading = false}) async {
+    await _load(showLoading: showLoading);
+    if (_currentSection == MassageBookingSection.monthlyAgenda) {
+      await _loadAgenda(force: true);
+    }
+    if (_currentSection == MassageBookingSection.monthlySummary) {
+      await _reloadProviderReport(force: true);
+    }
   }
 
   Future<void> _setSelectedDate(DateTime date, {int? monthOverride}) async {
     final DateTime normalizedDate = DateTime(date.year, date.month, date.day);
+    final bool dateChanged = !_sameDay(normalizedDate, _selectedDate);
     final bool monthChanged =
         normalizedDate.year != _selectedDate.year ||
         normalizedDate.month != _selectedDate.month;
@@ -548,8 +446,11 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       _selectedMonth = monthOverride ?? (normalizedDate.month - 1);
       _selectedTime = _recommendedTimeFor(normalizedDate, _selectedTherapistId);
     });
-    if (monthChanged) {
+    if (dateChanged || monthChanged) {
       await _load(showLoading: false);
+      if (_currentSection == MassageBookingSection.monthlyAgenda) {
+        await _loadAgenda(force: monthChanged);
+      }
     }
   }
 
@@ -557,66 +458,366 @@ class _MassageBookingPageState extends State<MassageBookingPage>
 
   DateTime _monthEnd(DateTime date) => DateTime(date.year, date.month + 1, 0);
 
-  Widget _buildSummarySection(BuildContext context) {
+  String _monthKeyFor(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}';
+
+  String _reportKeyFor(DateTime startDate, DateTime endDate) =>
+      '${_formatDateApi(startDate)}|${_formatDateApi(endDate)}';
+
+  bool get _hasAgendaForSelectedMonth =>
+      _loadedAgendaKey == _monthKeyFor(_selectedDate);
+
+  bool get _hasReportForSelectedRange =>
+      _loadedReportKey == _reportKeyFor(_reportStartDate, _reportEndDate);
+
+  Future<void> _loadAgenda({bool force = false}) async {
+    if (!force && _hasAgendaForSelectedMonth) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _loadingAgenda = true;
+      _agendaErrorMessage = null;
+    });
+    try {
+      final List<MassageBooking> bookings = await widget.massageAppService
+          .listBookings(
+            dateFrom: _formatDateApi(_monthStart(_selectedDate)),
+            dateTo: _formatDateApi(_monthEnd(_selectedDate)),
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _replaceCachedBookings(
+          startDate: _monthStart(_selectedDate),
+          endDate: _monthEnd(_selectedDate),
+          bookings: bookings,
+        );
+        _loadedAgendaKey = _monthKeyFor(_selectedDate);
+        _selectedTime = _recommendedTimeFor(
+          _selectedDate,
+          _selectedTherapistId,
+        );
+        _loadingAgenda = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadingAgenda = false;
+        _agendaErrorMessage = error.toString().replaceFirst('Bad state: ', '');
+      });
+    }
+  }
+
+  Future<bool> _ensureProvidersLoaded({bool force = false}) async {
+    if (!force && _providersLoaded) {
+      return true;
+    }
+    if (!mounted) {
+      return false;
+    }
+    setState(() {
+      _loadingProviders = true;
+      _errorMessage = null;
+    });
+    try {
+      final List<MassageProvider> providers = await widget.massageAppService
+          .listProviders();
+      if (!mounted) {
+        return false;
+      }
+      setState(() {
+        _providers = providers;
+        _providersLoaded = true;
+        _syncSelectedProviderAndTherapist();
+        _selectedTime = _recommendedTimeFor(
+          _selectedDate,
+          _selectedTherapistId,
+        );
+        _loadingProviders = false;
+      });
+      return true;
+    } catch (error) {
+      if (!mounted) {
+        return false;
+      }
+      setState(() {
+        _loadingProviders = false;
+        _errorMessage = error.toString().replaceFirst('Bad state: ', '');
+      });
+      return false;
+    }
+  }
+
+  void _replaceCachedBookings({
+    required DateTime startDate,
+    required DateTime endDate,
+    required List<MassageBooking> bookings,
+  }) {
+    final DateTime normalizedStart = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day,
+    );
+    final DateTime normalizedEnd = DateTime(
+      endDate.year,
+      endDate.month,
+      endDate.day,
+    );
+    final List<MassageBooking> nextBookings = _bookings.where((
+      MassageBooking booking,
+    ) {
+      final DateTime bookingDate = DateTime(
+        booking.startAt.year,
+        booking.startAt.month,
+        booking.startAt.day,
+      );
+      return bookingDate.isBefore(normalizedStart) ||
+          bookingDate.isAfter(normalizedEnd);
+    }).toList()..addAll(bookings);
+    nextBookings.sort(
+      (MassageBooking a, MassageBooking b) => a.startAt.compareTo(b.startAt),
+    );
+    _bookings = nextBookings;
+  }
+
+  Future<void> _refreshLoadedViewsAfterMutation() async {
+    await _load(showLoading: false);
+    if (_hasAgendaForSelectedMonth) {
+      await _loadAgenda(force: true);
+    }
+    if (_hasReportForSelectedRange) {
+      await _reloadProviderReport(force: true);
+    }
+  }
+
+  Future<void> _openAgendaDialog() async {
+    _setCurrentSection(MassageBookingSection.monthlyAgenda);
+    await _loadAgenda();
+    if (!mounted) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AppDialogShell(
+          maxWidth: 1080,
+          maxHeight: MediaQuery.of(dialogContext).size.height * 0.9,
+          padding: EdgeInsets.zero,
+          child: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setDialogState) {
+              return Column(
+                children: <Widget>[
+                  _buildSectionDialogHeader(
+                    context,
+                    title: 'Agenda mensal',
+                    subtitle:
+                        'Visualizacao mensal de atendimentos com acesso rapido por dia.',
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: _buildAgendaPanel(
+                        context,
+                        asCard: false,
+                        onDialogRefresh: () => setDialogState(() {}),
+                        onDaySelected: () => Navigator.of(dialogContext).pop(),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+    if (mounted) {
+      _setCurrentSection(MassageBookingSection.selectedDay);
+    }
+  }
+
+  Future<void> _openSummaryDialog() async {
+    _setCurrentSection(MassageBookingSection.monthlySummary);
+    if (!mounted) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AppDialogShell(
+          maxWidth: 1120,
+          maxHeight: MediaQuery.of(dialogContext).size.height * 0.9,
+          padding: EdgeInsets.zero,
+          child: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setDialogState) {
+              return Column(
+                children: <Widget>[
+                  _buildSectionDialogHeader(
+                    context,
+                    title: 'Periodo',
+                    subtitle:
+                        'Consolidado de atendimentos, cobranca e prestadores para o intervalo consultado.',
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: _buildSummarySection(
+                        context,
+                        asCard: false,
+                        onDialogRefresh: () => setDialogState(() {}),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+    if (mounted) {
+      _setCurrentSection(MassageBookingSection.selectedDay);
+    }
+  }
+
+  Widget _buildSectionDialogHeader(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 18, 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(title, style: Theme.of(context).textTheme.headlineSmall),
+                const SizedBox(height: 6),
+                Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.close_rounded),
+            tooltip: 'Fechar',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSummarySection(
+    BuildContext context, {
+    bool asCard = true,
+    VoidCallback? onDialogRefresh,
+  }) {
+    final Widget content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (asCard) ...<Widget>[
+          Text(
+            'Resumo do periodo',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Consolidado de atendimentos, cobranca e prestadores para o intervalo consultado.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 18),
+        ],
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: <Widget>[
+            OutlinedButton.icon(
+              onPressed: _loadingReport
+                  ? null
+                  : () async {
+                      await _pickReportStartDate();
+                      onDialogRefresh?.call();
+                    },
+              icon: const Icon(Icons.date_range_rounded),
+              label: Text('Inicio: ${_formatShortDateLabel(_reportStartDate)}'),
+            ),
+            OutlinedButton.icon(
+              onPressed: _loadingReport
+                  ? null
+                  : () async {
+                      await _pickReportEndDate();
+                      onDialogRefresh?.call();
+                    },
+              icon: const Icon(Icons.event_rounded),
+              label: Text('Fim: ${_formatShortDateLabel(_reportEndDate)}'),
+            ),
+            FilledButton.icon(
+              onPressed: _loadingReport
+                  ? null
+                  : () async {
+                      await _reloadProviderReport(force: true);
+                      onDialogRefresh?.call();
+                    },
+              icon: const Icon(Icons.refresh_rounded),
+              label: Text(_loadingReport ? 'Buscando...' : 'Buscar'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        if (_reportErrorMessage != null) ...<Widget>[
+          Text(
+            _reportErrorMessage!,
+            style: TextStyle(color: Colors.red.shade700),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (_loadingReport && !_hasReportForSelectedRange)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else if (!_hasReportForSelectedRange)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: CostaNorteBrand.line),
+              color: Colors.white,
+            ),
+            child: const Text(
+              'Use Buscar para carregar o resumo do periodo selecionado.',
+            ),
+          )
+        else ...<Widget>[
+          _buildSummaryStrip(context),
+          const SizedBox(height: 18),
+          _buildSummaryChips(context),
+          const SizedBox(height: 20),
+          _buildProviderReportSection(context),
+        ],
+      ],
+    );
+
+    if (!asCard) {
+      return content;
+    }
+
     return Container(
       key: _summaryKey,
       child: Card(
-        child: Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Text(
-                'Resumo do periodo',
-                style: Theme.of(context).textTheme.headlineSmall,
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Consolidado de atendimentos, cobranca e prestadores para o intervalo consultado.',
-                style: Theme.of(context).textTheme.bodyMedium,
-              ),
-              const SizedBox(height: 18),
-              Wrap(
-                spacing: 12,
-                runSpacing: 12,
-                children: <Widget>[
-                  OutlinedButton.icon(
-                    onPressed: _loadingReport ? null : _pickReportStartDate,
-                    icon: const Icon(Icons.date_range_rounded),
-                    label: Text(
-                      'Inicio: ${_formatShortDateLabel(_reportStartDate)}',
-                    ),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: _loadingReport ? null : _pickReportEndDate,
-                    icon: const Icon(Icons.event_rounded),
-                    label: Text(
-                      'Fim: ${_formatShortDateLabel(_reportEndDate)}',
-                    ),
-                  ),
-                  FilledButton.icon(
-                    onPressed: _loadingReport ? null : _reloadProviderReport,
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: Text(_loadingReport ? 'Buscando...' : 'Buscar'),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 18),
-              if (_reportErrorMessage != null) ...<Widget>[
-                Text(
-                  _reportErrorMessage!,
-                  style: TextStyle(color: Colors.red.shade700),
-                ),
-                const SizedBox(height: 12),
-              ],
-              _buildSummaryStrip(context),
-              const SizedBox(height: 18),
-              _buildSummaryChips(context),
-              const SizedBox(height: 20),
-              _buildProviderReportSection(context),
-            ],
-          ),
-        ),
+        child: Padding(padding: const EdgeInsets.all(20), child: content),
       ),
     );
   }
@@ -884,20 +1085,20 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     ) {
       return booking.status == MassageBookingStatus.cancelled;
     }).toList();
-    final Set<int> providerIds = scheduledBookings
-        .map((MassageBooking booking) => booking.providerId)
-        .toSet();
-    final Set<int> therapistIds = scheduledBookings
-        .map((MassageBooking booking) => booking.therapistId)
-        .toSet();
-    final double averageTicket = paidBookings.isEmpty
-        ? 0
-        : paidBookings.fold<double>(
-                0,
-                (double total, MassageBooking booking) =>
-                    total + booking.amount,
-              ) /
-              paidBookings.length;
+    // final Set<int> providerIds = scheduledBookings
+    //     .map((MassageBooking booking) => booking.providerId)
+    //     .toSet();
+    // final Set<int> therapistIds = scheduledBookings
+    //     .map((MassageBooking booking) => booking.therapistId)
+    //     .toSet();
+    // final double averageTicket = paidBookings.isEmpty
+    //     ? 0
+    //     : paidBookings.fold<double>(
+    //             0,
+    //             (double total, MassageBooking booking) =>
+    //                 total + booking.amount,
+    //           ) /
+    //           paidBookings.length;
 
     return Wrap(
       spacing: 12,
@@ -942,21 +1143,21 @@ class _MassageBookingPageState extends State<MassageBookingPage>
             bookings: cancelledBookings,
           ),
         ),
-        _DetailChip(
-          label: 'Prestadores',
-          value: '${providerIds.length}',
-          icon: Icons.groups_2_rounded,
-        ),
-        _DetailChip(
-          label: 'Masajistas',
-          value: '${therapistIds.length}',
-          icon: Icons.person_outline_rounded,
-        ),
-        _DetailChip(
-          label: 'Ticket medio',
-          value: _formatCurrencyLabel(averageTicket),
-          icon: Icons.receipt_long_rounded,
-        ),
+        // _DetailChip(
+        //   label: 'Prestadores',
+        //   value: '${providerIds.length}',
+        //   icon: Icons.groups_2_rounded,
+        // ),
+        // _DetailChip(
+        //   label: 'Masajistas',
+        //   value: '${therapistIds.length}',
+        //   icon: Icons.person_outline_rounded,
+        // ),
+        // _DetailChip(
+        //   label: 'Ticket medio',
+        //   value: _formatCurrencyLabel(averageTicket),
+        //   icon: Icons.receipt_long_rounded,
+        // ),
       ],
     );
   }
@@ -987,14 +1188,14 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       0,
       (double total, MassageBooking booking) => total + booking.amount,
     );
-    final int activeProviders = activeBookings
-        .map((MassageBooking booking) => booking.providerId)
-        .toSet()
-        .length;
-    final int activeTherapists = activeBookings
-        .map((MassageBooking booking) => booking.therapistId)
-        .toSet()
-        .length;
+    // final int activeProviders = activeBookings
+    //     .map((MassageBooking booking) => booking.providerId)
+    //     .toSet()
+    //     .length;
+    // final int activeTherapists = activeBookings
+    //     .map((MassageBooking booking) => booking.therapistId)
+    //     .toSet()
+    //     .length;
 
     return Wrap(
       spacing: 14,
@@ -1046,127 +1247,199 @@ class _MassageBookingPageState extends State<MassageBookingPage>
             bookings: activeBookings,
           ),
         ),
-        _MetricCard(
-          title: '$activeProviders prestadores',
-          value: '$activeTherapists masajistas',
-          caption: 'Equipe envolvida no atendimento do periodo',
-          icon: Icons.groups_2_rounded,
-          selected: _selectedSummaryDetailKey == 'metric:providers',
-          onTap: () => _openSummaryDetail(
-            key: 'metric:providers',
-            title: 'Equipe envolvida no periodo',
-            description:
-                'Atendimentos agendados distribuidos entre prestadores e masajistas do periodo consultado.',
-            bookings: activeBookings,
-          ),
-        ),
+        // _MetricCard(
+        //   title: '$activeProviders prestadores',
+        //   value: '$activeTherapists masajistas',
+        //   caption: 'Equipe envolvida no atendimento do periodo',
+        //   icon: Icons.groups_2_rounded,
+        //   selected: _selectedSummaryDetailKey == 'metric:providers',
+        //   onTap: () => _openSummaryDetail(
+        //     key: 'metric:providers',
+        //     title: 'Equipe envolvida no periodo',
+        //     description:
+        //         'Atendimentos agendados distribuidos entre prestadores e masajistas do periodo consultado.',
+        //     bookings: activeBookings,
+        //   ),
+        // ),
       ],
     );
   }
 
-  Widget _buildAgendaPanel(BuildContext context) {
+  Widget _buildAgendaPanel(
+    BuildContext context, {
+    bool asCard = true,
+    VoidCallback? onDialogRefresh,
+    VoidCallback? onDaySelected,
+  }) {
     final List<DateTime?> cells = _monthCells(
       _selectedDate.year,
       _selectedMonth + 1,
     );
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: <Widget>[
-                Text(
-                  'Agenda mensal',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const Spacer(),
-                SizedBox(
-                  width: 260,
-                  child: DropdownButtonFormField<int>(
-                    value: _selectedMonth,
-                    decoration: const InputDecoration(
-                      labelText: 'Mes da agenda',
-                      prefixIcon: Icon(Icons.calendar_month_rounded),
-                    ),
-                    items: List<DropdownMenuItem<int>>.generate(
-                      _monthLabels.length,
-                      (int index) => DropdownMenuItem<int>(
-                        value: index,
-                        child: Text(_monthLabels[index]),
-                      ),
-                    ),
-                    onChanged: (int? value) {
-                      if (value == null) {
-                        return;
-                      }
-                      final DateTime nextDate = DateTime(
-                        _selectedDate.year,
-                        value + 1,
-                        1,
-                      );
-                      unawaited(
-                        _setSelectedDate(nextDate, monthOverride: value),
-                      );
-                    },
+    final Widget content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (asCard) ...<Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              Text(
+                'Agenda mensal',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const Spacer(),
+              SizedBox(
+                width: 260,
+                child: DropdownButtonFormField<int>(
+                  value: _selectedMonth,
+                  decoration: const InputDecoration(
+                    labelText: 'Mes da agenda',
+                    prefixIcon: Icon(Icons.calendar_month_rounded),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: _weekDayLabels
-                      .map(
-                        (String label) => Expanded(
-                          child: Center(
-                            child: Text(
-                              label,
-                              style: Theme.of(context).textTheme.labelLarge
-                                  ?.copyWith(color: CostaNorteBrand.mutedInk),
-                            ),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                ),
-                const SizedBox(height: 10),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 7,
-                    crossAxisSpacing: 8,
-                    mainAxisSpacing: 8,
-                    mainAxisExtent: _agendaCellHeight(),
+                  items: List<DropdownMenuItem<int>>.generate(
+                    _monthLabels.length,
+                    (int index) => DropdownMenuItem<int>(
+                      value: index,
+                      child: Text(_monthLabels[index]),
+                    ),
                   ),
-                  itemCount: cells.length,
-                  itemBuilder: (BuildContext context, int index) {
-                    final DateTime? date = cells[index];
-                    if (date == null) {
-                      return const SizedBox.shrink();
+                  onChanged: (int? value) {
+                    if (value == null) {
+                      return;
                     }
-                    return _AgendaDayCard(
-                      date: date,
-                      selected: _sameDay(date, _selectedDate),
-                      bookings: _bookingsFor(date),
-                      onTap: () => unawaited(
-                        _setSelectedDate(date, monthOverride: date.month - 1),
-                      ),
-                      onDoubleTap: () => _openCalendarDayActions(date),
+                    final DateTime nextDate = DateTime(
+                      _selectedDate.year,
+                      value + 1,
+                      1,
+                    );
+                    unawaited(
+                      _setSelectedDate(nextDate, monthOverride: value).then((
+                        _,
+                      ) {
+                        onDialogRefresh?.call();
+                      }),
                     );
                   },
                 ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+        ] else
+          Align(
+            alignment: Alignment.centerRight,
+            child: SizedBox(
+              width: 260,
+              child: DropdownButtonFormField<int>(
+                value: _selectedMonth,
+                decoration: const InputDecoration(
+                  labelText: 'Mes da agenda',
+                  prefixIcon: Icon(Icons.calendar_month_rounded),
+                ),
+                items: List<DropdownMenuItem<int>>.generate(
+                  _monthLabels.length,
+                  (int index) => DropdownMenuItem<int>(
+                    value: index,
+                    child: Text(_monthLabels[index]),
+                  ),
+                ),
+                onChanged: (int? value) {
+                  if (value == null) {
+                    return;
+                  }
+                  final DateTime nextDate = DateTime(
+                    _selectedDate.year,
+                    value + 1,
+                    1,
+                  );
+                  unawaited(
+                    _setSelectedDate(nextDate, monthOverride: value).then((_) {
+                      onDialogRefresh?.call();
+                    }),
+                  );
+                },
+              ),
             ),
-          ],
-        ),
-      ),
+          ),
+        const SizedBox(height: 10),
+        if (_loadingAgenda && !_hasAgendaForSelectedMonth)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              if (_agendaErrorMessage != null) ...<Widget>[
+                Text(
+                  _agendaErrorMessage!,
+                  style: TextStyle(color: Colors.red.shade700),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Row(
+                children: _weekDayLabels
+                    .map(
+                      (String label) => Expanded(
+                        child: Center(
+                          child: Text(
+                            label,
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(color: CostaNorteBrand.mutedInk),
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+              ),
+              const SizedBox(height: 10),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  crossAxisSpacing: 8,
+                  mainAxisSpacing: 8,
+                  mainAxisExtent: _agendaCellHeight(),
+                ),
+                itemCount: cells.length,
+                itemBuilder: (BuildContext context, int index) {
+                  final DateTime? date = cells[index];
+                  if (date == null) {
+                    return const SizedBox.shrink();
+                  }
+                  return _AgendaDayCard(
+                    date: date,
+                    selected: _sameDay(date, _selectedDate),
+                    bookings: _bookingsFor(date),
+                    onTap: () => unawaited(
+                      _setSelectedDate(
+                        date,
+                        monthOverride: date.month - 1,
+                      ).then((_) {
+                        if (onDaySelected != null) {
+                          onDaySelected();
+                        } else {
+                          onDialogRefresh?.call();
+                        }
+                      }),
+                    ),
+                    onDoubleTap: () => _openCalendarDayActions(date),
+                  );
+                },
+              ),
+            ],
+          ),
+      ],
+    );
+
+    if (!asCard) {
+      return content;
+    }
+
+    return Card(
+      child: Padding(padding: const EdgeInsets.all(20), child: content),
     );
   }
 
@@ -1177,14 +1450,31 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              'Dia selecionado',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              _selectedDateLabel(_selectedDate),
-              style: Theme.of(context).textTheme.bodyLarge,
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Dia selecionado',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        _selectedDateLabel(_selectedDate),
+                        style: Theme.of(context).textTheme.bodyLarge,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: _savingBooking ? null : _pickSelectedDate,
+                  icon: const Icon(Icons.edit_calendar_rounded),
+                  label: const Text('Alterar dia'),
+                ),
+              ],
             ),
             const SizedBox(height: 18),
             if (_dayBookings.isEmpty)
@@ -1234,6 +1524,10 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   }
 
   Future<void> _openCreateBookingDialog() async {
+    final bool providersReady = await _ensureProvidersLoaded();
+    if (!providersReady || !mounted) {
+      return;
+    }
     final _BookingDraft? bookingDraft = await showDialog<_BookingDraft>(
       context: context,
       builder: (BuildContext context) {
@@ -1274,6 +1568,11 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       return;
     }
 
+    final bool providersReady = await _ensureProvidersLoaded();
+    if (!providersReady || !mounted) {
+      return;
+    }
+
     final _BookingDraft? bookingDraft = await showDialog<_BookingDraft>(
       context: context,
       builder: (BuildContext context) {
@@ -1304,102 +1603,12 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     await _updateBooking(booking, bookingDraft);
   }
 
-  Future<void> _openEditBookingPicker() async {
-    final MassageBooking? booking = await showDialog<MassageBooking>(
-      context: context,
-      builder: (BuildContext context) {
-        return _BookingSelectionDialog(
-          title: 'Editar atendimento',
-          description:
-              'Selecione o atendimento do dia para ajustar horario, cliente, valor ou masajista.',
-          bookings: _dayBookings,
-          emptyMessage: 'Nao ha atendimentos no dia selecionado.',
-          onSelectLabel: 'Editar',
-        );
-      },
-    );
-
-    if (booking == null) {
-      return;
-    }
-
-    await _openEditBookingDialog(booking);
-  }
-
-  Future<void> _openCancellationPicker() async {
-    final MassageBooking? booking = await showDialog<MassageBooking>(
-      context: context,
-      builder: (BuildContext context) {
-        return _BookingSelectionDialog(
-          title: 'Cancelar atendimento',
-          description:
-              'Selecione o atendimento do dia para registrar o cancelamento com observacao.',
-          bookings: _dayBookings,
-          emptyMessage: 'Nao ha atendimentos no dia selecionado.',
-          onSelectLabel: 'Cancelar',
-        );
-      },
-    );
-
-    if (booking == null) {
-      return;
-    }
-
-    await _openCancelBookingDialog(booking);
-  }
-
-  Future<void> _openPaymentPicker() async {
-    final List<MassageBooking> bookings = _dayBookings;
-    final MassageBooking? booking = await showDialog<MassageBooking>(
-      context: context,
-      builder: (BuildContext context) {
-        return _BookingSelectionDialog(
-          title: 'Informar pago',
-          description:
-              'Selecione o atendimento do dia para registrar data, meio e observacao do pagamento.',
-          bookings: bookings,
-          emptyMessage: 'Nao ha atendimentos no dia selecionado.',
-          onSelectLabel: 'Informar pago',
-          canSelect: _canRegisterPayment,
-          helperMessage:
-              bookings.isNotEmpty && !bookings.any(_canRegisterPayment)
-              ? 'Todos os atendimentos do dia ja estao pagos ou cancelados.'
-              : null,
-          blockedReason: _paymentBlockedReason,
-        );
-      },
-    );
-
-    if (booking == null) {
-      return;
-    }
-
-    await _openPaymentBookingDialog(booking);
-  }
-
-  Future<void> _openSharePicker() async {
-    final MassageBooking? booking = await showDialog<MassageBooking>(
-      context: context,
-      builder: (BuildContext context) {
-        return _BookingSelectionDialog(
-          title: 'Compartir atendimento',
-          description:
-              'Selecione o atendimento do dia para compartilhar os dados do registro.',
-          bookings: _dayBookings,
-          emptyMessage: 'Nao ha atendimentos no dia selecionado.',
-          onSelectLabel: 'Compartir',
-        );
-      },
-    );
-
-    if (booking == null) {
-      return;
-    }
-
-    await _shareBooking(booking);
-  }
-
   Future<void> _openProviderDialog() async {
+    final bool providersReady = await _ensureProvidersLoaded();
+    if (!providersReady || !mounted) {
+      return;
+    }
+
     setState(() {
       _savingProviders = true;
     });
@@ -1426,10 +1635,13 @@ class _MassageBookingPageState extends State<MassageBookingPage>
 
     setState(() {
       _providers = updatedProviders;
+      _providersLoaded = true;
       _syncSelectedProviderAndTherapist();
       _savingProviders = false;
     });
-    await _reloadProviderReport();
+    if (_hasReportForSelectedRange) {
+      await _reloadProviderReport(force: true);
+    }
   }
 
   Future<void> _createBooking(_BookingDraft bookingDraft) async {
@@ -1505,9 +1717,9 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         message: 'Atendimento salvo para ${bookingDraft.clientName}.',
       );
       if (monthChanged) {
-        await _load(showLoading: false);
+        _loadedAgendaKey = null;
       }
-      await _reloadProviderReport();
+      await _refreshLoadedViewsAfterMutation();
     } catch (error) {
       if (!mounted) {
         return;
@@ -1603,9 +1815,9 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         message: 'Atendimento atualizado para ${bookingDraft.clientName}.',
       );
       if (monthChanged) {
-        await _load(showLoading: false);
+        _loadedAgendaKey = null;
       }
-      await _reloadProviderReport();
+      await _refreshLoadedViewsAfterMutation();
     } catch (error) {
       if (!mounted) {
         return;
@@ -1754,7 +1966,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         title: 'Atendimento cancelado',
         message: 'O cancelamento foi registrado sem remover o historico.',
       );
-      await _reloadProviderReport();
+      await _refreshLoadedViewsAfterMutation();
     } catch (error) {
       if (!mounted) {
         return;
@@ -1833,7 +2045,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         title: 'Pagamento informado',
         message: 'O pagamento de ${booking.clientName} foi registrado.',
       );
-      await _reloadProviderReport();
+      await _refreshLoadedViewsAfterMutation();
     } catch (error) {
       if (!mounted) {
         return;
@@ -1885,7 +2097,10 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     _bookings = nextBookings;
   }
 
-  Future<void> _reloadProviderReport() async {
+  Future<void> _reloadProviderReport({bool force = false}) async {
+    if (!force && _hasReportForSelectedRange) {
+      return;
+    }
     setState(() {
       _loadingReport = true;
       _reportErrorMessage = null;
@@ -1893,12 +2108,20 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     });
 
     try {
-      final List<MassageProviderSummary> summaries = await widget
+      final Future<List<MassageBooking>> bookingsFuture = widget
+          .massageAppService
+          .listBookings(
+            dateFrom: _formatDateApi(_reportStartDate),
+            dateTo: _formatDateApi(_reportEndDate),
+          );
+      final Future<List<MassageProviderSummary>> summariesFuture = widget
           .massageAppService
           .listProviderSummaryReport(
             dateFrom: _formatDateApi(_reportStartDate),
             dateTo: _formatDateApi(_reportEndDate),
           );
+      final List<MassageBooking> bookings = await bookingsFuture;
+      final List<MassageProviderSummary> summaries = await summariesFuture;
 
       int? selectedProviderId = _selectedSummaryProviderId;
       if (selectedProviderId != null &&
@@ -1915,7 +2138,13 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         return;
       }
       setState(() {
+        _replaceCachedBookings(
+          startDate: _reportStartDate,
+          endDate: _reportEndDate,
+          bookings: bookings,
+        );
         _providerSummaries = summaries;
+        _loadedReportKey = _reportKeyFor(_reportStartDate, _reportEndDate);
         _selectedSummaryProviderId = selectedProviderId;
         _loadingReport = false;
       });
@@ -2118,6 +2347,24 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         'Cobrado: ${_formatCurrencyLabel(detail.summary.paidAmount)}';
   }
 
+  Future<void> _pickSelectedDate() async {
+    final DateTime initialDate = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+    );
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate,
+      firstDate: DateTime(initialDate.year - 1, 1, 1),
+      lastDate: DateTime(initialDate.year + 1, 12, 31),
+    );
+    if (picked == null) {
+      return;
+    }
+    await _setSelectedDate(picked);
+  }
+
   Future<void> _pickReportStartDate() async {
     final DateTime? picked = await showDatePicker(
       context: context,
@@ -2133,6 +2380,11 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       if (_reportStartDate.isAfter(_reportEndDate)) {
         _reportEndDate = _reportStartDate;
       }
+      _loadedReportKey = null;
+      _providerSummaries = <MassageProviderSummary>[];
+      _reportErrorMessage = null;
+      _selectedSummaryProviderId = null;
+      _selectedSummaryDetailKey = null;
     });
   }
 
@@ -2151,6 +2403,11 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       if (_reportEndDate.isBefore(_reportStartDate)) {
         _reportStartDate = _reportEndDate;
       }
+      _loadedReportKey = null;
+      _providerSummaries = <MassageProviderSummary>[];
+      _reportErrorMessage = null;
+      _selectedSummaryProviderId = null;
+      _selectedSummaryDetailKey = null;
     });
   }
 
@@ -2426,16 +2683,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       );
     }
     return buffer.toString().trim();
-  }
-
-  String _paymentBlockedReason(MassageBooking booking) {
-    if (booking.status == MassageBookingStatus.cancelled) {
-      return 'Atendimento cancelado';
-    }
-    if (booking.paid) {
-      return 'Pagamento ja informado';
-    }
-    return 'Pagamento disponivel';
   }
 }
 
@@ -3564,9 +3811,6 @@ class _BookingSelectionDialog extends StatelessWidget {
     required this.bookings,
     required this.emptyMessage,
     required this.onSelectLabel,
-    this.canSelect,
-    this.helperMessage,
-    this.blockedReason,
   });
 
   final String title;
@@ -3574,9 +3818,6 @@ class _BookingSelectionDialog extends StatelessWidget {
   final List<MassageBooking> bookings;
   final String emptyMessage;
   final String onSelectLabel;
-  final bool Function(MassageBooking booking)? canSelect;
-  final String? helperMessage;
-  final String Function(MassageBooking booking)? blockedReason;
 
   @override
   Widget build(BuildContext context) {
@@ -3589,15 +3830,6 @@ class _BookingSelectionDialog extends StatelessWidget {
           Text(title, style: Theme.of(context).textTheme.headlineSmall),
           const SizedBox(height: 6),
           Text(description, style: Theme.of(context).textTheme.bodyMedium),
-          if (helperMessage != null) ...<Widget>[
-            const SizedBox(height: 8),
-            Text(
-              helperMessage!,
-              style: Theme.of(
-                context,
-              ).textTheme.bodySmall?.copyWith(color: CostaNorteBrand.mutedInk),
-            ),
-          ],
           const SizedBox(height: 18),
           Expanded(
             child: bookings.isEmpty
@@ -3607,8 +3839,6 @@ class _BookingSelectionDialog extends StatelessWidget {
                     separatorBuilder: (_, _) => const SizedBox(height: 12),
                     itemBuilder: (BuildContext context, int index) {
                       final MassageBooking booking = bookings[index];
-                      final bool isSelectable =
-                          canSelect?.call(booking) ?? true;
                       return Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -3644,29 +3874,14 @@ class _BookingSelectionDialog extends StatelessWidget {
                                           color: _statusColor(booking),
                                         ),
                                   ),
-                                  if (!isSelectable &&
-                                      blockedReason != null) ...<Widget>[
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      blockedReason!(booking),
-                                      style: Theme.of(context)
-                                          .textTheme
-                                          .bodySmall
-                                          ?.copyWith(
-                                            color: CostaNorteBrand.mutedInk,
-                                          ),
-                                    ),
-                                  ],
                                 ],
                               ),
                             ),
                             const SizedBox(width: 12),
                             FilledButton(
-                              onPressed: isSelectable
-                                  ? () => Navigator.of(
-                                      context,
-                                    ).pop<MassageBooking>(booking)
-                                  : null,
+                              onPressed: () => Navigator.of(
+                                context,
+                              ).pop<MassageBooking>(booking),
                               child: Text(onSelectLabel),
                             ),
                           ],
