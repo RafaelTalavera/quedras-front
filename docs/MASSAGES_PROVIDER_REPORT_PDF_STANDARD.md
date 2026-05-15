@@ -61,13 +61,20 @@ Exportador: `lib/features/massages/application/massage_provider_report_pdf_expor
 
 ## Implementacion tecnica
 - Generacion con paquete `pdf`.
-- Guardado manual con `file_picker`.
+- Guardado manual con adaptador de bytes por plataforma.
+  - escritorio: selector de archivo y escritura local
+  - web: descarga iniciada por el navegador con nombre de archivo `.pdf`
 - Compartido manual con `share_plus`.
 - Fuentes incrustadas para evitar fallback a `Helvetica`:
   - `assets/fonts/Lato-Regular.ttf`
   - `assets/fonts/Lato-Bold.ttf`
 
 ## Archivos involucrados
+- `lib/core/files/file_bytes_saver.dart`
+- `lib/core/files/file_bytes_saver_io.dart`
+- `lib/core/files/file_bytes_saver_web.dart`
+- `lib/core/files/file_bytes_saver_stub.dart`
+- `lib/core/files/file_save_result.dart`
 - `lib/features/massages/application/massage_provider_report_pdf_exporter.dart`
 - `lib/features/massages/presentation/massage_booking_page.dart`
 - `lib/core/feedback/app_share.dart`

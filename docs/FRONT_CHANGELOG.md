@@ -1,5 +1,27 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-05-15 | Compatibilidad web | Descarga de PDF por bytes para Massagens y Quadras en navegador
+- Componente afectado: Frontend (`core/files`, `Massagens`, `Quadras`) + documentacion funcional
+- Archivos tocados:
+  - `lib/core/files/file_bytes_saver.dart`
+  - `lib/core/files/file_bytes_saver_io.dart`
+  - `lib/core/files/file_bytes_saver_web.dart`
+  - `lib/core/files/file_bytes_saver_stub.dart`
+  - `lib/core/files/file_save_result.dart`
+  - `lib/features/massages/application/massage_provider_report_pdf_exporter.dart`
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `lib/features/courts/application/partner_coach_report_pdf_exporter.dart`
+  - `lib/features/tennis/presentation/tennis_rental_page.dart`
+  - `docs/MASSAGES_PROVIDER_REPORT_PDF_STANDARD.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: corregir la descarga de `PDF` en Flutter Web, donde el flujo anterior intentaba persistir un `File` local y mostrar una ruta de sistema que no existe en navegador.
+- Impacto funcional:
+  - `Baixar PDF` sigue usando selector de archivo y ruta local en escritorio
+  - `Baixar PDF` en web ahora dispara la descarga del navegador con el nombre correcto del archivo
+  - el mensaje de exito deja de asumir `file.path` y distingue entre guardado local y descarga iniciada en browser
+  - `Massagens` y `Quadras` comparten ahora una capa de guardado por bytes con implementacion por plataforma
+  - validacion ejecutada: `flutter analyze` OK y `flutter build web` OK
+
 ## 2026-05-15 | UX operativa | Massagens conserva tabla de prestadores en Periodo y elimina solo KPIs superiores
 - Componente afectado: Frontend (`Massagens`) + documentacion funcional
 - Archivos tocados:
