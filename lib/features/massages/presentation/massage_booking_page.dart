@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 
 import '../../../core/config/app_runtime_config.dart';
+import '../../../core/files/file_save_result.dart';
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/feedback/app_share.dart';
 import '../../../core/sync/auto_refresh_controller.dart';
@@ -2173,18 +2174,20 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     MassageProviderDetailReport detail,
   ) async {
     try {
-      final File? file = await _providerReportPdfExporter.savePdf(
+      final FileSaveResult? result = await _providerReportPdfExporter.savePdf(
         detail: detail,
         startDate: _reportStartDate,
         endDate: _reportEndDate,
       );
-      if (file == null || !mounted) {
+      if (result == null || !mounted) {
         return;
       }
       await AppAlerts.success(
         context,
         title: 'PDF salvo',
-        message: 'Resumo salvo em:\n${file.path}',
+        message: result.hasLocalPath
+            ? 'Resumo salvo em:\n${result.path}'
+            : 'Download do PDF iniciado no navegador:\n${result.fileName}',
       );
     } catch (error) {
       if (!mounted) {

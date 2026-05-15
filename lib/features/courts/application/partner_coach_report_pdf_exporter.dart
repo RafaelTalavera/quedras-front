@@ -1,19 +1,15 @@
 import 'dart:io';
 
-import 'package:file_picker/file_picker.dart';
 import 'package:flutter/services.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 
+import '../../../core/files/file_bytes_saver.dart';
+import '../../../core/files/file_save_result.dart';
 import '../domain/court_models.dart';
 
 typedef LoadAssetBytes = Future<Uint8List> Function(String assetPath);
-typedef PickSaveFilePath =
-    Future<String?> Function({
-      required String dialogTitle,
-      required String fileName,
-    });
 typedef GetTemporaryDirectoryCallback = Future<Directory> Function();
 
 class PartnerCoachReportSummary {
@@ -61,7 +57,7 @@ abstract interface class PartnerCoachReportPdfExporter {
     required DateTime endDate,
   });
 
-  Future<File?> savePdf({
+  Future<FileSaveResult?> savePdf({
     required PartnerCoachReportDetail detail,
     required DateTime startDate,
     required DateTime endDate,
@@ -78,10 +74,8 @@ final class DefaultPartnerCoachReportPdfExporter
     implements PartnerCoachReportPdfExporter {
   DefaultPartnerCoachReportPdfExporter({
     LoadAssetBytes? loadAssetBytes,
-    PickSaveFilePath? pickSaveFilePath,
     GetTemporaryDirectoryCallback? getTemporaryDirectoryCallback,
   }) : _loadAssetBytes = loadAssetBytes ?? _defaultLoadAssetBytes,
-       _pickSaveFilePath = pickSaveFilePath ?? _defaultPickSaveFilePath,
        _getTemporaryDirectory =
            getTemporaryDirectoryCallback ?? getTemporaryDirectory;
 
@@ -93,7 +87,6 @@ final class DefaultPartnerCoachReportPdfExporter
       'Resumo de reservas por professor parceiro';
 
   final LoadAssetBytes _loadAssetBytes;
-  final PickSaveFilePath _pickSaveFilePath;
   final GetTemporaryDirectoryCallback _getTemporaryDirectory;
 
   @override
@@ -189,7 +182,7 @@ final class DefaultPartnerCoachReportPdfExporter
   }
 
   @override
-  Future<File?> savePdf({
+  Future<FileSaveResult?> savePdf({
     required PartnerCoachReportDetail detail,
     required DateTime startDate,
     required DateTime endDate,
@@ -199,25 +192,18 @@ final class DefaultPartnerCoachReportPdfExporter
       startDate: startDate,
       endDate: endDate,
     );
-    final String? outputPath = await _pickSaveFilePath(
-      dialogTitle: 'Salvar resumo em PDF',
-      fileName: fileName,
-    );
-    if (outputPath == null || outputPath.trim().isEmpty) {
-      return null;
-    }
-
     final Uint8List bytes = await buildPdfBytes(
       detail: detail,
       startDate: startDate,
       endDate: endDate,
     );
-    final String normalizedPath = outputPath.toLowerCase().endsWith('.pdf')
-        ? outputPath
-        : '$outputPath.pdf';
-    final File file = File(normalizedPath);
-    await file.writeAsBytes(bytes, flush: true);
-    return file;
+    return saveFileBytes(
+      bytes: bytes,
+      dialogTitle: 'Salvar resumo em PDF',
+      fileName: fileName,
+      mimeType: 'application/pdf',
+      allowedExtensions: const <String>['pdf'],
+    );
   }
 
   @override
@@ -247,19 +233,6 @@ final class DefaultPartnerCoachReportPdfExporter
   static Future<Uint8List> _defaultLoadAssetBytes(String assetPath) async {
     final ByteData data = await rootBundle.load(assetPath);
     return data.buffer.asUint8List();
-  }
-
-  static Future<String?> _defaultPickSaveFilePath({
-    required String dialogTitle,
-    required String fileName,
-  }) {
-    return FilePicker.platform.saveFile(
-      dialogTitle: dialogTitle,
-      fileName: fileName,
-      type: FileType.custom,
-      allowedExtensions: const <String>['pdf'],
-      lockParentWindow: true,
-    );
   }
 
   pw.Widget _buildHeader({
