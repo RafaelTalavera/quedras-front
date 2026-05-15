@@ -1,5 +1,17 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-05-15 | UX operativa | Massagens conserva tabla de prestadores en Periodo y elimina solo KPIs superiores
+- Componente afectado: Frontend (`Massagens`) + documentacion funcional
+- Archivos tocados:
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: ajustar la simplificacion visual de `Periodo` para quitar unicamente las tres tarjetas KPI superiores, manteniendo el flujo operativo de `Resumo por prestador`.
+- Impacto funcional:
+  - `Periodo` sigue mostrando la tabla de `Resumo por prestador`
+  - cada fila conserva `Ver detalhe` con apertura de modal operativo
+  - el detalle por prestador mantiene descarga y comparticion de `PDF`
+  - se eliminan solo las tarjetas resumen superiores, sin afectar la navegacion a detalle
+
 ## 2026-05-13 | Infra web | Bootstrap web, cliente HTTP de navegador y backend configurable por origen o URL publicada
 - Componente afectado: Frontend (`core/network`, configuracion base, dashboard tecnico, documentacion de ejecucion)
 - Archivos tocados:

@@ -733,7 +733,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
           ),
           const SizedBox(height: 6),
           Text(
-            'Consolidado de atendimentos, cobranca e prestadores para o intervalo consultado.',
+            'Consolidado de atendimentos e cobranca para o intervalo consultado.',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 18),
@@ -801,8 +801,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
             ),
           )
         else ...<Widget>[
-          _buildSummaryStrip(context),
-          const SizedBox(height: 18),
           _buildSummaryChips(context),
           const SizedBox(height: 20),
           _buildProviderReportSection(context),
@@ -819,6 +817,97 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       child: Card(
         child: Padding(padding: const EdgeInsets.all(20), child: content),
       ),
+    );
+  }
+
+  Widget _buildSummaryChips(BuildContext context) {
+    final List<MassageBooking> reportBookings = _reportBookings;
+    final List<MassageBooking> scheduledBookings = _scheduledReportBookings;
+    final List<MassageBooking> paidBookings = scheduledBookings
+        .where((MassageBooking booking) => booking.paid)
+        .toList();
+    final List<MassageBooking> pendingBookings = scheduledBookings
+        .where((MassageBooking booking) => !booking.paid)
+        .toList();
+    final List<MassageBooking> cancelledBookings = reportBookings.where((
+      MassageBooking booking,
+    ) {
+      return booking.status == MassageBookingStatus.cancelled;
+    }).toList();
+    // final Set<int> providerIds = scheduledBookings
+    //     .map((MassageBooking booking) => booking.providerId)
+    //     .toSet();
+    // final Set<int> therapistIds = scheduledBookings
+    //     .map((MassageBooking booking) => booking.therapistId)
+    //     .toSet();
+    // final double averageTicket = paidBookings.isEmpty
+    //     ? 0
+    //     : paidBookings.fold<double>(
+    //             0,
+    //             (double total, MassageBooking booking) =>
+    //                 total + booking.amount,
+    //           ) /
+    //           paidBookings.length;
+
+    return Wrap(
+      spacing: 12,
+      runSpacing: 12,
+      children: <Widget>[
+        _DetailChip(
+          label: 'Pagas',
+          value: '${paidBookings.length}',
+          icon: Icons.check_circle_outline_rounded,
+          selected: _selectedSummaryDetailKey == 'chip:paid',
+          onTap: () => _openSummaryDetail(
+            key: 'chip:paid',
+            title: 'Atendimentos pagos',
+            description:
+                'Atendimentos agendados com pagamento confirmado no periodo consultado.',
+            bookings: paidBookings,
+          ),
+        ),
+        _DetailChip(
+          label: 'Pendentes',
+          value: '${pendingBookings.length}',
+          icon: Icons.warning_amber_rounded,
+          selected: _selectedSummaryDetailKey == 'chip:pending',
+          onTap: () => _openSummaryDetail(
+            key: 'chip:pending',
+            title: 'Atendimentos pendentes',
+            description:
+                'Atendimentos agendados com cobranca em aberto no periodo consultado.',
+            bookings: pendingBookings,
+          ),
+        ),
+        _DetailChip(
+          label: 'Cancelados',
+          value: '${cancelledBookings.length}',
+          icon: Icons.cancel_schedule_send_rounded,
+          selected: _selectedSummaryDetailKey == 'chip:cancelled',
+          onTap: () => _openSummaryDetail(
+            key: 'chip:cancelled',
+            title: 'Atendimentos cancelados',
+            description:
+                'Historico de cancelamentos dentro do periodo consultado.',
+            bookings: cancelledBookings,
+          ),
+        ),
+        // _DetailChip(
+        //   label: 'Prestadores',
+        //   value: '${providerIds.length}',
+        //   icon: Icons.groups_2_rounded,
+        // ),
+        // _DetailChip(
+        //   label: 'Masajistas',
+        //   value: '${therapistIds.length}',
+        //   icon: Icons.person_outline_rounded,
+        // ),
+        // _DetailChip(
+        //   label: 'Ticket medio',
+        //   value: _formatCurrencyLabel(averageTicket),
+        //   icon: Icons.receipt_long_rounded,
+        // ),
+      ],
     );
   }
 
@@ -882,8 +971,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
           ),
           child: HorizontalScrollableContainer(
             child: ConstrainedBox(
-              // Keep the table readable on narrow layouts while preserving
-              // access to all provider report columns through horizontal scroll.
               constraints: BoxConstraints(minWidth: constraints.maxWidth),
               child: DataTable(
                 columnSpacing: 16,
@@ -1069,200 +1156,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     required IconData icon,
   }) {
     return _DetailChip(label: label, value: value, icon: icon);
-  }
-
-  Widget _buildSummaryChips(BuildContext context) {
-    final List<MassageBooking> reportBookings = _reportBookings;
-    final List<MassageBooking> scheduledBookings = _scheduledReportBookings;
-    final List<MassageBooking> paidBookings = scheduledBookings
-        .where((MassageBooking booking) => booking.paid)
-        .toList();
-    final List<MassageBooking> pendingBookings = scheduledBookings
-        .where((MassageBooking booking) => !booking.paid)
-        .toList();
-    final List<MassageBooking> cancelledBookings = reportBookings.where((
-      MassageBooking booking,
-    ) {
-      return booking.status == MassageBookingStatus.cancelled;
-    }).toList();
-    // final Set<int> providerIds = scheduledBookings
-    //     .map((MassageBooking booking) => booking.providerId)
-    //     .toSet();
-    // final Set<int> therapistIds = scheduledBookings
-    //     .map((MassageBooking booking) => booking.therapistId)
-    //     .toSet();
-    // final double averageTicket = paidBookings.isEmpty
-    //     ? 0
-    //     : paidBookings.fold<double>(
-    //             0,
-    //             (double total, MassageBooking booking) =>
-    //                 total + booking.amount,
-    //           ) /
-    //           paidBookings.length;
-
-    return Wrap(
-      spacing: 12,
-      runSpacing: 12,
-      children: <Widget>[
-        _DetailChip(
-          label: 'Pagas',
-          value: '${paidBookings.length}',
-          icon: Icons.check_circle_outline_rounded,
-          selected: _selectedSummaryDetailKey == 'chip:paid',
-          onTap: () => _openSummaryDetail(
-            key: 'chip:paid',
-            title: 'Atendimentos pagos',
-            description:
-                'Atendimentos agendados com pagamento confirmado no periodo consultado.',
-            bookings: paidBookings,
-          ),
-        ),
-        _DetailChip(
-          label: 'Pendentes',
-          value: '${pendingBookings.length}',
-          icon: Icons.warning_amber_rounded,
-          selected: _selectedSummaryDetailKey == 'chip:pending',
-          onTap: () => _openSummaryDetail(
-            key: 'chip:pending',
-            title: 'Atendimentos pendentes',
-            description:
-                'Atendimentos agendados com cobranca em aberto no periodo consultado.',
-            bookings: pendingBookings,
-          ),
-        ),
-        _DetailChip(
-          label: 'Cancelados',
-          value: '${cancelledBookings.length}',
-          icon: Icons.cancel_schedule_send_rounded,
-          selected: _selectedSummaryDetailKey == 'chip:cancelled',
-          onTap: () => _openSummaryDetail(
-            key: 'chip:cancelled',
-            title: 'Atendimentos cancelados',
-            description:
-                'Historico de cancelamentos dentro do periodo consultado.',
-            bookings: cancelledBookings,
-          ),
-        ),
-        // _DetailChip(
-        //   label: 'Prestadores',
-        //   value: '${providerIds.length}',
-        //   icon: Icons.groups_2_rounded,
-        // ),
-        // _DetailChip(
-        //   label: 'Masajistas',
-        //   value: '${therapistIds.length}',
-        //   icon: Icons.person_outline_rounded,
-        // ),
-        // _DetailChip(
-        //   label: 'Ticket medio',
-        //   value: _formatCurrencyLabel(averageTicket),
-        //   icon: Icons.receipt_long_rounded,
-        // ),
-      ],
-    );
-  }
-
-  Widget _buildSummaryStrip(BuildContext context) {
-    final List<MassageBooking> reportBookings = _reportBookings;
-    final List<MassageBooking> activeBookings = _scheduledReportBookings;
-    final List<MassageBooking> paidBookings = activeBookings
-        .where((MassageBooking booking) => booking.paid)
-        .toList();
-    final List<MassageBooking> pendingBookings = activeBookings
-        .where((MassageBooking booking) => !booking.paid)
-        .toList();
-    final List<MassageBooking> cancelledBookings = reportBookings.where((
-      MassageBooking booking,
-    ) {
-      return booking.status == MassageBookingStatus.cancelled;
-    }).toList();
-    final double totalRevenue = activeBookings.fold<double>(
-      0,
-      (double total, MassageBooking booking) => total + booking.amount,
-    );
-    final double paidAmount = paidBookings.fold<double>(
-      0,
-      (double total, MassageBooking booking) => total + booking.amount,
-    );
-    final double pendingAmount = pendingBookings.fold<double>(
-      0,
-      (double total, MassageBooking booking) => total + booking.amount,
-    );
-    // final int activeProviders = activeBookings
-    //     .map((MassageBooking booking) => booking.providerId)
-    //     .toSet()
-    //     .length;
-    // final int activeTherapists = activeBookings
-    //     .map((MassageBooking booking) => booking.therapistId)
-    //     .toSet()
-    //     .length;
-
-    return Wrap(
-      spacing: 14,
-      runSpacing: 14,
-      children: <Widget>[
-        _MetricCard(
-          title:
-              '${_formatShortDateLabel(_reportStartDate)} a ${_formatShortDateLabel(_reportEndDate)}',
-          value: '${activeBookings.length} ativos',
-          caption: cancelledBookings.isEmpty
-              ? 'Sem cancelamentos no periodo'
-              : '${cancelledBookings.length} cancelados no historico',
-          icon: Icons.calendar_view_month_rounded,
-          selected: _selectedSummaryDetailKey == 'metric:overview',
-          onTap: () => _openSummaryDetail(
-            key: 'metric:overview',
-            title: 'Atendimentos ativos do periodo',
-            description:
-                'Lista de atendimentos agendados dentro do intervalo consultado.',
-            bookings: activeBookings,
-          ),
-        ),
-        _MetricCard(
-          title: _formatCurrencyLabel(totalRevenue),
-          value: _formatCurrencyLabel(paidAmount),
-          caption:
-              '${pendingBookings.length} pendentes e ${_formatCurrencyLabel(pendingAmount)} em aberto',
-          icon: Icons.payments_rounded,
-          selected: _selectedSummaryDetailKey == 'metric:revenue',
-          onTap: () => _openSummaryDetail(
-            key: 'metric:revenue',
-            title: 'Receita do periodo',
-            description:
-                'Atendimentos agendados com foco em valores cobrados e pendentes no periodo consultado.',
-            bookings: activeBookings,
-          ),
-        ),
-        _MetricCard(
-          title: '${paidBookings.length} pagos',
-          value: '${pendingBookings.length} pendentes',
-          caption: 'Conversao de pagamento no periodo consultado',
-          icon: Icons.receipt_long_rounded,
-          selected: _selectedSummaryDetailKey == 'metric:payments',
-          onTap: () => _openSummaryDetail(
-            key: 'metric:payments',
-            title: 'Pagamentos do periodo',
-            description:
-                'Atendimentos agendados para acompanhar status de pagamento no periodo consultado.',
-            bookings: activeBookings,
-          ),
-        ),
-        // _MetricCard(
-        //   title: '$activeProviders prestadores',
-        //   value: '$activeTherapists masajistas',
-        //   caption: 'Equipe envolvida no atendimento do periodo',
-        //   icon: Icons.groups_2_rounded,
-        //   selected: _selectedSummaryDetailKey == 'metric:providers',
-        //   onTap: () => _openSummaryDetail(
-        //     key: 'metric:providers',
-        //     title: 'Equipe envolvida no periodo',
-        //     description:
-        //         'Atendimentos agendados distribuidos entre prestadores e masajistas do periodo consultado.',
-        //     bookings: activeBookings,
-        //   ),
-        // ),
-      ],
-    );
   }
 
   Widget _buildAgendaPanel(
@@ -2780,82 +2673,6 @@ class _AgendaDayCard extends StatelessWidget {
               ],
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _MetricCard extends StatelessWidget {
-  const _MetricCard({
-    required this.title,
-    required this.value,
-    required this.caption,
-    required this.icon,
-    this.selected = false,
-    this.onTap,
-  });
-
-  final String title;
-  final String value;
-  final String caption;
-  final IconData icon;
-  final bool selected;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(22),
-        child: Container(
-          width: 250,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(22),
-            gradient: const LinearGradient(
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-              colors: <Color>[Colors.white, Color(0xFFF7FAFF)],
-            ),
-            border: Border.all(
-              color: selected
-                  ? CostaNorteBrand.royalBlueDeep
-                  : CostaNorteBrand.line,
-              width: selected ? 1.4 : 1,
-            ),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              Container(
-                width: 42,
-                height: 42,
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(14),
-                  color: CostaNorteBrand.foam,
-                ),
-                child: Icon(icon, color: CostaNorteBrand.royalBlueDeep),
-              ),
-              const SizedBox(height: 14),
-              Text(title, style: Theme.of(context).textTheme.titleLarge),
-              const SizedBox(height: 4),
-              Text(value, style: Theme.of(context).textTheme.labelLarge),
-              const SizedBox(height: 6),
-              Text(caption, style: Theme.of(context).textTheme.bodySmall),
-              if (onTap != null) ...<Widget>[
-                const SizedBox(height: 10),
-                Text(
-                  selected ? 'Ocultar detalhe' : 'Ver detalhe',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                    color: CostaNorteBrand.royalBlueDeep,
-                  ),
-                ),
-              ],
-            ],
-          ),
         ),
       ),
     );
