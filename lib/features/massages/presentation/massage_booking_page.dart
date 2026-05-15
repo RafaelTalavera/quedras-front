@@ -652,7 +652,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       context: context,
       builder: (BuildContext dialogContext) {
         return AppDialogShell(
-          maxWidth: 1120,
+          maxWidth: 1400,
           maxHeight: MediaQuery.of(dialogContext).size.height * 0.9,
           padding: EdgeInsets.zero,
           child: StatefulBuilder(
