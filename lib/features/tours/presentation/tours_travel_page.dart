@@ -70,9 +70,6 @@ class ToursTravelPage extends StatefulWidget {
 class _ToursTravelPageState extends State<ToursTravelPage>
     with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
-  final GlobalKey _dayKey = GlobalKey();
-  final GlobalKey _agendaKey = GlobalKey();
-  final GlobalKey _summaryKey = GlobalKey();
   late final AutoRefreshController _autoRefreshController;
   List<ToursProvider> _providers = <ToursProvider>[];
   List<ToursBooking> _bookings = <ToursBooking>[];
@@ -82,19 +79,27 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   late DateTime _reportEnd;
   bool _loading = true;
   bool _refreshingData = false;
+  bool _loadingAgenda = false;
   bool _loadingProviders = false;
   bool _saving = false;
   bool _loadingSummary = false;
   int? _sharingBookingId;
   String? _error;
+  String? _agendaError;
   String? _summaryError;
   ToursTravelSection _currentSection = ToursTravelSection.selectedDay;
+  bool _providersLoaded = false;
+  String? _loadedAgendaKey;
+  String? _loadedSummaryKey;
 
   List<ToursProvider> get _activeProviders =>
       _providers.where((ToursProvider p) => p.active).toList()..sort(
         (ToursProvider a, ToursProvider b) =>
             a.name.toLowerCase().compareTo(b.name.toLowerCase()),
       );
+  List<ToursBooking> get _dayBookings => _bookings
+      .where((ToursBooking b) => _sameDay(b.startAt, _selectedDate))
+      .toList();
   List<ToursBooking> get _monthBookings =>
       _bookings
           .where(
@@ -106,22 +111,18 @@ class _ToursTravelPageState extends State<ToursTravelPage>
         ..sort(
           (ToursBooking a, ToursBooking b) => a.startAt.compareTo(b.startAt),
         );
-  List<ToursBooking> get _dayBookings => _monthBookings
-      .where((ToursBooking b) => _sameDay(b.startAt, _selectedDate))
-      .toList();
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.controller?._attach(this);
-    _scrollController.addListener(_handleScroll);
     _selectedDate = _today();
     _reportStart = DateTime(_selectedDate.year, _selectedDate.month, 1);
     _reportEnd = DateTime(_selectedDate.year, _selectedDate.month + 1, 0);
     _autoRefreshController = AutoRefreshController(
       interval: AppRuntimeConfig.operationalRefreshInterval,
-      onRefresh: () => _load(showLoading: false),
+      onRefresh: () => _refreshActiveData(showLoading: false),
       canRefresh: _canAutoRefresh,
     );
     _autoRefreshController.start();
@@ -150,57 +151,37 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _autoRefreshController.handleLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      _load(showLoading: false);
+      unawaited(_refreshActiveData(showLoading: false));
     }
   }
 
   Future<void> _scrollToSection(ToursTravelSection section) async {
-    final BuildContext? target = switch (section) {
-      ToursTravelSection.selectedDay => _dayKey.currentContext,
-      ToursTravelSection.monthlyAgenda => _agendaKey.currentContext,
-      ToursTravelSection.summary => _summaryKey.currentContext,
-    };
-    if (target == null) return;
-    await Scrollable.ensureVisible(
-      target,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
-      alignment: 0.02,
-    );
-    _setCurrentSection(section);
-  }
-
-  void _handleScroll() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) return;
-      final Map<ToursTravelSection, BuildContext?> contexts =
-          <ToursTravelSection, BuildContext?>{
-            ToursTravelSection.selectedDay: _dayKey.currentContext,
-            ToursTravelSection.monthlyAgenda: _agendaKey.currentContext,
-            ToursTravelSection.summary: _summaryKey.currentContext,
-          };
-      const double anchorY = 180;
-      ToursTravelSection best = _currentSection;
-      double? bestDistance;
-      for (final MapEntry<ToursTravelSection, BuildContext?> entry
-          in contexts.entries) {
-        final RenderObject? renderObject = entry.value?.findRenderObject();
-        if (renderObject is! RenderBox) continue;
-        final double distance =
-            (renderObject.localToGlobal(Offset.zero).dy - anchorY).abs();
-        if (bestDistance == null || distance < bestDistance) {
-          bestDistance = distance;
-          best = entry.key;
-        }
-      }
-      _setCurrentSection(best);
-    });
+    await _showSection(section);
   }
 
   void _setCurrentSection(ToursTravelSection section) {
     if (_currentSection == section) return;
     _currentSection = section;
     widget.onSectionChanged?.call(section);
+  }
+
+  Future<void> _showSection(ToursTravelSection section) async {
+    if (section == ToursTravelSection.monthlyAgenda) {
+      await _openAgendaDialog();
+      return;
+    }
+    if (section == ToursTravelSection.summary) {
+      await _openSummaryDialog();
+      return;
+    }
+    _setCurrentSection(section);
+    if (_scrollController.hasClients) {
+      await _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+      );
+    }
   }
 
   Future<void> _load({bool showLoading = true}) async {
@@ -216,45 +197,25 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     try {
       final Future<List<ToursBooking>> bookingsFuture = widget.toursAppService
           .listBookings(
-            dateFrom: _formatDate(_monthStart(_selectedDate)),
-            dateTo: _formatDate(_monthEnd(_selectedDate)),
+            dateFrom: _formatDate(_selectedDate),
+            dateTo: _formatDate(_selectedDate),
           );
       final List<ToursBooking> bookings = await bookingsFuture;
       if (!mounted) return;
       setState(() {
-        _bookings = bookings;
+        _replaceCachedBookings(
+          startDate: _selectedDate,
+          endDate: _selectedDate,
+          bookings: bookings,
+        );
         _loading = false;
         _refreshingData = false;
       });
-      unawaited(_loadDeferredData());
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _loading = false;
         _refreshingData = false;
-        _error = _describeError(error);
-      });
-    }
-  }
-
-  Future<void> _loadDeferredData() async {
-    if (!mounted) return;
-    setState(() {
-      _loadingProviders = true;
-    });
-    unawaited(_reloadSummary());
-    try {
-      final List<ToursProvider> providers = await widget.toursAppService
-          .listProviders();
-      if (!mounted) return;
-      setState(() {
-        _providers = providers;
-        _loadingProviders = false;
-      });
-    } catch (error) {
-      if (!mounted) return;
-      setState(() {
-        _loadingProviders = false;
         _error = _describeError(error);
       });
     }
@@ -263,6 +224,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   bool get _canRefreshPage =>
       !_loading &&
       !_refreshingData &&
+      !_loadingAgenda &&
       !_loadingProviders &&
       !_loadingSummary &&
       !_saving;
@@ -272,6 +234,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     return mounted &&
         !_loading &&
         !_refreshingData &&
+        !_loadingAgenda &&
         !_loadingProviders &&
         !_loadingSummary &&
         !_saving &&
@@ -280,19 +243,33 @@ class _ToursTravelPageState extends State<ToursTravelPage>
 
   Future<void> _refreshPage() async {
     if (!_canRefreshPage) return;
-    await _load(showLoading: false);
+    await _refreshActiveData(showLoading: false);
+  }
+
+  Future<void> _refreshActiveData({bool showLoading = false}) async {
+    await _load(showLoading: showLoading);
+    if (_currentSection == ToursTravelSection.monthlyAgenda) {
+      await _loadAgenda(force: true);
+    }
+    if (_currentSection == ToursTravelSection.summary) {
+      await _reloadSummary(force: true);
+    }
   }
 
   Future<void> _setSelectedDate(DateTime date) async {
     final DateTime normalizedDate = DateTime(date.year, date.month, date.day);
+    final bool dateChanged = !_sameDay(normalizedDate, _selectedDate);
     final bool monthChanged =
         normalizedDate.year != _selectedDate.year ||
         normalizedDate.month != _selectedDate.month;
     setState(() {
       _selectedDate = normalizedDate;
     });
-    if (monthChanged) {
+    if (dateChanged || monthChanged) {
       await _load(showLoading: false);
+      if (_currentSection == ToursTravelSection.monthlyAgenda) {
+        await _loadAgenda(force: monthChanged);
+      }
     }
   }
 
@@ -300,20 +277,81 @@ class _ToursTravelPageState extends State<ToursTravelPage>
 
   DateTime _monthEnd(DateTime date) => DateTime(date.year, date.month + 1, 0);
 
-  Future<void> _reloadSummary() async {
+  String _monthKeyFor(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}';
+
+  String _summaryKeyFor(DateTime startDate, DateTime endDate) =>
+      '${_formatDate(startDate)}|${_formatDate(endDate)}';
+
+  bool get _hasAgendaForSelectedMonth =>
+      _loadedAgendaKey == _monthKeyFor(_selectedDate);
+
+  bool get _hasSummaryForSelectedRange =>
+      _loadedSummaryKey == _summaryKeyFor(_reportStart, _reportEnd);
+
+  Future<void> _loadAgenda({bool force = false}) async {
+    if (!force && _hasAgendaForSelectedMonth) {
+      return;
+    }
+    if (!mounted) return;
+    setState(() {
+      _loadingAgenda = true;
+      _agendaError = null;
+    });
+    try {
+      final List<ToursBooking> bookings = await widget.toursAppService
+          .listBookings(
+            dateFrom: _formatDate(_monthStart(_selectedDate)),
+            dateTo: _formatDate(_monthEnd(_selectedDate)),
+          );
+      if (!mounted) return;
+      setState(() {
+        _replaceCachedBookings(
+          startDate: _monthStart(_selectedDate),
+          endDate: _monthEnd(_selectedDate),
+          bookings: bookings,
+        );
+        _loadedAgendaKey = _monthKeyFor(_selectedDate);
+        _loadingAgenda = false;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _loadingAgenda = false;
+        _agendaError = _describeError(error);
+      });
+    }
+  }
+
+  Future<void> _reloadSummary({bool force = false}) async {
+    if (!force && _hasSummaryForSelectedRange) {
+      return;
+    }
     setState(() {
       _loadingSummary = true;
       _summaryError = null;
     });
     try {
+      final Future<List<ToursBooking>> bookingsFuture = widget.toursAppService
+          .listBookings(
+            dateFrom: _formatDate(_reportStart),
+            dateTo: _formatDate(_reportEnd),
+          );
       final ToursSummaryReport summaryReport = await widget.toursAppService
           .getSummaryReport(
             dateFrom: _formatDate(_reportStart),
             dateTo: _formatDate(_reportEnd),
           );
+      final List<ToursBooking> bookings = await bookingsFuture;
       if (!mounted) return;
       setState(() {
+        _replaceCachedBookings(
+          startDate: _reportStart,
+          endDate: _reportEnd,
+          bookings: bookings,
+        );
         _summaryReport = summaryReport;
+        _loadedSummaryKey = _summaryKeyFor(_reportStart, _reportEnd);
         _loadingSummary = false;
       });
     } catch (error) {
@@ -323,6 +361,183 @@ class _ToursTravelPageState extends State<ToursTravelPage>
         _summaryError = _describeError(error);
       });
     }
+  }
+
+  Future<void> _openAgendaDialog() async {
+    _setCurrentSection(ToursTravelSection.monthlyAgenda);
+    await _loadAgenda();
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AppDialogShell(
+          maxWidth: 1080,
+          maxHeight: MediaQuery.of(dialogContext).size.height * 0.9,
+          padding: EdgeInsets.zero,
+          child: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setDialogState) {
+              return Column(
+                children: <Widget>[
+                  _buildSectionDialogHeader(
+                    context,
+                    title: 'Agenda mensal',
+                    subtitle:
+                        'Visualizacao mensal de tours e viagens com acesso rapido por dia.',
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: _buildAgendaCard(
+                        context,
+                        asCard: false,
+                        onDialogRefresh: () => setDialogState(() {}),
+                        onDaySelected: () => Navigator.of(dialogContext).pop(),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+    if (mounted) {
+      _setCurrentSection(ToursTravelSection.selectedDay);
+    }
+  }
+
+  Future<void> _openSummaryDialog() async {
+    _setCurrentSection(ToursTravelSection.summary);
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AppDialogShell(
+          maxWidth: 1120,
+          maxHeight: MediaQuery.of(dialogContext).size.height * 0.9,
+          padding: EdgeInsets.zero,
+          child: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setDialogState) {
+              return Column(
+                children: <Widget>[
+                  _buildSectionDialogHeader(
+                    context,
+                    title: 'Periodo',
+                    subtitle:
+                        'Consolidado de agendamentos, horas, pagamentos e comissao para o intervalo consultado.',
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: _buildSummaryCard(
+                        context,
+                        asCard: false,
+                        onDialogRefresh: () => setDialogState(() {}),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+    if (mounted) {
+      _setCurrentSection(ToursTravelSection.selectedDay);
+    }
+  }
+
+  Widget _buildSectionDialogHeader(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 18, 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(title, style: Theme.of(context).textTheme.headlineSmall),
+                const SizedBox(height: 6),
+                Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.close_rounded),
+            tooltip: 'Fechar',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<bool> _ensureProvidersLoaded({bool force = false}) async {
+    if (!force && _providersLoaded) {
+      return true;
+    }
+    if (!mounted) return false;
+    setState(() {
+      _loadingProviders = true;
+      _error = null;
+    });
+    try {
+      final List<ToursProvider> providers = await widget.toursAppService
+          .listProviders();
+      if (!mounted) return false;
+      setState(() {
+        _providers = providers;
+        _providersLoaded = true;
+        _loadingProviders = false;
+      });
+      return true;
+    } catch (error) {
+      if (!mounted) return false;
+      setState(() {
+        _loadingProviders = false;
+        _error = _describeError(error);
+      });
+      return false;
+    }
+  }
+
+  void _replaceCachedBookings({
+    required DateTime startDate,
+    required DateTime endDate,
+    required List<ToursBooking> bookings,
+  }) {
+    final DateTime normalizedStart = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day,
+    );
+    final DateTime normalizedEnd = DateTime(
+      endDate.year,
+      endDate.month,
+      endDate.day,
+    );
+    final List<ToursBooking> nextBookings = _bookings.where((ToursBooking b) {
+      final DateTime bookingDate = DateTime(
+        b.startAt.year,
+        b.startAt.month,
+        b.startAt.day,
+      );
+      return bookingDate.isBefore(normalizedStart) ||
+          bookingDate.isAfter(normalizedEnd);
+    }).toList()..addAll(bookings);
+    nextBookings.sort(
+      (ToursBooking a, ToursBooking b) => a.startAt.compareTo(b.startAt),
+    );
+    _bookings = nextBookings;
   }
 
   @override
@@ -344,11 +559,23 @@ class _ToursTravelPageState extends State<ToursTravelPage>
               runSpacing: 12,
               children: <Widget>[
                 FilledButton.icon(
-                  onPressed: _saving || _loadingProviders
-                      ? null
-                      : _createBooking,
+                  onPressed: _saving ? null : _createBooking,
                   icon: const Icon(Icons.add_circle_outline_rounded),
                   label: const Text('Lancar agendamento'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _loading
+                      ? null
+                      : () => _showSection(ToursTravelSection.monthlyAgenda),
+                  icon: const Icon(Icons.calendar_month_rounded),
+                  label: const Text('Agenda mensal'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _loading
+                      ? null
+                      : () => _showSection(ToursTravelSection.summary),
+                  icon: const Icon(Icons.analytics_rounded),
+                  label: const Text('Periodo'),
                 ),
                 OutlinedButton.icon(
                   onPressed:
@@ -406,13 +633,8 @@ class _ToursTravelPageState extends State<ToursTravelPage>
                 child: CircularProgressIndicator(),
               ),
             )
-          else ...<Widget>[
-            KeyedSubtree(key: _dayKey, child: _buildDayCard(context)),
-            const SizedBox(height: 18),
-            KeyedSubtree(key: _agendaKey, child: _buildAgendaCard(context)),
-            const SizedBox(height: 18),
-            KeyedSubtree(key: _summaryKey, child: _buildSummaryCard(context)),
-          ],
+          else
+            _buildDayCard(context),
         ],
       ),
     );
@@ -524,308 +746,310 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     );
   }
 
-  Widget _buildAgendaCard(BuildContext context) {
+  Widget _buildAgendaCard(
+    BuildContext context, {
+    bool asCard = true,
+    VoidCallback? onDialogRefresh,
+    VoidCallback? onDaySelected,
+  }) {
     final List<_DayCell> cells = _calendarCells();
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              children: <Widget>[
-                Text(
-                  'Agenda mensal',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const Spacer(),
-                SizedBox(
-                  width: 260,
-                  child: DropdownButtonFormField<int>(
-                    value: _selectedDate.month - 1,
-                    decoration: const InputDecoration(
-                      labelText: 'Mes da agenda',
-                      prefixIcon: Icon(Icons.calendar_month_rounded),
-                    ),
-                    items: List<DropdownMenuItem<int>>.generate(
-                      _months.length,
-                      (int i) => DropdownMenuItem<int>(
-                        value: i,
-                        child: Text(_months[i]),
-                      ),
-                    ),
-                    onChanged: (int? value) {
-                      if (value == null) return;
-                      unawaited(
-                        _setSelectedDate(
-                          DateTime(_selectedDate.year, value + 1, 1),
-                        ),
-                      );
-                    },
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: _week
-                  .map(
-                    (String label) => Expanded(
-                      child: Center(
-                        child: Text(
-                          label,
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(color: CostaNorteBrand.mutedInk),
-                        ),
-                      ),
-                    ),
-                  )
-                  .toList(),
-            ),
-            const SizedBox(height: 10),
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: cells.length,
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 7,
-                crossAxisSpacing: 8,
-                mainAxisSpacing: 8,
-                mainAxisExtent: 92,
+    final Widget content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (asCard)
+          Row(
+            children: <Widget>[
+              Text(
+                'Agenda mensal',
+                style: Theme.of(context).textTheme.headlineSmall,
               ),
-              itemBuilder: (BuildContext context, int index) {
-                final _DayCell cell = cells[index];
-                if (!cell.inMonth) return const SizedBox.shrink();
-                return _ToursAgendaDayCard(
-                  date: cell.date,
-                  bookings: cell.bookings,
-                  selected: _sameDay(cell.date, _selectedDate),
-                  onTap: () => unawaited(_setSelectedDate(cell.date)),
-                  onDoubleTap: () => _openCalendarDayActions(cell.date),
-                );
-              },
+              const Spacer(),
+              SizedBox(
+                width: 260,
+                child: DropdownButtonFormField<int>(
+                  value: _selectedDate.month - 1,
+                  decoration: const InputDecoration(
+                    labelText: 'Mes da agenda',
+                    prefixIcon: Icon(Icons.calendar_month_rounded),
+                  ),
+                  items: List<DropdownMenuItem<int>>.generate(
+                    _months.length,
+                    (int i) => DropdownMenuItem<int>(
+                      value: i,
+                      child: Text(_months[i]),
+                    ),
+                  ),
+                  onChanged: (int? value) {
+                    if (value == null) return;
+                    unawaited(
+                      _setSelectedDate(
+                        DateTime(_selectedDate.year, value + 1, 1),
+                      ).then((_) => onDialogRefresh?.call()),
+                    );
+                  },
+                ),
+              ),
+            ],
+          )
+        else
+          Align(
+            alignment: Alignment.centerRight,
+            child: SizedBox(
+              width: 260,
+              child: DropdownButtonFormField<int>(
+                value: _selectedDate.month - 1,
+                decoration: const InputDecoration(
+                  labelText: 'Mes da agenda',
+                  prefixIcon: Icon(Icons.calendar_month_rounded),
+                ),
+                items: List<DropdownMenuItem<int>>.generate(
+                  _months.length,
+                  (int i) =>
+                      DropdownMenuItem<int>(value: i, child: Text(_months[i])),
+                ),
+                onChanged: (int? value) {
+                  if (value == null) return;
+                  unawaited(
+                    _setSelectedDate(
+                      DateTime(_selectedDate.year, value + 1, 1),
+                    ).then((_) => onDialogRefresh?.call()),
+                  );
+                },
+              ),
             ),
+          ),
+        const SizedBox(height: 10),
+        if (_loadingAgenda && !_hasAgendaForSelectedMonth)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else ...<Widget>[
+          if (_agendaError != null) ...<Widget>[
+            Text(_agendaError!, style: TextStyle(color: Colors.red.shade700)),
+            const SizedBox(height: 12),
           ],
-        ),
-      ),
+          Row(
+            children: _week
+                .map(
+                  (String label) => Expanded(
+                    child: Center(
+                      child: Text(
+                        label,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: CostaNorteBrand.mutedInk,
+                        ),
+                      ),
+                    ),
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 10),
+          GridView.builder(
+            shrinkWrap: true,
+            physics: const NeverScrollableScrollPhysics(),
+            itemCount: cells.length,
+            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+              crossAxisCount: 7,
+              crossAxisSpacing: 8,
+              mainAxisSpacing: 8,
+              mainAxisExtent: 92,
+            ),
+            itemBuilder: (BuildContext context, int index) {
+              final _DayCell cell = cells[index];
+              if (!cell.inMonth) return const SizedBox.shrink();
+              return _ToursAgendaDayCard(
+                date: cell.date,
+                bookings: cell.bookings,
+                selected: _sameDay(cell.date, _selectedDate),
+                onTap: () => unawaited(
+                  _setSelectedDate(cell.date).then((_) {
+                    if (onDaySelected != null) {
+                      onDaySelected();
+                    } else {
+                      onDialogRefresh?.call();
+                    }
+                  }),
+                ),
+                onDoubleTap: () => _openCalendarDayActions(cell.date),
+              );
+            },
+          ),
+        ],
+      ],
+    );
+
+    if (!asCard) return content;
+
+    return Card(
+      child: Padding(padding: const EdgeInsets.all(20), child: content),
     );
   }
 
-  Widget _buildSummaryCard(BuildContext context) {
+  Widget _buildSummaryCard(
+    BuildContext context, {
+    bool asCard = true,
+    VoidCallback? onDialogRefresh,
+  }) {
     final ToursSummaryReport? summary = _summaryReport;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final Widget content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (asCard) ...<Widget>[
+          Text(
+            'Resumo do periodo',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Consolidado de agendamentos, horas, pagamentos e comissao para o intervalo consultado.',
+            style: Theme.of(context).textTheme.bodyMedium,
+          ),
+          const SizedBox(height: 18),
+        ],
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
           children: <Widget>[
-            Text(
-              'Resumo do periodo',
-              style: Theme.of(context).textTheme.headlineSmall,
+            OutlinedButton.icon(
+              onPressed: _loadingSummary
+                  ? null
+                  : () async {
+                      await _pickReportStart();
+                      onDialogRefresh?.call();
+                    },
+              icon: const Icon(Icons.date_range_rounded),
+              label: Text('Inicio: ${_short(_reportStart)}'),
             ),
-            const SizedBox(height: 6),
-            Text(
-              'Consolidado de agendamentos, horas, pagamentos e comissao para o intervalo consultado.',
-              style: Theme.of(context).textTheme.bodyMedium,
+            OutlinedButton.icon(
+              onPressed: _loadingSummary
+                  ? null
+                  : () async {
+                      await _pickReportEnd();
+                      onDialogRefresh?.call();
+                    },
+              icon: const Icon(Icons.event_rounded),
+              label: Text('Fim: ${_short(_reportEnd)}'),
             ),
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: <Widget>[
-                OutlinedButton.icon(
-                  onPressed: _pickReportStart,
-                  icon: const Icon(Icons.date_range_rounded),
-                  label: Text('Inicio: ${_short(_reportStart)}'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _pickReportEnd,
-                  icon: const Icon(Icons.event_rounded),
-                  label: Text('Fim: ${_short(_reportEnd)}'),
-                ),
-                FilledButton.icon(
-                  onPressed: _loadingSummary ? null : _reloadSummary,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: Text(_loadingSummary ? 'Buscando...' : 'Buscar'),
-                ),
-              ],
+            FilledButton.icon(
+              onPressed: _loadingSummary
+                  ? null
+                  : () async {
+                      await _reloadSummary(force: true);
+                      onDialogRefresh?.call();
+                    },
+              icon: const Icon(Icons.refresh_rounded),
+              label: Text(_loadingSummary ? 'Buscando...' : 'Buscar'),
             ),
-            const SizedBox(height: 16),
-            if (_summaryError != null) ...<Widget>[
-              Text(
-                _summaryError!,
-                style: TextStyle(color: Colors.red.shade700),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (_summaryError != null) ...<Widget>[
+          Text(_summaryError!, style: TextStyle(color: Colors.red.shade700)),
+          const SizedBox(height: 12),
+        ],
+        if (_loadingSummary && !_hasSummaryForSelectedRange)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: LinearProgressIndicator(),
+          )
+        else
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              _metric(
+                context,
+                Icons.event_available_rounded,
+                'Agendamentos',
+                '${summary?.scheduledCount ?? 0}',
               ),
-              const SizedBox(height: 12),
+              _metric(
+                context,
+                Icons.cancel_schedule_send_rounded,
+                'Cancelados',
+                '${summary?.cancelledCount ?? 0}',
+              ),
+              _metric(
+                context,
+                Icons.schedule_rounded,
+                'Horas',
+                _hours(summary?.totalHours ?? 0),
+              ),
+              _metric(
+                context,
+                Icons.attach_money_rounded,
+                'Cobrado',
+                _money(summary?.grossAmount ?? 0),
+              ),
+              _metric(
+                context,
+                Icons.payments_rounded,
+                'Recebido',
+                _money(summary?.paidAmount ?? 0),
+              ),
+              _metric(
+                context,
+                Icons.hourglass_bottom_rounded,
+                'Pendente',
+                _money(summary?.pendingAmount ?? 0),
+              ),
+              _metric(
+                context,
+                Icons.account_balance_wallet_rounded,
+                'Comissao',
+                _money(summary?.commissionAmount ?? 0),
+              ),
+              _metric(
+                context,
+                Icons.savings_rounded,
+                'Liquido',
+                _money(summary?.netAmount ?? 0),
+              ),
+              _metric(
+                context,
+                Icons.stacked_line_chart_rounded,
+                'Ticket medio',
+                _money(summary?.averageTicket ?? 0),
+              ),
             ],
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
-              children: <Widget>[
-                _metric(
-                  context,
-                  Icons.event_available_rounded,
-                  'Agendamentos',
-                  '${summary?.scheduledCount ?? 0}',
-                ),
-                _metric(
-                  context,
-                  Icons.cancel_schedule_send_rounded,
-                  'Cancelados',
-                  '${summary?.cancelledCount ?? 0}',
-                ),
-                _metric(
-                  context,
-                  Icons.schedule_rounded,
-                  'Horas',
-                  _hours(summary?.totalHours ?? 0),
-                ),
-                _metric(
-                  context,
-                  Icons.attach_money_rounded,
-                  'Cobrado',
-                  _money(summary?.grossAmount ?? 0),
-                ),
-                _metric(
-                  context,
-                  Icons.payments_rounded,
-                  'Recebido',
-                  _money(summary?.paidAmount ?? 0),
-                ),
-                _metric(
-                  context,
-                  Icons.hourglass_bottom_rounded,
-                  'Pendente',
-                  _money(summary?.pendingAmount ?? 0),
-                ),
-                _metric(
-                  context,
-                  Icons.account_balance_wallet_rounded,
-                  'Comissao',
-                  _money(summary?.commissionAmount ?? 0),
-                ),
-                _metric(
-                  context,
-                  Icons.savings_rounded,
-                  'Liquido',
-                  _money(summary?.netAmount ?? 0),
-                ),
-                _metric(
-                  context,
-                  Icons.stacked_line_chart_rounded,
-                  'Ticket medio',
-                  _money(summary?.averageTicket ?? 0),
-                ),
-              ],
-            ),
-            const SizedBox(height: 20),
-            if (summary == null || _summaryIsEmpty(summary))
-              _emptyBox(
-                context,
-                'Nenhum tour ou viagem possui dados ativos no periodo informado.',
-              )
-            else ...<Widget>[
-              _buildSummaryTableSection(
-                context,
-                title: 'Resumo por prestador',
-                description:
-                    'Clique no nome para abrir o detalhe dos bookings desse parceiro no periodo.',
-                columns: const <DataColumn>[
-                  DataColumn(label: Text('Prestador')),
-                  DataColumn(label: Text('Agendados')),
-                  DataColumn(label: Text('Pagos')),
-                  DataColumn(label: Text('Pendentes')),
-                  DataColumn(label: Text('Horas')),
-                  DataColumn(label: Text('Cobrado')),
-                  DataColumn(label: Text('Comissao')),
-                ],
-                rows: summary.providerBreakdown
-                    .map(
-                      (ToursSummaryBreakdown item) => DataRow(
-                        cells: <DataCell>[
-                          DataCell(
-                            Wrap(
-                              spacing: 8,
-                              crossAxisAlignment: WrapCrossAlignment.center,
-                              children: <Widget>[
-                                InkWell(
-                                  onTap: _loadingSummary
-                                      ? null
-                                      : () => _openSummaryDetails(
-                                          groupBy: ToursSummaryGroupBy.provider,
-                                          item: item,
-                                        ),
-                                  child: Text(
-                                    item.label,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
-                                ),
-                                if (item.active == false)
-                                  _summaryBadge(context, 'Inativo'),
-                              ],
-                            ),
-                          ),
-                          DataCell(Text('${item.scheduledCount}')),
-                          DataCell(Text('${item.paidCount}')),
-                          DataCell(Text('${item.pendingCount}')),
-                          DataCell(Text(_hours(item.totalHours))),
-                          DataCell(Text(_money(item.grossAmount))),
-                          DataCell(Text(_money(item.commissionAmount))),
-                        ],
-                      ),
-                    )
-                    .toList(),
-              ),
-              const SizedBox(height: 16),
-              _buildSummaryTableSection(
-                context,
-                title: 'Resumo por tipo',
-                description:
-                    'Tours e viagens separados por tipo de servico, com detalhe em modal.',
-                columns: const <DataColumn>[
-                  DataColumn(label: Text('Tipo')),
-                  DataColumn(label: Text('Agendados')),
-                  DataColumn(label: Text('Pagos')),
-                  DataColumn(label: Text('Pendentes')),
-                  DataColumn(label: Text('Horas')),
-                  DataColumn(label: Text('Cobrado')),
-                  DataColumn(label: Text('Comissao')),
-                ],
-                rows: summary.serviceTypeBreakdown
-                    .map(
-                      (ToursSummaryBreakdown item) => _summaryDataRow(
-                        groupBy: ToursSummaryGroupBy.serviceType,
-                        item: item,
-                      ),
-                    )
-                    .toList(),
-              ),
-              const SizedBox(height: 16),
-              _buildSummaryTableSection(
-                context,
-                title: 'Resumo por pagamento',
-                description:
-                    'Meios de pagamento com dados do periodo e acesso ao detalhe das reservas pagas.',
-                columns: const <DataColumn>[
-                  DataColumn(label: Text('Metodo')),
-                  DataColumn(label: Text('Pagos')),
-                  DataColumn(label: Text('Horas')),
-                  DataColumn(label: Text('Cobrado')),
-                  DataColumn(label: Text('Comissao')),
-                ],
-                rows: summary.paymentMethodBreakdown
-                    .map(
-                      (ToursSummaryBreakdown item) => DataRow(
-                        cells: <DataCell>[
-                          DataCell(
+          ),
+        const SizedBox(height: 20),
+        if (summary == null || _summaryIsEmpty(summary))
+          _emptyBox(
+            context,
+            'Nenhum tour ou viagem possui dados ativos no periodo informado.',
+          )
+        else ...<Widget>[
+          _buildSummaryTableSection(
+            context,
+            title: 'Resumo por prestador',
+            description:
+                'Clique no nome para abrir o detalhe dos bookings desse parceiro no periodo.',
+            columns: const <DataColumn>[
+              DataColumn(label: Text('Prestador')),
+              DataColumn(label: Text('Agendados')),
+              DataColumn(label: Text('Pagos')),
+              DataColumn(label: Text('Pendentes')),
+              DataColumn(label: Text('Horas')),
+              DataColumn(label: Text('Cobrado')),
+              DataColumn(label: Text('Comissao')),
+            ],
+            rows: summary.providerBreakdown
+                .map(
+                  (ToursSummaryBreakdown item) => DataRow(
+                    cells: <DataCell>[
+                      DataCell(
+                        Wrap(
+                          spacing: 8,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: <Widget>[
                             InkWell(
                               onTap: _loadingSummary
                                   ? null
                                   : () => _openSummaryDetails(
-                                      groupBy:
-                                          ToursSummaryGroupBy.paymentMethod,
+                                      groupBy: ToursSummaryGroupBy.provider,
                                       item: item,
                                     ),
                               child: Text(
@@ -835,20 +1059,94 @@ class _ToursTravelPageState extends State<ToursTravelPage>
                                 ),
                               ),
                             ),
-                          ),
-                          DataCell(Text('${item.paidCount}')),
-                          DataCell(Text(_hours(item.totalHours))),
-                          DataCell(Text(_money(item.grossAmount))),
-                          DataCell(Text(_money(item.commissionAmount))),
-                        ],
+                            if (item.active == false)
+                              _summaryBadge(context, 'Inativo'),
+                          ],
+                        ),
                       ),
-                    )
-                    .toList(),
-              ),
+                      DataCell(Text('${item.scheduledCount}')),
+                      DataCell(Text('${item.paidCount}')),
+                      DataCell(Text('${item.pendingCount}')),
+                      DataCell(Text(_hours(item.totalHours))),
+                      DataCell(Text(_money(item.grossAmount))),
+                      DataCell(Text(_money(item.commissionAmount))),
+                    ],
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 16),
+          _buildSummaryTableSection(
+            context,
+            title: 'Resumo por tipo',
+            description:
+                'Tours e viagens separados por tipo de servico, com detalhe em modal.',
+            columns: const <DataColumn>[
+              DataColumn(label: Text('Tipo')),
+              DataColumn(label: Text('Agendados')),
+              DataColumn(label: Text('Pagos')),
+              DataColumn(label: Text('Pendentes')),
+              DataColumn(label: Text('Horas')),
+              DataColumn(label: Text('Cobrado')),
+              DataColumn(label: Text('Comissao')),
             ],
-          ],
-        ),
-      ),
+            rows: summary.serviceTypeBreakdown
+                .map(
+                  (ToursSummaryBreakdown item) => _summaryDataRow(
+                    groupBy: ToursSummaryGroupBy.serviceType,
+                    item: item,
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 16),
+          _buildSummaryTableSection(
+            context,
+            title: 'Resumo por pagamento',
+            description:
+                'Meios de pagamento com dados do periodo e acesso ao detalhe das reservas pagas.',
+            columns: const <DataColumn>[
+              DataColumn(label: Text('Metodo')),
+              DataColumn(label: Text('Pagos')),
+              DataColumn(label: Text('Horas')),
+              DataColumn(label: Text('Cobrado')),
+              DataColumn(label: Text('Comissao')),
+            ],
+            rows: summary.paymentMethodBreakdown
+                .map(
+                  (ToursSummaryBreakdown item) => DataRow(
+                    cells: <DataCell>[
+                      DataCell(
+                        InkWell(
+                          onTap: _loadingSummary
+                              ? null
+                              : () => _openSummaryDetails(
+                                  groupBy: ToursSummaryGroupBy.paymentMethod,
+                                  item: item,
+                                ),
+                          child: Text(
+                            item.label,
+                            style: const TextStyle(fontWeight: FontWeight.w700),
+                          ),
+                        ),
+                      ),
+                      DataCell(Text('${item.paidCount}')),
+                      DataCell(Text(_hours(item.totalHours))),
+                      DataCell(Text(_money(item.grossAmount))),
+                      DataCell(Text(_money(item.commissionAmount))),
+                    ],
+                  ),
+                )
+                .toList(),
+          ),
+        ],
+      ],
+    );
+
+    if (!asCard) return content;
+
+    return Card(
+      child: Padding(padding: const EdgeInsets.all(20), child: content),
     );
   }
 
@@ -1198,6 +1496,10 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   }
 
   Future<void> _createBooking() async {
+    final bool providersReady = await _ensureProvidersLoaded();
+    if (!providersReady || !mounted) {
+      return;
+    }
     if (_activeProviders.isEmpty) {
       await AppAlerts.info(
         context,
@@ -1222,6 +1524,10 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   }
 
   Future<void> _editBooking({ToursBooking? booking}) async {
+    final bool providersReady = await _ensureProvidersLoaded();
+    if (!providersReady || !mounted) {
+      return;
+    }
     final ToursBooking? selected =
         booking ??
         await _pickBooking(
@@ -1385,6 +1691,10 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   }
 
   Future<void> _manageProvider() async {
+    final bool providersReady = await _ensureProvidersLoaded();
+    if (!providersReady || !mounted) {
+      return;
+    }
     final _ProviderDraft? draft = await showDialog<_ProviderDraft>(
       context: context,
       builder: (BuildContext context) => _ProviderDialog(providers: _providers),
@@ -1445,7 +1755,13 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     setState(() => _saving = true);
     try {
       await action();
-      await _load();
+      await _load(showLoading: false);
+      if (_hasAgendaForSelectedMonth) {
+        await _loadAgenda(force: true);
+      }
+      if (_hasSummaryForSelectedRange) {
+        await _reloadSummary(force: true);
+      }
     } catch (error) {
       if (mounted) {
         await AppAlerts.error(
@@ -1558,6 +1874,9 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       setState(() {
         _reportStart = DateTime(picked.year, picked.month, picked.day);
         if (_reportStart.isAfter(_reportEnd)) _reportEnd = _reportStart;
+        _loadedSummaryKey = null;
+        _summaryReport = null;
+        _summaryError = null;
       });
     }
   }
@@ -1573,6 +1892,9 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       setState(() {
         _reportEnd = DateTime(picked.year, picked.month, picked.day);
         if (_reportEnd.isBefore(_reportStart)) _reportStart = _reportEnd;
+        _loadedSummaryKey = null;
+        _summaryReport = null;
+        _summaryError = null;
       });
     }
   }

@@ -80,7 +80,6 @@ class MaintenancePage extends StatefulWidget {
 class _MaintenancePageState extends State<MaintenancePage>
     with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
-  final GlobalKey _operationalSummaryKey = GlobalKey();
 
   late final AutoRefreshController _autoRefreshController;
   List<MaintenanceLocation> _locations = const <MaintenanceLocation>[];
@@ -91,6 +90,7 @@ class _MaintenancePageState extends State<MaintenancePage>
   bool _refreshingData = false;
   bool _loadingProviders = false;
   bool _saving = false;
+  bool _providersLoaded = false;
   int? _sharingOrderId;
   String? _errorMessage;
   int? _selectedOrderId;
@@ -102,7 +102,6 @@ class _MaintenancePageState extends State<MaintenancePage>
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.controller?._attach(this);
-    _scrollController.addListener(_handleScroll);
     _selectedDate = _today();
     _autoRefreshController = AutoRefreshController(
       interval: AppRuntimeConfig.operationalRefreshInterval,
@@ -127,9 +126,7 @@ class _MaintenancePageState extends State<MaintenancePage>
     WidgetsBinding.instance.removeObserver(this);
     _autoRefreshController.dispose();
     widget.controller?._detach(this);
-    _scrollController
-      ..removeListener(_handleScroll)
-      ..dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -160,7 +157,7 @@ class _MaintenancePageState extends State<MaintenancePage>
               runSpacing: 12,
               children: <Widget>[
                 FilledButton.icon(
-                  onPressed: _saving || _loadingProviders ? null : _createOrder,
+                  onPressed: _saving ? null : _createOrder,
                   icon: const Icon(Icons.add_circle_outline_rounded),
                   label: const Text('Lancar ordem'),
                 ),
@@ -215,6 +212,11 @@ class _MaintenancePageState extends State<MaintenancePage>
                   label: const Text('Catalogos'),
                 ),
                 OutlinedButton.icon(
+                  onPressed: _saving ? null : _pickSelectedDate,
+                  icon: const Icon(Icons.edit_calendar_rounded),
+                  label: const Text('Alterar dia'),
+                ),
+                OutlinedButton.icon(
                   onPressed: _canRefreshPage ? _refreshPage : null,
                   icon: const Icon(Icons.refresh_rounded),
                   label: Text(_refreshingData ? 'Atualizando...' : 'Atualizar'),
@@ -234,12 +236,8 @@ class _MaintenancePageState extends State<MaintenancePage>
                 child: CircularProgressIndicator(),
               ),
             )
-          else ...<Widget>[
-            KeyedSubtree(
-              key: _operationalSummaryKey,
-              child: _buildOperationalSummaryCard(),
-            ),
-          ],
+          else
+            _buildOperationalSummaryCard(),
         ],
       ),
     );
@@ -268,51 +266,15 @@ class _MaintenancePageState extends State<MaintenancePage>
           return a.referenceDate.compareTo(b.referenceDate);
         });
 
-  void _handleScroll() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      final Map<MaintenanceSection, BuildContext?> contexts =
-          <MaintenanceSection, BuildContext?>{
-            MaintenanceSection.operationalSummary:
-                _operationalSummaryKey.currentContext,
-          };
-      const double anchorY = 180;
-      MaintenanceSection best = _currentSection;
-      double? bestDistance;
-      for (final MapEntry<MaintenanceSection, BuildContext?> entry
-          in contexts.entries) {
-        final RenderObject? renderObject = entry.value?.findRenderObject();
-        if (renderObject is! RenderBox) {
-          continue;
-        }
-        final double distance =
-            (renderObject.localToGlobal(Offset.zero).dy - anchorY).abs();
-        if (bestDistance == null || distance < bestDistance) {
-          bestDistance = distance;
-          best = entry.key;
-        }
-      }
-      _setCurrentSection(best);
-    });
-  }
-
   Future<void> _scrollToSection(MaintenanceSection section) async {
-    final BuildContext? target = switch (section) {
-      MaintenanceSection.operationalSummary =>
-        _operationalSummaryKey.currentContext,
-    };
-    if (target == null) {
-      return;
-    }
-    await Scrollable.ensureVisible(
-      target,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
-      alignment: 0.02,
-    );
     _setCurrentSection(section);
+    if (_scrollController.hasClients) {
+      await _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+      );
+    }
   }
 
   void _setCurrentSection(MaintenanceSection section) {
@@ -336,26 +298,21 @@ class _MaintenancePageState extends State<MaintenancePage>
       _errorMessage = null;
     });
     try {
-      final DateTime selectedDate = _today();
-      final String monthStart = _formatDateApi(
-        DateTime(selectedDate.year, selectedDate.month, 1),
-      );
-      final String monthEnd = _formatDateApi(
-        DateTime(selectedDate.year, selectedDate.month + 1, 0),
-      );
       final Future<List<MaintenanceLocation>> locationsFuture = widget
           .maintenanceAppService
           .listLocations();
       final Future<List<MaintenanceOrder>> ordersFuture = widget
           .maintenanceAppService
-          .listOrders(dateFrom: monthStart, dateTo: monthEnd);
+          .listOrders(
+            dateFrom: _formatDateApi(_selectedDate),
+            dateTo: _formatDateApi(_selectedDate),
+          );
       final List<MaintenanceLocation> locations = await locationsFuture;
       final List<MaintenanceOrder> orders = await ordersFuture;
       if (!mounted) {
         return;
       }
       setState(() {
-        _selectedDate = selectedDate;
         _locations = locations;
         _orders = orders;
         _loading = false;
@@ -374,7 +331,6 @@ class _MaintenancePageState extends State<MaintenancePage>
           _selectedLocationId = null;
         }
       });
-      unawaited(_loadProviders());
     } catch (error) {
       if (!mounted) {
         return;
@@ -388,6 +344,9 @@ class _MaintenancePageState extends State<MaintenancePage>
   }
 
   Future<void> _loadProviders() async {
+    if (_providersLoaded) {
+      return;
+    }
     if (!mounted) {
       return;
     }
@@ -403,6 +362,7 @@ class _MaintenancePageState extends State<MaintenancePage>
       }
       setState(() {
         _providers = providers;
+        _providersLoaded = true;
         _loadingProviders = false;
       });
     } catch (error) {
@@ -433,6 +393,22 @@ class _MaintenancePageState extends State<MaintenancePage>
     if (!_canRefreshPage) {
       return;
     }
+    await _load(showLoading: false);
+  }
+
+  Future<void> _pickSelectedDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(_selectedDate.year - 1, 1, 1),
+      lastDate: DateTime(_selectedDate.year + 1, 12, 31),
+    );
+    if (picked == null) {
+      return;
+    }
+    setState(() {
+      _selectedDate = DateTime(picked.year, picked.month, picked.day);
+    });
     await _load(showLoading: false);
   }
 
@@ -487,14 +463,31 @@ class _MaintenancePageState extends State<MaintenancePage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            Text(
-              'Resumo por local',
-              style: Theme.of(context).textTheme.headlineSmall,
-            ),
-            const SizedBox(height: 6),
-            Text(
-              'Painel permanente com apartamentos, chalets e areas comuns do dia selecionado.',
-              style: Theme.of(context).textTheme.bodyMedium,
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Resumo por local',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Painel permanente com apartamentos, chalets e areas comuns de ${_fullDate(_selectedDate)}.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                OutlinedButton.icon(
+                  onPressed: _saving ? null : _pickSelectedDate,
+                  icon: const Icon(Icons.edit_calendar_rounded),
+                  label: const Text('Alterar dia'),
+                ),
+              ],
             ),
             const SizedBox(height: 18),
             Wrap(
@@ -1287,6 +1280,10 @@ class _MaintenancePageState extends State<MaintenancePage>
   }
 
   Future<void> _createOrder() async {
+    await _loadProviders();
+    if (!mounted) {
+      return;
+    }
     final _MaintenanceOrderDraft? draft =
         await showDialog<_MaintenanceOrderDraft>(
           context: context,
@@ -1308,6 +1305,10 @@ class _MaintenancePageState extends State<MaintenancePage>
   Future<void> _editOrder({MaintenanceOrder? order}) async {
     final MaintenanceOrder? selected = order ?? _selectedOrder;
     if (selected == null) {
+      return;
+    }
+    await _loadProviders();
+    if (!mounted) {
       return;
     }
     final _MaintenanceOrderDraft? draft =
@@ -1533,6 +1534,10 @@ class _MaintenancePageState extends State<MaintenancePage>
   }
 
   Future<void> _manageCatalogs() async {
+    await _loadProviders();
+    if (!mounted) {
+      return;
+    }
     await showDialog<void>(
       context: context,
       builder: (BuildContext context) => _MaintenanceCatalogsDialog(

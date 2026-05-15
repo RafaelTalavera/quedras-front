@@ -8,6 +8,7 @@ import '../../../core/feedback/app_alerts.dart';
 import '../../../core/feedback/app_share.dart';
 import '../../../core/sync/auto_refresh_controller.dart';
 import '../../../core/theme/costa_norte_brand.dart';
+import '../../../core/widgets/app_dialog_shell.dart';
 import '../../../core/widgets/brand_section_hero.dart';
 import '../../courts/application/court_app_service.dart';
 import '../../courts/application/partner_coach_report_pdf_exporter.dart';
@@ -113,9 +114,6 @@ class TennisRentalPage extends StatefulWidget {
 class _TennisRentalPageState extends State<TennisRentalPage>
     with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
-  final GlobalKey _selectedDaySectionKey = GlobalKey();
-  final GlobalKey _monthlyAgendaSectionKey = GlobalKey();
-  final GlobalKey _summarySectionKey = GlobalKey();
   late final AutoRefreshController _autoRefreshController;
   late final PartnerCoachReportPdfExporter _partnerCoachReportPdfExporter;
   late DateTime _selectedDate;
@@ -123,6 +121,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
   late DateTime _reportEndDate;
   bool _loading = true;
   bool _refreshingData = false;
+  bool _loadingAgenda = false;
   bool _loadingSummary = false;
   bool _saving = false;
   int? _sharingBookingId;
@@ -133,13 +132,15 @@ class _TennisRentalPageState extends State<TennisRentalPage>
   List<CourtBooking> _summaryBookings = <CourtBooking>[];
   CourtSummaryReport? _summary;
   TennisRentalSection _currentSection = TennisRentalSection.selectedDay;
+  String? _agendaErrorMessage;
+  String? _loadedAgendaKey;
+  String? _loadedSummaryKey;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     widget.controller?._attach(this);
-    _scrollController.addListener(_handleScroll);
     _selectedDate = DateTime.now();
     _reportStartDate = DateTime(_selectedDate.year, _selectedDate.month, 1);
     _reportEndDate = DateTime(_selectedDate.year, _selectedDate.month + 1, 0);
@@ -148,16 +149,11 @@ class _TennisRentalPageState extends State<TennisRentalPage>
         DefaultPartnerCoachReportPdfExporter();
     _autoRefreshController = AutoRefreshController(
       interval: AppRuntimeConfig.operationalRefreshInterval,
-      onRefresh: () => _load(showLoading: false),
+      onRefresh: () => _refreshActiveData(showLoading: false),
       canRefresh: _canAutoRefresh,
     );
     _autoRefreshController.start();
     _load();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted) {
-        _notifyCurrentSection();
-      }
-    });
   }
 
   @override
@@ -174,9 +170,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     WidgetsBinding.instance.removeObserver(this);
     _autoRefreshController.dispose();
     widget.controller?._detach(this);
-    _scrollController
-      ..removeListener(_handleScroll)
-      ..dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
@@ -184,21 +178,21 @@ class _TennisRentalPageState extends State<TennisRentalPage>
   void didChangeAppLifecycleState(AppLifecycleState state) {
     _autoRefreshController.handleLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      _load(showLoading: false);
+      unawaited(_refreshActiveData(showLoading: false));
     }
   }
+
+  List<CourtBooking> get _dayBookings =>
+      _bookings.where((CourtBooking item) {
+        return _sameDay(item.bookingDate, _selectedDate);
+      }).toList()..sort(
+        (CourtBooking a, CourtBooking b) => a.startTime.compareTo(b.startTime),
+      );
 
   List<CourtBooking> get _monthBookings =>
       _bookings.where((CourtBooking item) {
         return item.bookingDate.year == _selectedDate.year &&
             item.bookingDate.month == _selectedDate.month;
-      }).toList()..sort(
-        (CourtBooking a, CourtBooking b) => a.startTime.compareTo(b.startTime),
-      );
-
-  List<CourtBooking> get _dayBookings =>
-      _monthBookings.where((CourtBooking item) {
-        return _sameDay(item.bookingDate, _selectedDate);
       }).toList()..sort(
         (CourtBooking a, CourtBooking b) => a.startTime.compareTo(b.startTime),
       );
@@ -225,6 +219,20 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                   onPressed: _saving ? null : _openCreateDialog,
                   icon: const Icon(Icons.add_circle_outline_rounded),
                   label: const Text('Lancar reserva'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _loading
+                      ? null
+                      : () => _showSection(TennisRentalSection.monthlyAgenda),
+                  icon: const Icon(Icons.calendar_month_rounded),
+                  label: const Text('Agenda mensal'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _loading
+                      ? null
+                      : () => _showSection(TennisRentalSection.summary),
+                  icon: const Icon(Icons.analytics_rounded),
+                  label: const Text('Periodo'),
                 ),
                 OutlinedButton.icon(
                   onPressed: _saving || _dayBookings.isEmpty
@@ -279,95 +287,15 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                 child: CircularProgressIndicator(),
               ),
             )
-          else ...<Widget>[
-            KeyedSubtree(
-              key: _selectedDaySectionKey,
-              child: _buildSelectedDayCard(context),
-            ),
-            const SizedBox(height: 18),
-            KeyedSubtree(
-              key: _monthlyAgendaSectionKey,
-              child: _buildCalendarCard(context),
-            ),
-            const SizedBox(height: 18),
-            KeyedSubtree(
-              key: _summarySectionKey,
-              child: _buildSummaryCard(context),
-            ),
-          ],
+          else
+            _buildSelectedDayCard(context),
         ],
       ),
     );
   }
 
-  void _handleScroll() {
-    _notifyCurrentSection();
-  }
-
   Future<void> _scrollToSection(TennisRentalSection section) async {
-    final BuildContext? targetContext = _sectionKeyFor(section).currentContext;
-    if (targetContext == null) {
-      return;
-    }
-    await Scrollable.ensureVisible(
-      targetContext,
-      duration: const Duration(milliseconds: 320),
-      curve: Curves.easeOutCubic,
-      alignment: 0.02,
-    );
-    _setCurrentSection(section);
-  }
-
-  GlobalKey _sectionKeyFor(TennisRentalSection section) {
-    switch (section) {
-      case TennisRentalSection.selectedDay:
-        return _selectedDaySectionKey;
-      case TennisRentalSection.monthlyAgenda:
-        return _monthlyAgendaSectionKey;
-      case TennisRentalSection.summary:
-        return _summarySectionKey;
-    }
-  }
-
-  void _notifyCurrentSection() {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted) {
-        return;
-      }
-      _setCurrentSection(_resolveCurrentSection());
-    });
-  }
-
-  TennisRentalSection _resolveCurrentSection() {
-    final Map<TennisRentalSection, GlobalKey> sectionKeys =
-        <TennisRentalSection, GlobalKey>{
-          TennisRentalSection.selectedDay: _selectedDaySectionKey,
-          TennisRentalSection.monthlyAgenda: _monthlyAgendaSectionKey,
-          TennisRentalSection.summary: _summarySectionKey,
-        };
-    const double anchorY = 180;
-    TennisRentalSection bestSection = _currentSection;
-    double? bestDistance;
-
-    for (final MapEntry<TennisRentalSection, GlobalKey> entry
-        in sectionKeys.entries) {
-      final BuildContext? sectionContext = entry.value.currentContext;
-      if (sectionContext == null) {
-        continue;
-      }
-      final RenderObject? renderObject = sectionContext.findRenderObject();
-      if (renderObject is! RenderBox) {
-        continue;
-      }
-      final double sectionTop = renderObject.localToGlobal(Offset.zero).dy;
-      final double distance = (sectionTop - anchorY).abs();
-      if (bestDistance == null || distance < bestDistance) {
-        bestDistance = distance;
-        bestSection = entry.key;
-      }
-    }
-
-    return bestSection;
+    await _showSection(section);
   }
 
   void _setCurrentSection(TennisRentalSection section) {
@@ -376,6 +304,25 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     }
     _currentSection = section;
     widget.onSectionChanged?.call(section);
+  }
+
+  Future<void> _showSection(TennisRentalSection section) async {
+    if (section == TennisRentalSection.monthlyAgenda) {
+      await _openAgendaDialog();
+      return;
+    }
+    if (section == TennisRentalSection.summary) {
+      await _openSummaryDialog();
+      return;
+    }
+    _setCurrentSection(section);
+    if (_scrollController.hasClients) {
+      await _scrollController.animateTo(
+        0,
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+      );
+    }
   }
 
   Future<void> _load({bool showLoading = true}) async {
@@ -393,21 +340,21 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     });
     try {
       final Future<List<CourtBooking>> bookingsFuture = widget.courtAppService
-          .listBookings(
-            dateFrom: _formatDate(_monthStart(_selectedDate)),
-            dateTo: _formatDate(_monthEnd(_selectedDate)),
-          );
+          .listBookings(bookingDate: _formatDate(_selectedDate));
       final List<CourtBooking> bookings = await bookingsFuture;
       if (!mounted) {
         return;
       }
       setState(() {
-        _bookings = bookings;
+        _replaceCachedBookings(
+          startDate: _selectedDate,
+          endDate: _selectedDate,
+          bookings: bookings,
+        );
         _selectedSummaryDetailKey = null;
         _loading = false;
         _refreshingData = false;
       });
-      unawaited(_loadDeferredSummary());
     } catch (error) {
       if (!mounted) {
         return;
@@ -420,55 +367,19 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     }
   }
 
-  Future<void> _loadDeferredSummary() async {
-    if (!mounted) {
-      return;
-    }
-    setState(() {
-      _loadingSummary = true;
-      _summaryErrorMessage = null;
-    });
-    try {
-      final Future<List<CourtBooking>> bookingsFuture = widget.courtAppService
-          .listBookings(
-            dateFrom: _formatDate(_reportStartDate),
-            dateTo: _formatDate(_reportEndDate),
-          );
-      final Future<CourtSummaryReport> summaryFuture = widget.courtAppService
-          .getSummaryReport(
-            dateFrom: _formatDate(_reportStartDate),
-            dateTo: _formatDate(_reportEndDate),
-          );
-      final List<CourtBooking> bookings = await bookingsFuture;
-      final CourtSummaryReport summary = await summaryFuture;
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _summaryBookings = bookings;
-        _summary = summary;
-        _selectedSummaryDetailKey = null;
-        _loadingSummary = false;
-      });
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      setState(() {
-        _loadingSummary = false;
-        _summaryErrorMessage = error.toString().replaceFirst('Bad state: ', '');
-      });
-    }
-  }
-
   bool get _canRefreshPage =>
-      !_loading && !_refreshingData && !_loadingSummary && !_saving;
+      !_loading &&
+      !_refreshingData &&
+      !_loadingAgenda &&
+      !_loadingSummary &&
+      !_saving;
 
   bool _canAutoRefresh() {
     final ModalRoute<dynamic>? route = ModalRoute.of(context);
     return mounted &&
         !_loading &&
         !_refreshingData &&
+        !_loadingAgenda &&
         !_loadingSummary &&
         !_saving &&
         (route?.isCurrent ?? true);
@@ -478,12 +389,101 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     if (!_canRefreshPage) {
       return;
     }
-    await _load(showLoading: false);
+    await _refreshActiveData(showLoading: false);
+  }
+
+  Future<void> _refreshActiveData({bool showLoading = false}) async {
+    await _load(showLoading: showLoading);
+    if (_currentSection == TennisRentalSection.monthlyAgenda) {
+      await _loadAgenda(force: true);
+    }
+    if (_currentSection == TennisRentalSection.summary) {
+      await _reloadSummary(force: true);
+    }
   }
 
   DateTime _monthStart(DateTime date) => DateTime(date.year, date.month, 1);
 
   DateTime _monthEnd(DateTime date) => DateTime(date.year, date.month + 1, 0);
+
+  String _monthKeyFor(DateTime date) =>
+      '${date.year}-${date.month.toString().padLeft(2, '0')}';
+
+  String _summaryKeyFor(DateTime startDate, DateTime endDate) =>
+      '${_formatDate(startDate)}|${_formatDate(endDate)}';
+
+  bool get _hasAgendaForSelectedMonth =>
+      _loadedAgendaKey == _monthKeyFor(_selectedDate);
+
+  bool get _hasSummaryForSelectedRange =>
+      _loadedSummaryKey == _summaryKeyFor(_reportStartDate, _reportEndDate);
+
+  Future<void> _loadAgenda({bool force = false}) async {
+    if (!force && _hasAgendaForSelectedMonth) {
+      return;
+    }
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _loadingAgenda = true;
+      _agendaErrorMessage = null;
+    });
+    try {
+      final List<CourtBooking> bookings = await widget.courtAppService
+          .listBookings(
+            dateFrom: _formatDate(_monthStart(_selectedDate)),
+            dateTo: _formatDate(_monthEnd(_selectedDate)),
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _replaceCachedBookings(
+          startDate: _monthStart(_selectedDate),
+          endDate: _monthEnd(_selectedDate),
+          bookings: bookings,
+        );
+        _loadedAgendaKey = _monthKeyFor(_selectedDate);
+        _loadingAgenda = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadingAgenda = false;
+        _agendaErrorMessage = error.toString().replaceFirst('Bad state: ', '');
+      });
+    }
+  }
+
+  void _replaceCachedBookings({
+    required DateTime startDate,
+    required DateTime endDate,
+    required List<CourtBooking> bookings,
+  }) {
+    final DateTime normalizedStart = DateTime(
+      startDate.year,
+      startDate.month,
+      startDate.day,
+    );
+    final DateTime normalizedEnd = DateTime(
+      endDate.year,
+      endDate.month,
+      endDate.day,
+    );
+    final List<CourtBooking> nextBookings = _bookings.where((
+      CourtBooking item,
+    ) {
+      return item.bookingDate.isBefore(normalizedStart) ||
+          item.bookingDate.isAfter(normalizedEnd);
+    }).toList()..addAll(bookings);
+    nextBookings.sort(
+      (CourtBooking a, CourtBooking b) => a.startTime.compareTo(b.startTime),
+    );
+    _bookings = nextBookings;
+  }
 
   Future<void> _shareBookingReceipt(CourtBooking booking) async {
     if (_sharingBookingId != null) {
@@ -540,7 +540,10 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     return buffer.toString().trim();
   }
 
-  Future<void> _reloadSummary() async {
+  Future<void> _reloadSummary({bool force = false}) async {
+    if (!force && _hasSummaryForSelectedRange) {
+      return;
+    }
     setState(() {
       _loadingSummary = true;
       _summaryErrorMessage = null;
@@ -563,6 +566,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       setState(() {
         _summaryBookings = bookings;
         _summary = summary;
+        _loadedSummaryKey = _summaryKeyFor(_reportStartDate, _reportEndDate);
         _selectedSummaryDetailKey = null;
         _loadingSummary = false;
       });
@@ -597,14 +601,18 @@ class _TennisRentalPageState extends State<TennisRentalPage>
 
   Future<void> _setSelectedDate(DateTime date) async {
     final DateTime normalizedDate = DateTime(date.year, date.month, date.day);
+    final bool dateChanged = !_sameDay(normalizedDate, _selectedDate);
     final bool monthChanged =
         normalizedDate.year != _selectedDate.year ||
         normalizedDate.month != _selectedDate.month;
     setState(() {
       _selectedDate = normalizedDate;
     });
-    if (monthChanged) {
-      await _load();
+    if (dateChanged || monthChanged) {
+      await _load(showLoading: false);
+      if (_currentSection == TennisRentalSection.monthlyAgenda) {
+        await _loadAgenda(force: monthChanged);
+      }
     }
   }
 
@@ -623,6 +631,10 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       if (_reportStartDate.isAfter(_reportEndDate)) {
         _reportEndDate = _reportStartDate;
       }
+      _loadedSummaryKey = null;
+      _summary = null;
+      _summaryBookings = <CourtBooking>[];
+      _summaryErrorMessage = null;
     });
   }
 
@@ -641,7 +653,133 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       if (_reportEndDate.isBefore(_reportStartDate)) {
         _reportStartDate = _reportEndDate;
       }
+      _loadedSummaryKey = null;
+      _summary = null;
+      _summaryBookings = <CourtBooking>[];
+      _summaryErrorMessage = null;
     });
+  }
+
+  Future<void> _openAgendaDialog() async {
+    _setCurrentSection(TennisRentalSection.monthlyAgenda);
+    await _loadAgenda();
+    if (!mounted) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AppDialogShell(
+          maxWidth: 1080,
+          maxHeight: MediaQuery.of(dialogContext).size.height * 0.9,
+          padding: EdgeInsets.zero,
+          child: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setDialogState) {
+              return Column(
+                children: <Widget>[
+                  _buildSectionDialogHeader(
+                    context,
+                    title: 'Agenda mensal',
+                    subtitle:
+                        'Visualizacao mensal de reservas com acesso rapido por dia.',
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: _buildCalendarCard(
+                        context,
+                        asCard: false,
+                        onDialogRefresh: () => setDialogState(() {}),
+                        onDaySelected: () => Navigator.of(dialogContext).pop(),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+    if (mounted) {
+      _setCurrentSection(TennisRentalSection.selectedDay);
+    }
+  }
+
+  Future<void> _openSummaryDialog() async {
+    _setCurrentSection(TennisRentalSection.summary);
+    if (!mounted) {
+      return;
+    }
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return AppDialogShell(
+          maxWidth: 1120,
+          maxHeight: MediaQuery.of(dialogContext).size.height * 0.9,
+          padding: EdgeInsets.zero,
+          child: StatefulBuilder(
+            builder: (BuildContext context, StateSetter setDialogState) {
+              return Column(
+                children: <Widget>[
+                  _buildSectionDialogHeader(
+                    context,
+                    title: 'Periodo',
+                    subtitle:
+                        'Resumo operacional do intervalo consultado com detalhes por perfil e parceiro.',
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: _buildSummaryCard(
+                        context,
+                        asCard: false,
+                        onDialogRefresh: () => setDialogState(() {}),
+                      ),
+                    ),
+                  ),
+                ],
+              );
+            },
+          ),
+        );
+      },
+    );
+    if (mounted) {
+      _setCurrentSection(TennisRentalSection.selectedDay);
+    }
+  }
+
+  Widget _buildSectionDialogHeader(
+    BuildContext context, {
+    required String title,
+    required String subtitle,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(24, 20, 18, 16),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(title, style: Theme.of(context).textTheme.headlineSmall),
+                const SizedBox(height: 6),
+                Text(subtitle, style: Theme.of(context).textTheme.bodyMedium),
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: () => Navigator.of(context).pop(),
+            icon: const Icon(Icons.close_rounded),
+            tooltip: 'Fechar',
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildSelectedDayCard(BuildContext context) {
@@ -765,372 +903,453 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     );
   }
 
-  Widget _buildCalendarCard(BuildContext context) {
+  Widget _buildCalendarCard(
+    BuildContext context, {
+    bool asCard = true,
+    VoidCallback? onDialogRefresh,
+    VoidCallback? onDaySelected,
+  }) {
     final List<_CalendarCell> cells = _buildCalendarCells();
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: <Widget>[
-                Text(
-                  'Agenda mensal',
-                  style: Theme.of(context).textTheme.headlineSmall,
-                ),
-                const Spacer(),
-                SizedBox(
-                  width: 260,
-                  child: DropdownButtonFormField<int>(
-                    value: _selectedDate.month - 1,
-                    decoration: const InputDecoration(
-                      labelText: 'Mes da agenda',
-                      prefixIcon: Icon(Icons.calendar_month_rounded),
-                    ),
-                    items: List<DropdownMenuItem<int>>.generate(
-                      _courtMonthLabels.length,
-                      (int index) => DropdownMenuItem<int>(
-                        value: index,
-                        child: Text(_courtMonthLabels[index]),
-                      ),
-                    ),
-                    onChanged: (int? value) {
-                      if (value == null) {
-                        return;
-                      }
-                      unawaited(
-                        _setSelectedDate(
-                          DateTime(_selectedDate.year, value + 1, 1),
-                        ),
-                      );
-                    },
+    final Widget content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (asCard)
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: <Widget>[
+              Text(
+                'Agenda mensal',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const Spacer(),
+              SizedBox(
+                width: 260,
+                child: DropdownButtonFormField<int>(
+                  value: _selectedDate.month - 1,
+                  decoration: const InputDecoration(
+                    labelText: 'Mes da agenda',
+                    prefixIcon: Icon(Icons.calendar_month_rounded),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Row(
-                  children: _courtWeekLabels.map((String label) {
-                    return Expanded(
-                      child: Center(
-                        child: Text(
-                          label,
-                          style: Theme.of(context).textTheme.labelLarge
-                              ?.copyWith(color: CostaNorteBrand.mutedInk),
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 10),
-                GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: cells.length,
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: 7,
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                    mainAxisExtent: _agendaCellHeight(),
+                  items: List<DropdownMenuItem<int>>.generate(
+                    _courtMonthLabels.length,
+                    (int index) => DropdownMenuItem<int>(
+                      value: index,
+                      child: Text(_courtMonthLabels[index]),
+                    ),
                   ),
-                  itemBuilder: (BuildContext context, int index) {
-                    final _CalendarCell cell = cells[index];
-                    if (cell.date == null) {
-                      return const SizedBox.shrink();
+                  onChanged: (int? value) {
+                    if (value == null) {
+                      return;
                     }
-                    return _CourtAgendaDayCard(
-                      date: cell.date!,
-                      bookings: _bookingsForDate(cell.date!),
-                      selected: _sameDay(cell.date!, _selectedDate),
-                      onTap: () => unawaited(_setSelectedDate(cell.date!)),
-                      onDoubleTap: () => _openCalendarDayActions(cell.date!),
+                    unawaited(
+                      _setSelectedDate(
+                        DateTime(_selectedDate.year, value + 1, 1),
+                      ).then((_) => onDialogRefresh?.call()),
                     );
                   },
                 ),
-              ],
+              ),
+            ],
+          )
+        else
+          Align(
+            alignment: Alignment.centerRight,
+            child: SizedBox(
+              width: 260,
+              child: DropdownButtonFormField<int>(
+                value: _selectedDate.month - 1,
+                decoration: const InputDecoration(
+                  labelText: 'Mes da agenda',
+                  prefixIcon: Icon(Icons.calendar_month_rounded),
+                ),
+                items: List<DropdownMenuItem<int>>.generate(
+                  _courtMonthLabels.length,
+                  (int index) => DropdownMenuItem<int>(
+                    value: index,
+                    child: Text(_courtMonthLabels[index]),
+                  ),
+                ),
+                onChanged: (int? value) {
+                  if (value == null) {
+                    return;
+                  }
+                  unawaited(
+                    _setSelectedDate(
+                      DateTime(_selectedDate.year, value + 1, 1),
+                    ).then((_) => onDialogRefresh?.call()),
+                  );
+                },
+              ),
             ),
-          ],
-        ),
-      ),
+          ),
+        const SizedBox(height: 10),
+        if (_loadingAgenda && !_hasAgendaForSelectedMonth)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              if (_agendaErrorMessage != null) ...<Widget>[
+                Text(
+                  _agendaErrorMessage!,
+                  style: TextStyle(color: Colors.red.shade700),
+                ),
+                const SizedBox(height: 12),
+              ],
+              Row(
+                children: _courtWeekLabels.map((String label) {
+                  return Expanded(
+                    child: Center(
+                      child: Text(
+                        label,
+                        style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                          color: CostaNorteBrand.mutedInk,
+                        ),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+              const SizedBox(height: 10),
+              GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: cells.length,
+                gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 7,
+                  mainAxisSpacing: 8,
+                  crossAxisSpacing: 8,
+                  mainAxisExtent: _agendaCellHeight(),
+                ),
+                itemBuilder: (BuildContext context, int index) {
+                  final _CalendarCell cell = cells[index];
+                  if (cell.date == null) {
+                    return const SizedBox.shrink();
+                  }
+                  return _CourtAgendaDayCard(
+                    date: cell.date!,
+                    bookings: _bookingsForDate(cell.date!),
+                    selected: _sameDay(cell.date!, _selectedDate),
+                    onTap: () => unawaited(
+                      _setSelectedDate(cell.date!).then((_) {
+                        if (onDaySelected != null) {
+                          onDaySelected();
+                        } else {
+                          onDialogRefresh?.call();
+                        }
+                      }),
+                    ),
+                    onDoubleTap: () => _openCalendarDayActions(cell.date!),
+                  );
+                },
+              ),
+            ],
+          ),
+      ],
+    );
+
+    if (!asCard) {
+      return content;
+    }
+
+    return Card(
+      child: Padding(padding: const EdgeInsets.all(20), child: content),
     );
   }
 
-  Widget _buildSummaryCard(BuildContext context) {
+  Widget _buildSummaryCard(
+    BuildContext context, {
+    bool asCard = true,
+    VoidCallback? onDialogRefresh,
+  }) {
     final CourtSummaryReport? summary = _summary;
     final List<_PartnerCoachSummaryRow> partnerCoachRows =
         _buildPartnerCoachSummaryRows();
     final List<CourtBooking> reportBookings = _reportBookings;
     final List<CourtBooking> activeReportBookings = _activeReportBookings;
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    final Widget content = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        if (asCard) ...<Widget>[
+          Text(
+            'Resumo do periodo',
+            style: Theme.of(context).textTheme.headlineSmall,
+          ),
+          const SizedBox(height: 18),
+        ],
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: <Widget>[
-            Text(
-              'Resumo do periodo',
-              style: Theme.of(context).textTheme.headlineSmall,
+            OutlinedButton.icon(
+              onPressed: _loadingSummary
+                  ? null
+                  : () async {
+                      await _pickReportStartDate();
+                      onDialogRefresh?.call();
+                    },
+              icon: const Icon(Icons.date_range_rounded),
+              label: Text('Inicio: ${_formatShortDate(_reportStartDate)}'),
             ),
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              children: <Widget>[
-                OutlinedButton.icon(
-                  onPressed: _loadingSummary ? null : _pickReportStartDate,
-                  icon: const Icon(Icons.date_range_rounded),
-                  label: Text('Inicio: ${_formatShortDate(_reportStartDate)}'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _loadingSummary ? null : _pickReportEndDate,
-                  icon: const Icon(Icons.event_rounded),
-                  label: Text('Fim: ${_formatShortDate(_reportEndDate)}'),
-                ),
-                FilledButton.icon(
-                  onPressed: _loadingSummary ? null : _reloadSummary,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: Text(_loadingSummary ? 'Buscando...' : 'Buscar'),
-                ),
-              ],
+            OutlinedButton.icon(
+              onPressed: _loadingSummary
+                  ? null
+                  : () async {
+                      await _pickReportEndDate();
+                      onDialogRefresh?.call();
+                    },
+              icon: const Icon(Icons.event_rounded),
+              label: Text('Fim: ${_formatShortDate(_reportEndDate)}'),
             ),
-            const SizedBox(height: 18),
-            if (_summaryErrorMessage != null) ...<Widget>[
-              Text(
-                _summaryErrorMessage!,
-                style: TextStyle(color: Colors.red.shade700),
-              ),
-              const SizedBox(height: 12),
-            ],
-            if (summary == null)
-              const Text('Resumo indisponivel.')
-            else if (_loadingSummary)
-              const Padding(
-                padding: EdgeInsets.symmetric(vertical: 12),
-                child: LinearProgressIndicator(),
-              )
-            else
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+            FilledButton.icon(
+              onPressed: _loadingSummary
+                  ? null
+                  : () async {
+                      await _reloadSummary(force: true);
+                      onDialogRefresh?.call();
+                    },
+              icon: const Icon(Icons.refresh_rounded),
+              label: Text(_loadingSummary ? 'Buscando...' : 'Buscar'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 18),
+        if (_summaryErrorMessage != null) ...<Widget>[
+          Text(
+            _summaryErrorMessage!,
+            style: TextStyle(color: Colors.red.shade700),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (_loadingSummary && !_hasSummaryForSelectedRange)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 12),
+            child: LinearProgressIndicator(),
+          )
+        else if (summary == null)
+          const Text('Resumo indisponivel.')
+        else
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Wrap(
+                spacing: 14,
+                runSpacing: 14,
                 children: <Widget>[
-                  Wrap(
-                    spacing: 14,
-                    runSpacing: 14,
-                    children: <Widget>[
-                      _MetricCard(
-                        selected:
-                            _selectedSummaryDetailKey == 'metric:overview',
-                        title: _formatReportRangeLabel(
-                          _reportStartDate,
-                          _reportEndDate,
-                        ),
-                        value: '${summary.scheduledCount} reservas ativas',
-                        caption: summary.cancelledCount == 0
-                            ? 'Sem cancelamentos no periodo'
-                            : '${summary.cancelledCount} canceladas no historico',
-                        icon: Icons.calendar_view_month_rounded,
-                        onTap: () => _openSummaryDetail(
-                          key: 'metric:overview',
-                          title: 'Reservas ativas do periodo',
-                          description:
-                              'Lista de reservas ativas dentro do periodo consultado.',
-                          bookings: activeReportBookings,
-                        ),
-                      ),
-                      _MetricCard(
-                        selected:
-                            _selectedSummaryDetailKey == 'metric:materials',
-                        title: _formatCurrency(summary.materialsAmount),
-                        value: _formatCurrency(summary.courtAmount),
-                        caption: 'Materiais vendidos e receita base de quadra',
-                        icon: Icons.inventory_2_rounded,
-                        onTap: () => _openSummaryDetail(
-                          key: 'metric:materials',
-                          title: 'Materiais e receita base',
-                          description:
-                              'Reservas ativas com materiais ou cobranca de quadra no periodo.',
-                          bookings: activeReportBookings.where((
-                            CourtBooking booking,
-                          ) {
-                            return booking.materialsAmount > 0 ||
-                                booking.courtAmount > 0;
-                          }).toList(),
-                        ),
-                      ),
-                    ],
+                  _MetricCard(
+                    selected: _selectedSummaryDetailKey == 'metric:overview',
+                    title: _formatReportRangeLabel(
+                      _reportStartDate,
+                      _reportEndDate,
+                    ),
+                    value: '${summary.scheduledCount} reservas ativas',
+                    caption: summary.cancelledCount == 0
+                        ? 'Sem cancelamentos no periodo'
+                        : '${summary.cancelledCount} canceladas no historico',
+                    icon: Icons.calendar_view_month_rounded,
+                    onTap: () => _openSummaryDetail(
+                      key: 'metric:overview',
+                      title: 'Reservas ativas do periodo',
+                      description:
+                          'Lista de reservas ativas dentro do periodo consultado.',
+                      bookings: activeReportBookings,
+                    ),
                   ),
-                  const SizedBox(height: 18),
-                  Wrap(
-                    spacing: 12,
-                    runSpacing: 12,
-                    children: <Widget>[
-                      _DetailChip(
-                        selected: _selectedSummaryDetailKey == 'chip:guest',
-                        label: 'Hospedes',
-                        value: '${summary.guestHours.toStringAsFixed(1)} h',
-                        icon: Icons.king_bed_rounded,
-                        onTap: () => _openSummaryDetail(
-                          key: 'chip:guest',
-                          title: 'Detalhe de hospedes',
-                          description:
-                              'Reservas ativas de hospedes dentro do periodo consultado.',
-                          bookings: _filterReportBookingsByCustomerType(
-                            CourtCustomerType.guest,
-                          ),
-                        ),
-                      ),
-                      _DetailChip(
-                        selected: _selectedSummaryDetailKey == 'chip:vip',
-                        label: 'VIP',
-                        value: '${summary.vipHours.toStringAsFixed(1)} h',
-                        icon: Icons.workspace_premium_rounded,
-                        onTap: () => _openSummaryDetail(
-                          key: 'chip:vip',
-                          title: 'Detalhe de clientes VIP',
-                          description:
-                              'Reservas ativas de clientes VIP dentro do periodo consultado.',
-                          bookings: _filterReportBookingsByCustomerType(
-                            CourtCustomerType.vip,
-                          ),
-                        ),
-                      ),
-                      _DetailChip(
-                        selected: _selectedSummaryDetailKey == 'chip:external',
-                        label: 'Externos',
-                        value: '${summary.externalHours.toStringAsFixed(1)} h',
-                        icon: Icons.public_rounded,
-                        onTap: () => _openSummaryDetail(
-                          key: 'chip:external',
-                          title: 'Detalhe de clientes externos',
-                          description:
-                              'Reservas ativas de clientes externos dentro do periodo consultado.',
-                          bookings: _filterReportBookingsByCustomerType(
-                            CourtCustomerType.external,
-                          ),
-                        ),
-                      ),
-                      _DetailChip(
-                        selected:
-                            _selectedSummaryDetailKey == 'chip:partner-coach',
-                        label: 'Prof. parceiro',
-                        value:
-                            '${summary.partnerCoachHours.toStringAsFixed(1)} h',
-                        icon: Icons.sports_rounded,
-                        onTap: () => _openSummaryDetail(
-                          key: 'chip:partner-coach',
-                          title: 'Detalhe de professores parceiros',
-                          description:
-                              'Reservas ativas de professores parceiros dentro do periodo consultado.',
-                          bookings: _filterReportBookingsByCustomerType(
-                            CourtCustomerType.partnerCoach,
-                          ),
-                        ),
-                      ),
-                      _DetailChip(
-                        selected: _selectedSummaryDetailKey == 'chip:materials',
-                        label: 'Materiais',
-                        value: _formatCurrency(summary.materialsAmount),
-                        icon: Icons.inventory_2_rounded,
-                        onTap: () => _openSummaryDetail(
-                          key: 'chip:materials',
-                          title: 'Detalhe de materiais',
-                          description:
-                              'Reservas ativas com venda de materiais no periodo consultado.',
-                          bookings: activeReportBookings.where((
-                            CourtBooking booking,
-                          ) {
-                            return booking.materialsAmount > 0;
-                          }).toList(),
-                        ),
-                      ),
-                      _DetailChip(
-                        selected: _selectedSummaryDetailKey == 'chip:pending',
-                        label: 'Pendente',
-                        value: _formatCurrency(summary.pendingAmount),
-                        icon: Icons.warning_amber_rounded,
-                        onTap: () => _openSummaryDetail(
-                          key: 'chip:pending',
-                          title: 'Detalhe de pendencias',
-                          description:
-                              'Reservas ativas com pagamento pendente no periodo consultado.',
-                          bookings: activeReportBookings.where((
-                            CourtBooking booking,
-                          ) {
-                            return !booking.paid;
-                          }).toList(),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 20),
-                  _buildPartnerCoachBreakdownSection(context, partnerCoachRows),
-                  const SizedBox(height: 18),
-                  _buildSummaryBreakdownSection(
-                    context,
-                    selectionPrefix: 'customer-type',
-                    title: 'Resumo por tipo de cliente',
-                    description:
-                        'Distribuicao de reservas, horas e receita conforme o perfil operacional da quadra.',
-                    items: summary.customerTypeBreakdown,
-                    detailTitleBuilder: (CourtSummaryBreakdown item) =>
-                        'Detalhe de ${item.label}',
-                    detailDescriptionBuilder: (CourtSummaryBreakdown item) =>
-                        'Reservas ativas do tipo ${item.label.toLowerCase()} no periodo consultado.',
-                    bookingsBuilder: (CourtSummaryBreakdown item) =>
-                        _filterReportBookingsByCustomerType(
-                          _customerTypeFromBreakdownCode(item.code),
-                        ),
-                  ),
-                  const SizedBox(height: 18),
-                  _buildSummaryBreakdownSection(
-                    context,
-                    selectionPrefix: 'pricing-period',
-                    title: 'Resumo por periodo tarifario',
-                    description:
-                        'Comparativo entre operacao diurna e noturna para apoiar regras de preco e ocupacao.',
-                    items: summary.pricingPeriodBreakdown,
-                    detailTitleBuilder: (CourtSummaryBreakdown item) =>
-                        'Detalhe de ${item.label}',
-                    detailDescriptionBuilder: (CourtSummaryBreakdown item) =>
-                        'Reservas ativas do periodo tarifario ${item.label.toLowerCase()} no periodo consultado.',
-                    bookingsBuilder: (CourtSummaryBreakdown item) =>
-                        _activeReportBookings.where((CourtBooking booking) {
-                          return booking.pricingPeriod ==
-                              _pricingPeriodFromBreakdownCode(item.code);
-                        }).toList(),
-                  ),
-                  const SizedBox(height: 18),
-                  _buildSummaryBreakdownSection(
-                    context,
-                    selectionPrefix: 'payment-method',
-                    title: 'Cobrado por meio de pagamento',
-                    description:
-                        'Valores efetivamente pagos por canal de recebimento no periodo consultado.',
-                    items: summary.paymentMethodBreakdown,
-                    hidePendingColumn: true,
-                    detailTitleBuilder: (CourtSummaryBreakdown item) =>
-                        'Detalhe de ${item.label}',
-                    detailDescriptionBuilder: (CourtSummaryBreakdown item) =>
-                        'Reservas pagas por ${item.label.toLowerCase()} no periodo consultado.',
-                    bookingsBuilder: (CourtSummaryBreakdown item) =>
-                        reportBookings.where((CourtBooking booking) {
-                          return booking.status ==
-                                  CourtBookingStatus.scheduled &&
-                              booking.paid &&
-                              booking.paymentMethod ==
-                                  _paymentMethodFromBreakdownCode(item.code);
-                        }).toList(),
+                  _MetricCard(
+                    selected: _selectedSummaryDetailKey == 'metric:materials',
+                    title: _formatCurrency(summary.materialsAmount),
+                    value: _formatCurrency(summary.courtAmount),
+                    caption: 'Materiais vendidos e receita base de quadra',
+                    icon: Icons.inventory_2_rounded,
+                    onTap: () => _openSummaryDetail(
+                      key: 'metric:materials',
+                      title: 'Materiais e receita base',
+                      description:
+                          'Reservas ativas com materiais ou cobranca de quadra no periodo.',
+                      bookings: activeReportBookings.where((
+                        CourtBooking booking,
+                      ) {
+                        return booking.materialsAmount > 0 ||
+                            booking.courtAmount > 0;
+                      }).toList(),
+                    ),
                   ),
                 ],
               ),
-          ],
-        ),
-      ),
+              const SizedBox(height: 18),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: <Widget>[
+                  _DetailChip(
+                    selected: _selectedSummaryDetailKey == 'chip:guest',
+                    label: 'Hospedes',
+                    value: '${summary.guestHours.toStringAsFixed(1)} h',
+                    icon: Icons.king_bed_rounded,
+                    onTap: () => _openSummaryDetail(
+                      key: 'chip:guest',
+                      title: 'Detalhe de hospedes',
+                      description:
+                          'Reservas ativas de hospedes dentro do periodo consultado.',
+                      bookings: _filterReportBookingsByCustomerType(
+                        CourtCustomerType.guest,
+                      ),
+                    ),
+                  ),
+                  _DetailChip(
+                    selected: _selectedSummaryDetailKey == 'chip:vip',
+                    label: 'VIP',
+                    value: '${summary.vipHours.toStringAsFixed(1)} h',
+                    icon: Icons.workspace_premium_rounded,
+                    onTap: () => _openSummaryDetail(
+                      key: 'chip:vip',
+                      title: 'Detalhe de clientes VIP',
+                      description:
+                          'Reservas ativas de clientes VIP dentro do periodo consultado.',
+                      bookings: _filterReportBookingsByCustomerType(
+                        CourtCustomerType.vip,
+                      ),
+                    ),
+                  ),
+                  _DetailChip(
+                    selected: _selectedSummaryDetailKey == 'chip:external',
+                    label: 'Externos',
+                    value: '${summary.externalHours.toStringAsFixed(1)} h',
+                    icon: Icons.public_rounded,
+                    onTap: () => _openSummaryDetail(
+                      key: 'chip:external',
+                      title: 'Detalhe de clientes externos',
+                      description:
+                          'Reservas ativas de clientes externos dentro do periodo consultado.',
+                      bookings: _filterReportBookingsByCustomerType(
+                        CourtCustomerType.external,
+                      ),
+                    ),
+                  ),
+                  _DetailChip(
+                    selected: _selectedSummaryDetailKey == 'chip:partner-coach',
+                    label: 'Prof. parceiro',
+                    value: '${summary.partnerCoachHours.toStringAsFixed(1)} h',
+                    icon: Icons.sports_rounded,
+                    onTap: () => _openSummaryDetail(
+                      key: 'chip:partner-coach',
+                      title: 'Detalhe de professores parceiros',
+                      description:
+                          'Reservas ativas de professores parceiros dentro do periodo consultado.',
+                      bookings: _filterReportBookingsByCustomerType(
+                        CourtCustomerType.partnerCoach,
+                      ),
+                    ),
+                  ),
+                  _DetailChip(
+                    selected: _selectedSummaryDetailKey == 'chip:materials',
+                    label: 'Materiais',
+                    value: _formatCurrency(summary.materialsAmount),
+                    icon: Icons.inventory_2_rounded,
+                    onTap: () => _openSummaryDetail(
+                      key: 'chip:materials',
+                      title: 'Detalhe de materiais',
+                      description:
+                          'Reservas ativas com venda de materiais no periodo consultado.',
+                      bookings: activeReportBookings.where((
+                        CourtBooking booking,
+                      ) {
+                        return booking.materialsAmount > 0;
+                      }).toList(),
+                    ),
+                  ),
+                  _DetailChip(
+                    selected: _selectedSummaryDetailKey == 'chip:pending',
+                    label: 'Pendente',
+                    value: _formatCurrency(summary.pendingAmount),
+                    icon: Icons.warning_amber_rounded,
+                    onTap: () => _openSummaryDetail(
+                      key: 'chip:pending',
+                      title: 'Detalhe de pendencias',
+                      description:
+                          'Reservas ativas com pagamento pendente no periodo consultado.',
+                      bookings: activeReportBookings.where((
+                        CourtBooking booking,
+                      ) {
+                        return !booking.paid;
+                      }).toList(),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 20),
+              _buildPartnerCoachBreakdownSection(context, partnerCoachRows),
+              const SizedBox(height: 18),
+              _buildSummaryBreakdownSection(
+                context,
+                selectionPrefix: 'customer-type',
+                title: 'Resumo por tipo de cliente',
+                description:
+                    'Distribuicao de reservas, horas e receita conforme o perfil operacional da quadra.',
+                items: summary.customerTypeBreakdown,
+                detailTitleBuilder: (CourtSummaryBreakdown item) =>
+                    'Detalhe de ${item.label}',
+                detailDescriptionBuilder: (CourtSummaryBreakdown item) =>
+                    'Reservas ativas do tipo ${item.label.toLowerCase()} no periodo consultado.',
+                bookingsBuilder: (CourtSummaryBreakdown item) =>
+                    _filterReportBookingsByCustomerType(
+                      _customerTypeFromBreakdownCode(item.code),
+                    ),
+              ),
+              const SizedBox(height: 18),
+              _buildSummaryBreakdownSection(
+                context,
+                selectionPrefix: 'pricing-period',
+                title: 'Resumo por periodo tarifario',
+                description:
+                    'Comparativo entre operacao diurna e noturna para apoiar regras de preco e ocupacao.',
+                items: summary.pricingPeriodBreakdown,
+                detailTitleBuilder: (CourtSummaryBreakdown item) =>
+                    'Detalhe de ${item.label}',
+                detailDescriptionBuilder: (CourtSummaryBreakdown item) =>
+                    'Reservas ativas do periodo tarifario ${item.label.toLowerCase()} no periodo consultado.',
+                bookingsBuilder: (CourtSummaryBreakdown item) =>
+                    _activeReportBookings.where((CourtBooking booking) {
+                      return booking.pricingPeriod ==
+                          _pricingPeriodFromBreakdownCode(item.code);
+                    }).toList(),
+              ),
+              const SizedBox(height: 18),
+              _buildSummaryBreakdownSection(
+                context,
+                selectionPrefix: 'payment-method',
+                title: 'Cobrado por meio de pagamento',
+                description:
+                    'Valores efetivamente pagos por canal de recebimento no periodo consultado.',
+                items: summary.paymentMethodBreakdown,
+                hidePendingColumn: true,
+                detailTitleBuilder: (CourtSummaryBreakdown item) =>
+                    'Detalhe de ${item.label}',
+                detailDescriptionBuilder: (CourtSummaryBreakdown item) =>
+                    'Reservas pagas por ${item.label.toLowerCase()} no periodo consultado.',
+                bookingsBuilder: (CourtSummaryBreakdown item) =>
+                    reportBookings.where((CourtBooking booking) {
+                      return booking.status == CourtBookingStatus.scheduled &&
+                          booking.paid &&
+                          booking.paymentMethod ==
+                              _paymentMethodFromBreakdownCode(item.code);
+                    }).toList(),
+              ),
+            ],
+          ),
+      ],
+    );
+
+    if (!asCard) {
+      return content;
+    }
+
+    return Card(
+      child: Padding(padding: const EdgeInsets.all(20), child: content),
     );
   }
 
