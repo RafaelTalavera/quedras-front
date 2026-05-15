@@ -47,11 +47,16 @@ final class DefaultMassageProviderReportPdfExporter
        _getTemporaryDirectory =
            getTemporaryDirectoryCallback ?? getTemporaryDirectory;
 
-  static const String _logoAssetPath = 'assets/branding/costanorte_logo.png';
   static const String _fontRegularAssetPath = 'assets/fonts/Lato-Regular.ttf';
   static const String _fontBoldAssetPath = 'assets/fonts/Lato-Bold.ttf';
   static const String _hotelName = 'Hotel Costa Norte';
   static const String _reportTitle = 'Resumo de atendimentos por prestador';
+
+  static final PdfColor _inkColor = PdfColor.fromHex('#000000');
+  static final PdfColor _headlineColor = PdfColor.fromHex('#000000');
+  static final PdfColor _mutedColor = PdfColor.fromHex('#4A4A4A');
+  static final PdfColor _borderColor = PdfColor.fromHex('#9A9A9A');
+  static final PdfColor _accentColor = PdfColor.fromHex('#000000');
 
   final LoadAssetBytes _loadAssetBytes;
   final GetTemporaryDirectoryCallback _getTemporaryDirectory;
@@ -75,12 +80,10 @@ final class DefaultMassageProviderReportPdfExporter
     required DateTime endDate,
   }) async {
     final pw.Document document = pw.Document();
-    final Uint8List logoBytes = await _loadAssetBytes(_logoAssetPath);
     final Uint8List regularFontBytes = await _loadAssetBytes(
       _fontRegularAssetPath,
     );
     final Uint8List boldFontBytes = await _loadAssetBytes(_fontBoldAssetPath);
-    final pw.MemoryImage logoImage = pw.MemoryImage(logoBytes);
     final pw.Font regularFont = pw.Font.ttf(
       regularFontBytes.buffer.asByteData(
         regularFontBytes.offsetInBytes,
@@ -93,29 +96,47 @@ final class DefaultMassageProviderReportPdfExporter
         boldFontBytes.lengthInBytes,
       ),
     );
+
     final pw.PageTheme pageTheme = pw.PageTheme(
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.all(28),
       theme: pw.ThemeData.withFont(base: regularFont, bold: boldFont),
     );
+
     final List<MassageProviderReportItem> items =
         List<MassageProviderReportItem>.from(detail.items)..sort(
           (MassageProviderReportItem a, MassageProviderReportItem b) =>
               a.startAt.compareTo(b.startAt),
         );
 
+    final DateTime generatedAt = DateTime.now();
+
     document.addPage(
       pw.MultiPage(
         pageTheme: pageTheme,
         header: (pw.Context context) => _buildHeader(
-          logoImage: logoImage,
           providerName: detail.providerName,
+          generatedAt: generatedAt,
         ),
-        footer: (pw.Context context) => pw.Align(
-          alignment: pw.Alignment.centerRight,
-          child: pw.Text(
-            'Pagina ${context.pageNumber} de ${context.pagesCount}',
-            style: const pw.TextStyle(fontSize: 9, color: PdfColors.grey700),
+        footer: (pw.Context context) => pw.Container(
+          padding: const pw.EdgeInsets.only(top: 8),
+          decoration: pw.BoxDecoration(
+            border: pw.Border(
+              top: pw.BorderSide(color: _borderColor, width: 0.7),
+            ),
+          ),
+          child: pw.Row(
+            mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+            children: <pw.Widget>[
+              pw.Text(
+                _ascii(_hotelName),
+                style: pw.TextStyle(fontSize: 8.5, color: _mutedColor),
+              ),
+              pw.Text(
+                'Pagina ${context.pageNumber} de ${context.pagesCount}',
+                style: pw.TextStyle(fontSize: 8.5, color: _mutedColor),
+              ),
+            ],
           ),
         ),
         build: (pw.Context context) {
@@ -124,23 +145,26 @@ final class DefaultMassageProviderReportPdfExporter
               detail: detail,
               startDate: startDate,
               endDate: endDate,
+              generatedAt: generatedAt,
             ),
-            pw.SizedBox(height: 18),
+            pw.SizedBox(height: 16),
             _buildSummaryGrid(detail.summary),
-            pw.SizedBox(height: 20),
+            pw.SizedBox(height: 18),
             pw.Text(
               'Detalhe das atencoes',
               style: pw.TextStyle(
-                fontSize: 15,
+                fontSize: 14,
                 fontWeight: pw.FontWeight.bold,
-                color: PdfColors.blueGrey900,
+                color: _headlineColor,
               ),
             ),
+            pw.SizedBox(height: 4),
+            pw.Text(
+              'Relacao analitica dos atendimentos incluidos no periodo.',
+              style: pw.TextStyle(fontSize: 9.5, color: _mutedColor),
+            ),
             pw.SizedBox(height: 10),
-            if (items.isEmpty)
-              _buildEmptyState()
-            else
-              ...items.map(_buildItemCard),
+            if (items.isEmpty) _buildEmptyState() else ...items.map(_buildItemCard),
           ];
         },
       ),
@@ -160,11 +184,13 @@ final class DefaultMassageProviderReportPdfExporter
       startDate: startDate,
       endDate: endDate,
     );
+
     final Uint8List bytes = await buildPdfBytes(
       detail: detail,
       startDate: startDate,
       endDate: endDate,
     );
+
     return saveFileBytes(
       bytes: bytes,
       dialogTitle: 'Salvar resumo em PDF',
@@ -185,16 +211,21 @@ final class DefaultMassageProviderReportPdfExporter
       startDate: startDate,
       endDate: endDate,
     );
+
     final Directory directory = await _getTemporaryDirectory();
+
     final String fileName = buildFileName(
       detail: detail,
       startDate: startDate,
       endDate: endDate,
     );
+
     final File file = File(
       '${directory.path}${Platform.pathSeparator}$fileName',
     );
+
     await file.writeAsBytes(bytes, flush: true);
+
     return file;
   }
 
@@ -203,48 +234,74 @@ final class DefaultMassageProviderReportPdfExporter
     return data.buffer.asUint8List();
   }
 
+  pw.BoxDecoration _printBorder({double width = 0.6}) {
+    return pw.BoxDecoration(
+      border: pw.Border.all(color: _borderColor, width: width),
+    );
+  }
+
   pw.Widget _buildHeader({
-    required pw.MemoryImage logoImage,
     required String providerName,
+    required DateTime generatedAt,
   }) {
-    return pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 16),
+    return pw.Container(
+      padding: const pw.EdgeInsets.only(bottom: 14),
+      decoration: pw.BoxDecoration(
+        border: pw.Border(
+          bottom: pw.BorderSide(color: _borderColor, width: 0.8),
+        ),
+      ),
       child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.center,
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: <pw.Widget>[
-          _buildLogoBox(logoImage),
-          pw.SizedBox(width: 24),
           pw.Expanded(
             child: pw.Column(
               crossAxisAlignment: pw.CrossAxisAlignment.start,
-              mainAxisAlignment: pw.MainAxisAlignment.center,
               children: <pw.Widget>[
                 pw.Text(
-                  _hotelName,
+                  _ascii(_hotelName).toUpperCase(),
                   style: pw.TextStyle(
-                    fontSize: 20,
+                    fontSize: 8.5,
                     fontWeight: pw.FontWeight.bold,
-                    color: PdfColors.blueGrey900,
+                    color: _accentColor,
+                    letterSpacing: 1.1,
                   ),
                 ),
-                pw.SizedBox(height: 4),
+                pw.SizedBox(height: 5),
                 pw.Text(
-                  '${_ascii(providerName)} - $_reportTitle',
-                  style: const pw.TextStyle(
-                    fontSize: 11,
-                    color: PdfColors.grey700,
+                  _reportTitle,
+                  style: pw.TextStyle(
+                    fontSize: 18,
+                    fontWeight: pw.FontWeight.bold,
+                    color: _headlineColor,
                   ),
                 ),
-                pw.SizedBox(height: 8),
+                pw.SizedBox(height: 3),
                 pw.Text(
-                  'Documento preparado para envio ao prestador.',
-                  style: const pw.TextStyle(
-                    fontSize: 9.5,
-                    color: PdfColors.grey700,
-                  ),
+                  'Prestador: ${_ascii(providerName)}',
+                  style: pw.TextStyle(fontSize: 10, color: _mutedColor),
                 ),
               ],
             ),
+          ),
+          pw.SizedBox(width: 20),
+          pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.end,
+            children: <pw.Widget>[
+              pw.Text(
+                'Relatorio executivo',
+                style: pw.TextStyle(
+                  fontSize: 9,
+                  fontWeight: pw.FontWeight.bold,
+                  color: _headlineColor,
+                ),
+              ),
+              pw.SizedBox(height: 4),
+              pw.Text(
+                'Emitido em ${_formatDateTime(generatedAt)}',
+                style: pw.TextStyle(fontSize: 9, color: _mutedColor),
+              ),
+            ],
           ),
         ],
       ),
@@ -255,19 +312,21 @@ final class DefaultMassageProviderReportPdfExporter
     required MassageProviderDetailReport detail,
     required DateTime startDate,
     required DateTime endDate,
+    required DateTime generatedAt,
   }) {
     return pw.Container(
       width: double.infinity,
-      padding: const pw.EdgeInsets.all(18),
+      padding: const pw.EdgeInsets.all(12),
+      decoration: _printBorder(width: 0.7),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: <pw.Widget>[
           pw.Text(
-            _reportTitle,
+            'Visao geral do periodo',
             style: pw.TextStyle(
-              fontSize: 19,
+              fontSize: 14,
               fontWeight: pw.FontWeight.bold,
-              color: PdfColors.blueGrey900,
+              color: _headlineColor,
             ),
           ),
           pw.SizedBox(height: 6),
@@ -276,23 +335,38 @@ final class DefaultMassageProviderReportPdfExporter
             style: pw.TextStyle(
               fontSize: 16,
               fontWeight: pw.FontWeight.bold,
-              color: PdfColors.blue800,
+              color: _inkColor,
             ),
           ),
-          pw.SizedBox(height: 8),
-          pw.Wrap(
-            spacing: 12,
-            runSpacing: 8,
+          pw.SizedBox(height: 4),
+          pw.Text(
+            'Documento consolidado para acompanhamento operacional e financeiro do prestador.',
+            style: pw.TextStyle(fontSize: 9.2, color: _mutedColor),
+          ),
+          pw.SizedBox(height: 12),
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: <pw.Widget>[
-              _buildOverviewTag(
-                'Periodo',
-                _formatDateRange(startDate, endDate),
+              pw.Expanded(
+                child: _buildOverviewField(
+                  'Periodo analisado',
+                  _formatDateRange(startDate, endDate),
+                ),
               ),
-              _buildOverviewTag(
-                'Status',
-                detail.providerActive ? 'Ativo' : 'Inativo',
+              pw.SizedBox(width: 10),
+              pw.Expanded(
+                child: _buildOverviewField(
+                  'Situacao do prestador',
+                  detail.providerActive ? 'Ativo' : 'Inativo',
+                ),
               ),
-              _buildOverviewTag('Emitido em', _formatDateTime(DateTime.now())),
+              pw.SizedBox(width: 10),
+              pw.Expanded(
+                child: _buildOverviewField(
+                  'Data de emissao',
+                  _formatDateTime(generatedAt),
+                ),
+              ),
             ],
           ),
         ],
@@ -300,62 +374,33 @@ final class DefaultMassageProviderReportPdfExporter
     );
   }
 
-  pw.Widget _buildOverviewTag(String label, String value) {
-    return pw.RichText(
-      text: pw.TextSpan(
-        style: const pw.TextStyle(fontSize: 9.5, color: PdfColors.black),
-        children: <pw.InlineSpan>[
-          pw.TextSpan(
-            text: '$label: ',
-            style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
-          ),
-          pw.TextSpan(text: _ascii(value)),
-        ],
-      ),
-    );
-  }
-
-  pw.Widget _buildLogoBox(pw.MemoryImage logoImage) {
+  pw.Widget _buildOverviewField(String label, String value) {
     return pw.Container(
-      width: 106,
-      height: 118,
-      padding: const pw.EdgeInsets.fromLTRB(10, 9, 10, 8),
+      padding: const pw.EdgeInsets.only(left: 8, top: 2, bottom: 2),
       decoration: pw.BoxDecoration(
-        color: PdfColor.fromHex('#FFF8D8'),
-        borderRadius: pw.BorderRadius.circular(18),
+        border: pw.Border(
+          left: pw.BorderSide(color: _borderColor, width: 1),
+        ),
       ),
       child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
         children: <pw.Widget>[
-          pw.Expanded(
-            child: pw.FittedBox(
-              fit: pw.BoxFit.contain,
-              child: pw.ClipRect(
-                child: pw.Align(
-                  alignment: const pw.Alignment(-1.0, -0.1),
-                  widthFactor: 0.40,
-                  child: pw.Image(logoImage, width: 188),
-                ),
-              ),
-            ),
-          ),
-          pw.SizedBox(height: 6),
           pw.Text(
-            'COSTA NORTE',
-            textAlign: pw.TextAlign.center,
+            label.toUpperCase(),
             style: pw.TextStyle(
-              fontSize: 8.2,
+              fontSize: 7.8,
               fontWeight: pw.FontWeight.bold,
-              color: PdfColors.black,
+              color: _mutedColor,
+              letterSpacing: 0.5,
             ),
           ),
-          pw.SizedBox(height: 1.5),
+          pw.SizedBox(height: 4),
           pw.Text(
-            'INGLESES',
-            textAlign: pw.TextAlign.center,
-            style: const pw.TextStyle(
-              fontSize: 6.5,
-              color: PdfColors.black,
-              letterSpacing: 1.1,
+            _ascii(value),
+            style: pw.TextStyle(
+              fontSize: 9.8,
+              fontWeight: pw.FontWeight.bold,
+              color: _inkColor,
             ),
           ),
         ],
@@ -389,75 +434,62 @@ final class DefaultMassageProviderReportPdfExporter
     return pw.Wrap(
       spacing: 10,
       runSpacing: 10,
-      children: items
-          .map(
-            (MapEntry<String, String> item) => pw.Container(
-              width: 248,
-              padding: const pw.EdgeInsets.all(12),
-              decoration: pw.BoxDecoration(
-                color: PdfColor.fromHex('#F7F7F5'),
-                borderRadius: pw.BorderRadius.circular(12),
-              ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: <pw.Widget>[
-                  pw.Text(
-                    item.key,
-                    style: const pw.TextStyle(
-                      fontSize: 9,
-                      color: PdfColors.grey700,
-                    ),
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    _ascii(item.value),
-                    style: pw.TextStyle(
-                      fontSize: 14,
-                      fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.blueGrey900,
-                    ),
-                  ),
-                ],
-              ),
+      children: items.map(_buildMetricCard).toList(),
+    );
+  }
+
+  pw.Widget _buildMetricCard(MapEntry<String, String> item) {
+    return pw.Container(
+      width: 248,
+      padding: const pw.EdgeInsets.all(10),
+      decoration: _printBorder(width: 0.6),
+      child: pw.Column(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        children: <pw.Widget>[
+          pw.Text(
+            item.key.toUpperCase(),
+            style: pw.TextStyle(
+              fontSize: 8,
+              fontWeight: pw.FontWeight.bold,
+              color: _mutedColor,
+              letterSpacing: 0.5,
             ),
-          )
-          .toList(),
+          ),
+          pw.SizedBox(height: 5),
+          pw.Text(
+            _ascii(item.value),
+            style: pw.TextStyle(
+              fontSize: 14,
+              fontWeight: pw.FontWeight.bold,
+              color: _headlineColor,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
   pw.Widget _buildEmptyState() {
     return pw.Container(
       width: double.infinity,
-      padding: const pw.EdgeInsets.all(16),
-      decoration: pw.BoxDecoration(
-        color: PdfColor.fromHex('#F7F7F5'),
-        borderRadius: pw.BorderRadius.circular(12),
-      ),
+      padding: const pw.EdgeInsets.all(12),
+      decoration: _printBorder(width: 0.6),
       child: pw.Text(
         'Nao existem atendimentos para o periodo informado.',
-        style: const pw.TextStyle(fontSize: 11),
+        style: pw.TextStyle(fontSize: 10.2, color: _inkColor),
       ),
     );
   }
 
   pw.Widget _buildItemCard(MassageProviderReportItem item) {
-    final bool cancelled = item.status == MassageBookingStatus.cancelled;
     final String paymentLabel = _buildPaymentLabel(item);
-    final PdfColor accentColor = cancelled
-        ? PdfColors.red700
-        : item.paid
-        ? PdfColors.green700
-        : PdfColors.amber800;
 
     return pw.Padding(
-      padding: const pw.EdgeInsets.only(bottom: 10),
+      padding: const pw.EdgeInsets.only(bottom: 8),
       child: pw.Container(
         width: double.infinity,
-        padding: const pw.EdgeInsets.all(14),
-        decoration: pw.BoxDecoration(
-          color: PdfColor.fromHex('#F7F7F5'),
-          borderRadius: pw.BorderRadius.circular(14),
-        ),
+        padding: const pw.EdgeInsets.all(10),
+        decoration: _printBorder(width: 0.6),
         child: pw.Column(
           crossAxisAlignment: pw.CrossAxisAlignment.start,
           children: <pw.Widget>[
@@ -468,61 +500,82 @@ final class DefaultMassageProviderReportPdfExporter
                   child: pw.Text(
                     _ascii(item.clientName),
                     style: pw.TextStyle(
-                      fontSize: 13,
+                      fontSize: 12,
                       fontWeight: pw.FontWeight.bold,
-                      color: PdfColors.blueGrey900,
+                      color: _headlineColor,
                     ),
                   ),
                 ),
                 pw.Container(
                   padding: const pw.EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
+                    horizontal: 7,
+                    vertical: 3,
                   ),
+                  decoration: _printBorder(width: 0.5),
                   child: pw.Text(
-                    _statusLabel(item),
+                    _statusLabel(item).toUpperCase(),
                     style: pw.TextStyle(
-                      fontSize: 9,
+                      fontSize: 8,
                       fontWeight: pw.FontWeight.bold,
-                      color: accentColor,
+                      color: _headlineColor,
+                      letterSpacing: 0.3,
                     ),
                   ),
                 ),
               ],
             ),
-            pw.SizedBox(height: 6),
-            pw.Text(
-              'Data: ${_formatDate(item.bookingDate)} | Hora: ${item.startTime.substring(0, 5)} | Tratamento: ${_ascii(item.treatment)}',
-              style: const pw.TextStyle(fontSize: 10.5),
+            pw.SizedBox(height: 8),
+            _buildDetailLine(
+              'Agenda',
+              '${_formatDate(item.bookingDate)} | ${item.startTime.substring(0, 5)}',
             ),
             pw.SizedBox(height: 3),
-            pw.Text(
-              'Referencia: ${_ascii(item.guestReference)} | Masajista: ${_ascii(item.therapistName)}',
-              style: const pw.TextStyle(fontSize: 10.5),
+            _buildDetailLine('Tratamento', item.treatment),
+            pw.SizedBox(height: 3),
+            _buildDetailLine('Referencia', item.guestReference),
+            pw.SizedBox(height: 3),
+            _buildDetailLine('Massagista', item.therapistName),
+            pw.SizedBox(height: 3),
+            _buildDetailLine(
+              'Valor do atendimento',
+              _formatCurrency(item.amount),
             ),
             pw.SizedBox(height: 3),
-            pw.Text(
-              'Valor: ${_formatCurrency(item.amount)} | Pagamento: ${_ascii(paymentLabel)}',
-              style: const pw.TextStyle(fontSize: 10.5),
-            ),
+            _buildDetailLine('Situacao do pagamento', paymentLabel),
             if ((item.paymentNotes ?? '').trim().isNotEmpty) ...<pw.Widget>[
               pw.SizedBox(height: 3),
-              pw.Text(
-                'Observacoes do pagamento: ${_ascii(item.paymentNotes!.trim())}',
-                style: const pw.TextStyle(fontSize: 10.5),
+              _buildDetailLine(
+                'Observacoes do pagamento',
+                item.paymentNotes!.trim(),
               ),
             ],
-            if ((item.cancellationNotes ?? '')
-                .trim()
-                .isNotEmpty) ...<pw.Widget>[
+            if ((item.cancellationNotes ?? '').trim().isNotEmpty) ...<pw.Widget>[
               pw.SizedBox(height: 3),
-              pw.Text(
-                'Motivo do cancelamento: ${_ascii(item.cancellationNotes!.trim())}',
-                style: const pw.TextStyle(fontSize: 10.5),
+              _buildDetailLine(
+                'Motivo do cancelamento',
+                item.cancellationNotes!.trim(),
               ),
             ],
           ],
         ),
+      ),
+    );
+  }
+
+  pw.Widget _buildDetailLine(String label, String value) {
+    return pw.RichText(
+      text: pw.TextSpan(
+        style: pw.TextStyle(fontSize: 9.8, color: _inkColor),
+        children: <pw.InlineSpan>[
+          pw.TextSpan(
+            text: '$label: ',
+            style: pw.TextStyle(
+              fontWeight: pw.FontWeight.bold,
+              color: _headlineColor,
+            ),
+          ),
+          pw.TextSpan(text: _ascii(value)),
+        ],
       ),
     );
   }
@@ -572,13 +625,16 @@ final class DefaultMassageProviderReportPdfExporter
     if (item.status == MassageBookingStatus.cancelled) {
       return 'Cancelado';
     }
+
     if (!item.paid) {
       return 'Pendente';
     }
+
     final String method = item.paymentMethod?.label ?? 'Meio nao informado';
     final String date = item.paymentDate == null
         ? 'data nao informada'
         : _formatDate(item.paymentDate!);
+
     return 'Pago em $date via $method';
   }
 
@@ -586,6 +642,7 @@ final class DefaultMassageProviderReportPdfExporter
     if (item.status == MassageBookingStatus.cancelled) {
       return 'Cancelado';
     }
+
     return item.paid ? 'Pago' : 'Pendente';
   }
 
@@ -596,6 +653,7 @@ final class DefaultMassageProviderReportPdfExporter
         .replaceAll(RegExp(r'[^a-z0-9]+'), '_')
         .replaceAll(RegExp(r'_+'), '_')
         .replaceAll(RegExp(r'^_|_$'), '');
+
     return normalized.isEmpty ? 'prestador' : normalized;
   }
 
@@ -650,11 +708,14 @@ final class DefaultMassageProviderReportPdfExporter
       'ñ': 'n',
       'Ñ': 'N',
     };
+
     final StringBuffer buffer = StringBuffer();
+
     for (final int rune in value.runes) {
       final String char = String.fromCharCode(rune);
       buffer.write(replacements[char] ?? char);
     }
+
     return buffer.toString();
   }
 }
