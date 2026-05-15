@@ -1,6 +1,6 @@
 String get defaultApiBaseUrl {
   if (_looksLikeLocalFlutterDevServer(Uri.base)) {
-    return 'http://127.0.0.1:8091/api/v1';
+    return 'http://127.0.0.1:8080/api/v1';
   }
 
   final Uri apiUri = Uri.base.resolve('/api/v1');
@@ -18,5 +18,5 @@ bool _looksLikeLocalFlutterDevServer(Uri uri) {
     return false;
   }
 
-  return uri.port != 0 && uri.port != 80 && uri.port != 443 && uri.port != 8091;
+  return uri.port != 0 && uri.port != 80 && uri.port != 443 && uri.port != 8080;
 }

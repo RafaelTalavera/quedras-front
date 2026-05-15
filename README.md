@@ -22,7 +22,7 @@ flutter run -d windows --dart-define=COSTANORTE_API_BASE_URL=http://127.0.0.1:80
 ## Ejecucion web
 Por defecto:
 - en deploy web, consume el backend en el mismo origen bajo `/api/v1`
-- en desarrollo local con `flutter run -d chrome`, si detecta servidor Flutter en `localhost`, usa `http://127.0.0.1:8091/api/v1`
+- en desarrollo local con `flutter run -d chrome`, si detecta servidor Flutter en `localhost`, usa `http://127.0.0.1:8080/api/v1`
 
 ```powershell
 flutter run -d chrome
@@ -37,7 +37,7 @@ flutter run -d chrome --dart-define=COSTANORTE_API_BASE_URL=https://mi-backend.e
 Si el backend local corre en otro puerto:
 
 ```powershell
-flutter run -d chrome --dart-define=COSTANORTE_API_BASE_URL=http://127.0.0.1:8091/api/v1
+flutter run -d chrome --dart-define=COSTANORTE_API_BASE_URL=http://127.0.0.1:8080/api/v1
 ```
 
 ## Validacion tecnica
