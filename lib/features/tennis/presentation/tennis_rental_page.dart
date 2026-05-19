@@ -3,11 +3,11 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
-import '../../../core/config/app_runtime_config.dart';
 import '../../../core/files/file_save_result.dart';
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/feedback/app_share.dart';
-import '../../../core/sync/auto_refresh_controller.dart';
+import '../../../core/sync/schedule_sync_event.dart';
+import '../../../core/sync/schedule_sync_service.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/app_dialog_shell.dart';
 import '../../../core/widgets/brand_section_hero.dart';
@@ -97,6 +97,7 @@ class TennisRentalPageController {
 class TennisRentalPage extends StatefulWidget {
   const TennisRentalPage({
     required this.courtAppService,
+    required this.scheduleSyncService,
     this.partnerCoachReportPdfExporter,
     this.controller,
     this.onSectionChanged,
@@ -104,6 +105,7 @@ class TennisRentalPage extends StatefulWidget {
   });
 
   final CourtAppService courtAppService;
+  final ScheduleSyncService scheduleSyncService;
   final PartnerCoachReportPdfExporter? partnerCoachReportPdfExporter;
   final TennisRentalPageController? controller;
   final ValueChanged<TennisRentalSection>? onSectionChanged;
@@ -115,7 +117,7 @@ class TennisRentalPage extends StatefulWidget {
 class _TennisRentalPageState extends State<TennisRentalPage>
     with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
-  late final AutoRefreshController _autoRefreshController;
+  StreamSubscription<ScheduleSyncEvent>? _syncSubscription;
   late final PartnerCoachReportPdfExporter _partnerCoachReportPdfExporter;
   late DateTime _selectedDate;
   late DateTime _reportStartDate;
@@ -148,12 +150,9 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     _partnerCoachReportPdfExporter =
         widget.partnerCoachReportPdfExporter ??
         DefaultPartnerCoachReportPdfExporter();
-    _autoRefreshController = AutoRefreshController(
-      interval: AppRuntimeConfig.operationalRefreshInterval,
-      onRefresh: () => _refreshActiveData(showLoading: false),
-      canRefresh: _canAutoRefresh,
+    _syncSubscription = widget.scheduleSyncService.events.listen(
+      _handleSyncEvent,
     );
-    _autoRefreshController.start();
     _load();
   }
 
@@ -169,7 +168,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _autoRefreshController.dispose();
+    _syncSubscription?.cancel();
     widget.controller?._detach(this);
     _scrollController.dispose();
     super.dispose();
@@ -177,7 +176,6 @@ class _TennisRentalPageState extends State<TennisRentalPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _autoRefreshController.handleLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       unawaited(_refreshActiveData(showLoading: false));
     }
@@ -236,42 +234,9 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                   label: const Text('Periodo'),
                 ),
                 OutlinedButton.icon(
-                  onPressed: _saving || _dayBookings.isEmpty
-                      ? null
-                      : _openEditDialog,
-                  icon: const Icon(Icons.edit_rounded),
-                  label: const Text('Editar'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _saving || _dayBookings.isEmpty
-                      ? null
-                      : _openPaymentDialog,
-                  icon: const Icon(Icons.payments_rounded),
-                  label: const Text('Informar pago'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _saving || _dayBookings.isEmpty
-                      ? null
-                      : _openShareDialog,
-                  icon: const Icon(Icons.send_rounded),
-                  label: const Text('Compartir'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _saving || _dayBookings.isEmpty
-                      ? null
-                      : _openCancelDialog,
-                  icon: const Icon(Icons.cancel_schedule_send_rounded),
-                  label: const Text('Cancelar reserva'),
-                ),
-                OutlinedButton.icon(
                   onPressed: _saving ? null : _openSettingsDialog,
                   icon: const Icon(Icons.tune_rounded),
                   label: const Text('Tarifas y materiales'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _canRefreshPage ? _refreshPage : null,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: Text(_refreshingData ? 'Atualizando...' : 'Atualizar'),
                 ),
               ],
             ),
@@ -368,13 +333,6 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     }
   }
 
-  bool get _canRefreshPage =>
-      !_loading &&
-      !_refreshingData &&
-      !_loadingAgenda &&
-      !_loadingSummary &&
-      !_saving;
-
   bool _canAutoRefresh() {
     final ModalRoute<dynamic>? route = ModalRoute.of(context);
     return mounted &&
@@ -386,13 +344,6 @@ class _TennisRentalPageState extends State<TennisRentalPage>
         (route?.isCurrent ?? true);
   }
 
-  Future<void> _refreshPage() async {
-    if (!_canRefreshPage) {
-      return;
-    }
-    await _refreshActiveData(showLoading: false);
-  }
-
   Future<void> _refreshActiveData({bool showLoading = false}) async {
     await _load(showLoading: showLoading);
     if (_currentSection == TennisRentalSection.monthlyAgenda) {
@@ -400,6 +351,30 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     }
     if (_currentSection == TennisRentalSection.summary) {
       await _reloadSummary(force: true);
+    }
+  }
+
+  void _handleSyncEvent(ScheduleSyncEvent event) {
+    if (event.domain != ScheduleSyncDomain.courts || !_canAutoRefresh()) {
+      return;
+    }
+    if (!_isRelevantSyncEvent(event)) {
+      return;
+    }
+    unawaited(_refreshActiveData(showLoading: false));
+  }
+
+  bool _isRelevantSyncEvent(ScheduleSyncEvent event) {
+    switch (_currentSection) {
+      case TennisRentalSection.selectedDay:
+        return event.affectsDay(_selectedDate);
+      case TennisRentalSection.monthlyAgenda:
+        return event.affectsRange(
+          DateTime(_selectedDate.year, _selectedDate.month, 1),
+          DateTime(_selectedDate.year, _selectedDate.month + 1, 0),
+        );
+      case TennisRentalSection.summary:
+        return event.affectsRange(_reportStartDate, _reportEndDate);
     }
   }
 
@@ -784,19 +759,6 @@ class _TennisRentalPageState extends State<TennisRentalPage>
   }
 
   Widget _buildSelectedDayCard(BuildContext context) {
-    final List<CourtBooking> activeBookings = _dayBookings
-        .where(
-          (CourtBooking booking) =>
-              booking.status == CourtBookingStatus.scheduled,
-        )
-        .toList();
-    final int pendingPayments = activeBookings
-        .where((CourtBooking booking) => !booking.paid)
-        .length;
-    final double totalRevenue = activeBookings.fold<double>(
-      0,
-      (double total, CourtBooking booking) => total + booking.totalAmount,
-    );
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -839,16 +801,6 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                   label: 'Reservas',
                   value: '${_dayBookings.length}',
                   icon: Icons.event_available_rounded,
-                ),
-                _DetailChip(
-                  label: 'Pendentes',
-                  value: '$pendingPayments',
-                  icon: Icons.payments_outlined,
-                ),
-                _DetailChip(
-                  label: 'Receita',
-                  value: _formatCurrency(totalRevenue),
-                  icon: Icons.ssid_chart_rounded,
                 ),
               ],
             ),
@@ -1772,12 +1724,12 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     PartnerCoachReportDetail detail,
   ) async {
     try {
-      final FileSaveResult? result =
-          await _partnerCoachReportPdfExporter.savePdf(
-        detail: detail,
-        startDate: _reportStartDate,
-        endDate: _reportEndDate,
-      );
+      final FileSaveResult? result = await _partnerCoachReportPdfExporter
+          .savePdf(
+            detail: detail,
+            startDate: _reportStartDate,
+            endDate: _reportEndDate,
+          );
       if (result == null || !mounted) {
         return;
       }

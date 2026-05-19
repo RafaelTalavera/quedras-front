@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../core/config/app_runtime_config.dart';
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/feedback/app_share.dart';
 import '../../../core/network/api_exception.dart';
-import '../../../core/sync/auto_refresh_controller.dart';
+import '../../../core/sync/schedule_sync_event.dart';
+import '../../../core/sync/schedule_sync_service.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/app_dialog_dimensions.dart';
 import '../../../core/widgets/app_dialog_shell.dart';
@@ -54,12 +54,14 @@ class ToursTravelPageController {
 class ToursTravelPage extends StatefulWidget {
   const ToursTravelPage({
     required this.toursAppService,
+    required this.scheduleSyncService,
     this.controller,
     this.onSectionChanged,
     super.key,
   });
 
   final ToursAppService toursAppService;
+  final ScheduleSyncService scheduleSyncService;
   final ToursTravelPageController? controller;
   final ValueChanged<ToursTravelSection>? onSectionChanged;
 
@@ -70,7 +72,7 @@ class ToursTravelPage extends StatefulWidget {
 class _ToursTravelPageState extends State<ToursTravelPage>
     with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
-  late final AutoRefreshController _autoRefreshController;
+  StreamSubscription<ScheduleSyncEvent>? _syncSubscription;
   List<ToursProvider> _providers = <ToursProvider>[];
   List<ToursBooking> _bookings = <ToursBooking>[];
   ToursSummaryReport? _summaryReport;
@@ -120,12 +122,9 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     _selectedDate = _today();
     _reportStart = DateTime(_selectedDate.year, _selectedDate.month, 1);
     _reportEnd = DateTime(_selectedDate.year, _selectedDate.month + 1, 0);
-    _autoRefreshController = AutoRefreshController(
-      interval: AppRuntimeConfig.operationalRefreshInterval,
-      onRefresh: () => _refreshActiveData(showLoading: false),
-      canRefresh: _canAutoRefresh,
+    _syncSubscription = widget.scheduleSyncService.events.listen(
+      _handleSyncEvent,
     );
-    _autoRefreshController.start();
     _load();
   }
 
@@ -141,7 +140,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _autoRefreshController.dispose();
+    _syncSubscription?.cancel();
     widget.controller?._detach(this);
     _scrollController.dispose();
     super.dispose();
@@ -149,7 +148,6 @@ class _ToursTravelPageState extends State<ToursTravelPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _autoRefreshController.handleLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       unawaited(_refreshActiveData(showLoading: false));
     }
@@ -221,14 +219,6 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     }
   }
 
-  bool get _canRefreshPage =>
-      !_loading &&
-      !_refreshingData &&
-      !_loadingAgenda &&
-      !_loadingProviders &&
-      !_loadingSummary &&
-      !_saving;
-
   bool _canAutoRefresh() {
     final ModalRoute<dynamic>? route = ModalRoute.of(context);
     return mounted &&
@@ -241,11 +231,6 @@ class _ToursTravelPageState extends State<ToursTravelPage>
         (route?.isCurrent ?? true);
   }
 
-  Future<void> _refreshPage() async {
-    if (!_canRefreshPage) return;
-    await _refreshActiveData(showLoading: false);
-  }
-
   Future<void> _refreshActiveData({bool showLoading = false}) async {
     await _load(showLoading: showLoading);
     if (_currentSection == ToursTravelSection.monthlyAgenda) {
@@ -253,6 +238,30 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     }
     if (_currentSection == ToursTravelSection.summary) {
       await _reloadSummary(force: true);
+    }
+  }
+
+  void _handleSyncEvent(ScheduleSyncEvent event) {
+    if (event.domain != ScheduleSyncDomain.tours || !_canAutoRefresh()) {
+      return;
+    }
+    if (!_isRelevantSyncEvent(event)) {
+      return;
+    }
+    unawaited(_refreshActiveData(showLoading: false));
+  }
+
+  bool _isRelevantSyncEvent(ScheduleSyncEvent event) {
+    switch (_currentSection) {
+      case ToursTravelSection.selectedDay:
+        return event.affectsDay(_selectedDate);
+      case ToursTravelSection.monthlyAgenda:
+        return event.affectsRange(
+          DateTime(_selectedDate.year, _selectedDate.month, 1),
+          DateTime(_selectedDate.year, _selectedDate.month + 1, 0),
+        );
+      case ToursTravelSection.summary:
+        return event.affectsRange(_reportStart, _reportEnd);
     }
   }
 
@@ -578,45 +587,11 @@ class _ToursTravelPageState extends State<ToursTravelPage>
                   label: const Text('Periodo'),
                 ),
                 OutlinedButton.icon(
-                  onPressed:
-                      _saving || _loadingProviders || _dayBookings.isEmpty
-                      ? null
-                      : _editBooking,
-                  icon: const Icon(Icons.edit_rounded),
-                  label: const Text('Editar'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _saving || _dayBookings.isEmpty
-                      ? null
-                      : _markPayment,
-                  icon: const Icon(Icons.payments_rounded),
-                  label: const Text('Informar pago'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _saving || _dayBookings.isEmpty
-                      ? null
-                      : _shareBooking,
-                  icon: const Icon(Icons.send_rounded),
-                  label: const Text('Compartir'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _saving || _dayBookings.isEmpty
-                      ? null
-                      : _cancelBooking,
-                  icon: const Icon(Icons.cancel_schedule_send_rounded),
-                  label: const Text('Cancelar'),
-                ),
-                OutlinedButton.icon(
                   onPressed: _saving || _loadingProviders
                       ? null
                       : _manageProvider,
                   icon: const Icon(Icons.business_rounded),
                   label: const Text('Fornecedores'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _canRefreshPage ? _refreshPage : null,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: Text(_refreshingData ? 'Atualizando...' : 'Atualizar'),
                 ),
               ],
             ),
@@ -644,17 +619,6 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     final List<ToursBooking> scheduled = _dayBookings
         .where((ToursBooking b) => b.status == ToursBookingStatus.scheduled)
         .toList();
-    final double charged = scheduled.fold<double>(
-      0,
-      (double total, ToursBooking b) => total + b.amount,
-    );
-    final double commission = scheduled.fold<double>(
-      0,
-      (double total, ToursBooking b) => total + b.commissionAmount,
-    );
-    final double paid = scheduled
-        .where((ToursBooking b) => b.paid)
-        .fold<double>(0, (double total, ToursBooking b) => total + b.amount);
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -697,19 +661,6 @@ class _ToursTravelPageState extends State<ToursTravelPage>
                   'Agendados',
                   '${scheduled.length}',
                 ),
-                _metric(
-                  context,
-                  Icons.point_of_sale_rounded,
-                  'Cobrado',
-                  _money(charged),
-                ),
-                _metric(
-                  context,
-                  Icons.account_balance_wallet_rounded,
-                  'Comissao',
-                  _money(commission),
-                ),
-                _metric(context, Icons.payments_rounded, 'Pago', _money(paid)),
               ],
             ),
             const SizedBox(height: 18),

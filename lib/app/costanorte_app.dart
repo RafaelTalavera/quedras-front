@@ -4,6 +4,7 @@ import '../core/config/backend_config.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_client_factory.dart';
 import '../core/network/authorized_api_client.dart';
+import '../core/sync/schedule_sync_service.dart';
 import '../core/theme/costa_norte_brand.dart';
 import '../features/auth/application/auth_app_service.dart';
 import '../features/auth/application/session_controller.dart';
@@ -64,6 +65,7 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
   late final CourtAppService _courtAppService;
   late final ToursAppService _toursAppService;
   late final MaintenanceAppService _maintenanceAppService;
+  late final ScheduleSyncService _scheduleSyncService;
 
   @override
   void initState() {
@@ -78,6 +80,11 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
     );
     _authAppService =
         widget._authAppService ?? HttpAuthAppService(apiClient: _rawApiClient);
+    _scheduleSyncService = ScheduleSyncService(
+      baseUrl: BackendConfig.apiBaseUrl,
+      authorizationHeaderProvider: () => _sessionController.authorizationHeader,
+      onUnauthorized: _sessionController.clearSession,
+    );
     _massageAppService =
         widget._massageAppService ??
         HttpMassageAppService(apiClient: _authorizedApiClient);
@@ -93,6 +100,23 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
     _maintenanceAppService =
         widget._maintenanceAppService ??
         HttpMaintenanceAppService(apiClient: _authorizedApiClient);
+    _sessionController.addListener(_handleSessionChanged);
+    _handleSessionChanged();
+  }
+
+  @override
+  void dispose() {
+    _sessionController.removeListener(_handleSessionChanged);
+    _scheduleSyncService.dispose();
+    super.dispose();
+  }
+
+  void _handleSessionChanged() {
+    if (_sessionController.isAuthenticated) {
+      _scheduleSyncService.start();
+      return;
+    }
+    _scheduleSyncService.stop();
   }
 
   @override
@@ -111,6 +135,7 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
         courtAppService: _courtAppService,
         toursAppService: _toursAppService,
         maintenanceAppService: _maintenanceAppService,
+        scheduleSyncService: _scheduleSyncService,
       ),
     );
   }

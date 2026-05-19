@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../../app/router/app_routes.dart';
 import '../../../core/theme/costa_norte_brand.dart';
+import '../../../core/sync/schedule_sync_service.dart';
 import '../../../core/widgets/costa_norte_logo.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/auth_session.dart';
@@ -31,6 +32,7 @@ class ShellPage extends StatefulWidget {
     required this.courtAppService,
     required this.toursAppService,
     required this.maintenanceAppService,
+    required this.scheduleSyncService,
     super.key,
   });
 
@@ -41,6 +43,7 @@ class ShellPage extends StatefulWidget {
   final CourtAppService courtAppService;
   final ToursAppService toursAppService;
   final MaintenanceAppService maintenanceAppService;
+  final ScheduleSyncService scheduleSyncService;
 
   @override
   State<ShellPage> createState() => _ShellPageState();
@@ -197,24 +200,28 @@ class _ShellPageState extends State<ShellPage> {
       case AppSection.massageBooking:
         return MassageBookingPage(
           massageAppService: widget.massageAppService,
+          scheduleSyncService: widget.scheduleSyncService,
           controller: _massageBookingPageController,
           onSectionChanged: _handleMassageSectionChanged,
         );
       case AppSection.tennisRental:
         return TennisRentalPage(
           courtAppService: widget.courtAppService,
+          scheduleSyncService: widget.scheduleSyncService,
           controller: _tennisRentalPageController,
           onSectionChanged: _handleTennisSectionChanged,
         );
       case AppSection.toursTravel:
         return ToursTravelPage(
           toursAppService: widget.toursAppService,
+          scheduleSyncService: widget.scheduleSyncService,
           controller: _toursTravelPageController,
           onSectionChanged: _handleToursSectionChanged,
         );
       case AppSection.maintenance:
         return MaintenancePage(
           maintenanceAppService: widget.maintenanceAppService,
+          scheduleSyncService: widget.scheduleSyncService,
           controller: _maintenancePageController,
           onSectionChanged: _handleMaintenanceSectionChanged,
         );

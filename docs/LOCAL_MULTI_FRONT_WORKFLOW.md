@@ -12,9 +12,6 @@
     - `local`
     - `test-red`
     - `prod`
-- `COSTANORTE_AUTO_REFRESH_SECONDS`
-  - override opcional del intervalo de auto refresh.
-  - `0` desactiva el polling.
 
 ## Comandos recomendados
 
@@ -22,26 +19,21 @@
 ```powershell
 flutter run -d windows `
   --dart-define=COSTANORTE_APP_ENV=local `
-  --dart-define=COSTANORTE_API_BASE_URL=http://127.0.0.1:8080/api/v1 `
-  --dart-define=COSTANORTE_AUTO_REFRESH_SECONDS=0
+  --dart-define=COSTANORTE_API_BASE_URL=http://127.0.0.1:8080/api/v1
 ```
 
 ### Prueba multi-front en red local
 ```powershell
 flutter run -d windows `
   --dart-define=COSTANORTE_APP_ENV=test-red `
-  --dart-define=COSTANORTE_API_BASE_URL=http://192.168.1.50:8080/api/v1 `
-  --dart-define=COSTANORTE_AUTO_REFRESH_SECONDS=20
+  --dart-define=COSTANORTE_API_BASE_URL=http://192.168.1.50:8080/api/v1
 ```
 
 ## Comportamiento implementado en frontend
-- `Massagens`, `Quadras` y `Tours` tienen boton manual de `Atualizar`.
-- En `test-red` y `prod` el polling operativo queda activo por defecto cada `20` segundos.
-- En `local` el polling queda desactivado por defecto para no interferir con desarrollo.
-- El refresh automatico se pausa cuando:
-  - la app no esta activa
-  - la pantalla no es la ruta actual
-  - hay operaciones de guardado en curso
+- `Massagens`, `Quadras`, `Tours` y `Maintenance` escuchan eventos emitidos por backend.
+- La recarga se ejecuta solo cuando el evento afecta la pantalla visible.
+- La app tambien vuelve a consultar al retomar foco.
+- Ya no se usa `polling` periodico para mantener sincronizadas las terminales.
 
 ## Escenario recomendado de prueba
 1. Levantar el backend en una maquina accesible por IP local.
@@ -49,7 +41,7 @@ flutter run -d windows `
 3. En la terminal A:
    crear, pagar o cancelar un registro.
 4. En la terminal B:
-   verificar el cambio con boton manual o esperar el siguiente ciclo de polling.
+   verificar que el cambio se refleje automaticamente por el canal de eventos.
 
 ## Nota
 - La validacion definitiva de concurrencia sigue dependiendo del backend.

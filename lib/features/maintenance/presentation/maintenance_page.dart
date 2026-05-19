@@ -5,10 +5,10 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
-import '../../../core/config/app_runtime_config.dart';
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/feedback/app_share.dart';
-import '../../../core/sync/auto_refresh_controller.dart';
+import '../../../core/sync/schedule_sync_event.dart';
+import '../../../core/sync/schedule_sync_service.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/app_dialog_dimensions.dart';
 import '../../../core/widgets/app_dialog_shell.dart';
@@ -64,12 +64,14 @@ class MaintenancePageController {
 class MaintenancePage extends StatefulWidget {
   const MaintenancePage({
     required this.maintenanceAppService,
+    required this.scheduleSyncService,
     this.controller,
     this.onSectionChanged,
     super.key,
   });
 
   final MaintenanceAppService maintenanceAppService;
+  final ScheduleSyncService scheduleSyncService;
   final MaintenancePageController? controller;
   final ValueChanged<MaintenanceSection>? onSectionChanged;
 
@@ -81,7 +83,7 @@ class _MaintenancePageState extends State<MaintenancePage>
     with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
 
-  late final AutoRefreshController _autoRefreshController;
+  StreamSubscription<ScheduleSyncEvent>? _syncSubscription;
   List<MaintenanceLocation> _locations = const <MaintenanceLocation>[];
   List<MaintenanceProvider> _providers = const <MaintenanceProvider>[];
   List<MaintenanceOrder> _orders = const <MaintenanceOrder>[];
@@ -103,12 +105,9 @@ class _MaintenancePageState extends State<MaintenancePage>
     WidgetsBinding.instance.addObserver(this);
     widget.controller?._attach(this);
     _selectedDate = _today();
-    _autoRefreshController = AutoRefreshController(
-      interval: AppRuntimeConfig.operationalRefreshInterval,
-      onRefresh: () => _load(showLoading: false),
-      canRefresh: _canAutoRefresh,
+    _syncSubscription = widget.scheduleSyncService.events.listen(
+      _handleSyncEvent,
     );
-    _autoRefreshController.start();
     _load();
   }
 
@@ -124,7 +123,7 @@ class _MaintenancePageState extends State<MaintenancePage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _autoRefreshController.dispose();
+    _syncSubscription?.cancel();
     widget.controller?._detach(this);
     _scrollController.dispose();
     super.dispose();
@@ -132,9 +131,8 @@ class _MaintenancePageState extends State<MaintenancePage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _autoRefreshController.handleLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
-      _load(showLoading: false);
+      unawaited(_load(showLoading: false));
     }
   }
 
@@ -162,49 +160,6 @@ class _MaintenancePageState extends State<MaintenancePage>
                   label: const Text('Lancar ordem'),
                 ),
                 OutlinedButton.icon(
-                  onPressed:
-                      _saving || _loadingProviders || _selectedOrder == null
-                      ? null
-                      : _editOrder,
-                  icon: const Icon(Icons.edit_rounded),
-                  label: const Text('Editar'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _saving || _selectedOrder == null
-                      ? null
-                      : _shareOrderToWhatsApp,
-                  icon: const Icon(Icons.send_rounded),
-                  label: const Text('Compartir'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _saving || _selectedOrder == null
-                      ? null
-                      : _startOrder,
-                  icon: const Icon(Icons.play_circle_outline_rounded),
-                  label: const Text('Iniciar'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _saving || _selectedOrder == null
-                      ? null
-                      : _completeOrder,
-                  icon: const Icon(Icons.task_alt_rounded),
-                  label: const Text('Concluir'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _saving || _selectedOrder == null
-                      ? null
-                      : _cancelOrder,
-                  icon: const Icon(Icons.cancel_schedule_send_rounded),
-                  label: const Text('Cancelar'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _saving || _selectedOrder == null
-                      ? null
-                      : _manageAttachments,
-                  icon: const Icon(Icons.attach_file_rounded),
-                  label: const Text('Anexos'),
-                ),
-                OutlinedButton.icon(
                   onPressed: _saving || _loadingProviders
                       ? null
                       : _manageCatalogs,
@@ -215,11 +170,6 @@ class _MaintenancePageState extends State<MaintenancePage>
                   onPressed: _saving ? null : _pickSelectedDate,
                   icon: const Icon(Icons.edit_calendar_rounded),
                   label: const Text('Alterar dia'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _canRefreshPage ? _refreshPage : null,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: Text(_refreshingData ? 'Atualizando...' : 'Atualizar'),
                 ),
               ],
             ),
@@ -376,9 +326,6 @@ class _MaintenancePageState extends State<MaintenancePage>
     }
   }
 
-  bool get _canRefreshPage =>
-      !_loading && !_refreshingData && !_loadingProviders && !_saving;
-
   bool _canAutoRefresh() {
     final ModalRoute<dynamic>? route = ModalRoute.of(context);
     return mounted &&
@@ -389,11 +336,18 @@ class _MaintenancePageState extends State<MaintenancePage>
         (route?.isCurrent ?? true);
   }
 
-  Future<void> _refreshPage() async {
-    if (!_canRefreshPage) {
+  void _handleSyncEvent(ScheduleSyncEvent event) {
+    if (event.domain != ScheduleSyncDomain.maintenance || !_canAutoRefresh()) {
       return;
     }
-    await _load(showLoading: false);
+    if (!_isRelevantSyncEvent(event)) {
+      return;
+    }
+    unawaited(_load(showLoading: false));
+  }
+
+  bool _isRelevantSyncEvent(ScheduleSyncEvent event) {
+    return event.affectsDay(_selectedDate);
   }
 
   Future<void> _pickSelectedDate() async {

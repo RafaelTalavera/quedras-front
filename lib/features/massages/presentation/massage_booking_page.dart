@@ -2,11 +2,11 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
-import '../../../core/config/app_runtime_config.dart';
 import '../../../core/files/file_save_result.dart';
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/feedback/app_share.dart';
-import '../../../core/sync/auto_refresh_controller.dart';
+import '../../../core/sync/schedule_sync_event.dart';
+import '../../../core/sync/schedule_sync_service.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/app_dialog_dimensions.dart';
 import '../../../core/widgets/app_dialog_shell.dart';
@@ -75,6 +75,7 @@ class MassageBookingPageController {
 class MassageBookingPage extends StatefulWidget {
   const MassageBookingPage({
     required this.massageAppService,
+    required this.scheduleSyncService,
     this.providerReportPdfExporter,
     this.controller,
     this.onSectionChanged,
@@ -82,6 +83,7 @@ class MassageBookingPage extends StatefulWidget {
   });
 
   final MassageAppService massageAppService;
+  final ScheduleSyncService scheduleSyncService;
   final MassageProviderReportPdfExporter? providerReportPdfExporter;
   final MassageBookingPageController? controller;
   final ValueChanged<MassageBookingSection>? onSectionChanged;
@@ -95,7 +97,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   final ScrollController _scrollController = ScrollController();
   final GlobalKey _summaryKey = GlobalKey();
 
-  late final AutoRefreshController _autoRefreshController;
+  StreamSubscription<ScheduleSyncEvent>? _syncSubscription;
   late final MassageProviderReportPdfExporter _providerReportPdfExporter;
   List<MassageProvider> _providers = <MassageProvider>[];
   List<MassageBooking> _bookings = <MassageBooking>[];
@@ -145,12 +147,9 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     _providerReportPdfExporter =
         widget.providerReportPdfExporter ??
         DefaultMassageProviderReportPdfExporter();
-    _autoRefreshController = AutoRefreshController(
-      interval: AppRuntimeConfig.operationalRefreshInterval,
-      onRefresh: () => _refreshActiveData(showLoading: false),
-      canRefresh: _canAutoRefresh,
+    _syncSubscription = widget.scheduleSyncService.events.listen(
+      _handleSyncEvent,
     );
-    _autoRefreshController.start();
     _load();
   }
 
@@ -166,7 +165,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
-    _autoRefreshController.dispose();
+    _syncSubscription?.cancel();
     widget.controller?._detach(this);
     _scrollController.dispose();
     super.dispose();
@@ -174,7 +173,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    _autoRefreshController.handleLifecycleState(state);
     if (state == AppLifecycleState.resumed) {
       unawaited(_refreshActiveData(showLoading: false));
     }
@@ -290,11 +288,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                         : 'Prestadores',
                   ),
                 ),
-                OutlinedButton.icon(
-                  onPressed: _canRefreshPage ? _refreshPage : null,
-                  icon: const Icon(Icons.refresh_rounded),
-                  label: Text(_refreshingData ? 'Atualizando...' : 'Atualizar'),
-                ),
               ],
             ),
           ),
@@ -396,15 +389,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     }
   }
 
-  bool get _canRefreshPage =>
-      !_loading &&
-      !_refreshingData &&
-      !_loadingAgenda &&
-      !_loadingProviders &&
-      !_savingBooking &&
-      !_savingProviders &&
-      !_loadingReport;
-
   bool _canAutoRefresh() {
     final ModalRoute<dynamic>? route = ModalRoute.of(context);
     return mounted &&
@@ -418,13 +402,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         (route?.isCurrent ?? true);
   }
 
-  Future<void> _refreshPage() async {
-    if (!_canRefreshPage) {
-      return;
-    }
-    await _refreshActiveData(showLoading: false);
-  }
-
   Future<void> _refreshActiveData({bool showLoading = false}) async {
     await _load(showLoading: showLoading);
     if (_currentSection == MassageBookingSection.monthlyAgenda) {
@@ -432,6 +409,30 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     }
     if (_currentSection == MassageBookingSection.monthlySummary) {
       await _reloadProviderReport(force: true);
+    }
+  }
+
+  void _handleSyncEvent(ScheduleSyncEvent event) {
+    if (event.domain != ScheduleSyncDomain.massages || !_canAutoRefresh()) {
+      return;
+    }
+    if (!_isRelevantSyncEvent(event)) {
+      return;
+    }
+    unawaited(_refreshActiveData(showLoading: false));
+  }
+
+  bool _isRelevantSyncEvent(ScheduleSyncEvent event) {
+    switch (_currentSection) {
+      case MassageBookingSection.selectedDay:
+        return event.affectsDay(_selectedDate);
+      case MassageBookingSection.monthlyAgenda:
+        return event.affectsRange(
+          DateTime(_selectedDate.year, _selectedDate.month, 1),
+          DateTime(_selectedDate.year, _selectedDate.month + 1, 0),
+        );
+      case MassageBookingSection.monthlySummary:
+        return event.affectsRange(_reportStartDate, _reportEndDate);
     }
   }
 
@@ -1366,6 +1367,18 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                   onPressed: _savingBooking ? null : _pickSelectedDate,
                   icon: const Icon(Icons.edit_calendar_rounded),
                   label: const Text('Alterar dia'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: <Widget>[
+                _DetailChip(
+                  label: 'Reservas',
+                  value: '${_dayBookings.length}',
+                  icon: Icons.event_available_rounded,
                 ),
               ],
             ),
