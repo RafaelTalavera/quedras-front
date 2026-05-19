@@ -9,16 +9,15 @@ Exportador: `lib/features/massages/application/massage_provider_report_pdf_expor
 - Permitir que el operador genere un PDF del `Resumo por prestador`.
 - El archivo debe poder:
   - guardarse manualmente
-  - compartirse manualmente
   - incluir identidad visual del hotel
-  - resultar legible para envio directo al prestador
+  - resultar legible para descarga y entrega manual al prestador
 
 ## Flujo operativo implementado
 - El operador abre `Massagens`.
 - Dentro de `Resumo por prestador`, selecciona `Ver detalhe`.
 - En el modal del prestador dispone de:
   - `Baixar PDF`
-  - `Compartilhar PDF`
+  - `Fechar`
 
 ## Contenido del PDF
 - Encabezado con logo del hotel.
@@ -64,7 +63,6 @@ Exportador: `lib/features/massages/application/massage_provider_report_pdf_expor
 - Guardado manual con adaptador de bytes por plataforma.
   - escritorio: selector de archivo y escritura local
   - web: descarga iniciada por el navegador con nombre de archivo `.pdf`
-- Compartido manual con `share_plus`.
 - Fuentes incrustadas para evitar fallback a `Helvetica`:
   - `assets/fonts/Lato-Regular.ttf`
   - `assets/fonts/Lato-Bold.ttf`
@@ -77,7 +75,6 @@ Exportador: `lib/features/massages/application/massage_provider_report_pdf_expor
 - `lib/core/files/file_save_result.dart`
 - `lib/features/massages/application/massage_provider_report_pdf_exporter.dart`
 - `lib/features/massages/presentation/massage_booking_page.dart`
-- `lib/core/feedback/app_share.dart`
 - `assets/fonts/Lato-Regular.ttf`
 - `assets/fonts/Lato-Bold.ttf`
 

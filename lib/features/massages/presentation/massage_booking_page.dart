@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
 
@@ -2141,21 +2140,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                         : 'Baixar PDF',
                   ),
                 ),
-                FilledButton.icon(
-                  onPressed: exporting
-                      ? null
-                      : () => runExport(
-                          'share',
-                          () => _shareProviderReportPdf(detail),
-                          setDialogState,
-                        ),
-                  icon: const Icon(Icons.share_rounded),
-                  label: Text(
-                    exportingAction == 'share'
-                        ? 'Preparando...'
-                        : 'Compartilhar PDF',
-                  ),
-                ),
                 TextButton(
                   onPressed: exporting
                       ? null
@@ -2199,48 +2183,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         message: 'Nao foi possivel salvar o resumo do prestador: $error',
       );
     }
-  }
-
-  Future<void> _shareProviderReportPdf(
-    MassageProviderDetailReport detail,
-  ) async {
-    try {
-      final File file = await _providerReportPdfExporter.createTemporaryPdf(
-        detail: detail,
-        startDate: _reportStartDate,
-        endDate: _reportEndDate,
-      );
-      if (!mounted) {
-        return;
-      }
-      await AppShare.shareFiles(
-        context,
-        filePaths: <String>[file.path],
-        subject: 'Resumo de atendimentos - ${detail.providerName}',
-        text: _providerReportShareText(detail),
-        failureTitle: 'Falha ao compartilhar PDF',
-        failureMessagePrefix:
-            'Nao foi possivel compartilhar o resumo do prestador',
-      );
-    } catch (error) {
-      if (!mounted) {
-        return;
-      }
-      await AppAlerts.error(
-        context,
-        title: 'Falha ao gerar PDF',
-        message: 'Nao foi possivel preparar o resumo do prestador: $error',
-      );
-    }
-  }
-
-  String _providerReportShareText(MassageProviderDetailReport detail) {
-    return 'Resumo de atendimentos de ${detail.providerName}\n'
-        'Periodo: ${_formatShortDateLabel(_reportStartDate)} a ${_formatShortDateLabel(_reportEndDate)}\n'
-        'Atencoes: ${detail.summary.attendedCount}\n'
-        'Pagas: ${detail.summary.paidCount}\n'
-        'Pendentes: ${detail.summary.pendingCount}\n'
-        'Cobrado: ${_formatCurrencyLabel(detail.summary.paidAmount)}';
   }
 
   Future<void> _pickSelectedDate() async {

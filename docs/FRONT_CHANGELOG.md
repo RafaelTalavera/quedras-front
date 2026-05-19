@@ -1,5 +1,17 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-05-19 | UX operativa | Massagens elimina comparticion de PDF en detalle por prestador
+- Componente afectado: Frontend (`Massagens`) + documentacion funcional
+- Archivos tocados:
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `docs/MASSAGES_PROVIDER_REPORT_PDF_STANDARD.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: simplificar el detalle por prestador y retirar una accion de comparticion que no formaba parte del flujo operativo deseado para este modulo.
+- Impacto funcional:
+  - el modal `Detalhe de <prestador>` conserva `Baixar PDF` y `Fechar`
+  - se elimina `Compartilhar PDF` del detalle por prestador en `Massagens`
+  - la generacion del PDF y la descarga manual permanecen sin cambios
+
 ## 2026-05-15 | Compatibilidad web | Descarga de PDF por bytes para Massagens y Quadras en navegador
 - Componente afectado: Frontend (`core/files`, `Massagens`, `Quadras`) + documentacion funcional
 - Archivos tocados:
