@@ -709,7 +709,7 @@ class _MaintenancePageState extends State<MaintenancePage>
             ),
             const SizedBox(height: 8),
             Text(
-              '${order.locationLabelSnapshot} Â· ${order.providerLabel}',
+              '${order.locationDisplayLabel} - ${order.providerLabel}',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 6),
@@ -768,8 +768,8 @@ class _MaintenancePageState extends State<MaintenancePage>
                   ),
                   label: Text(
                     _sharingOrderId == order.id
-                        ? 'Compartindo...'
-                        : 'Compartir',
+                        ? 'Compartilhando...'
+                        : 'Compartilhar',
                   ),
                 ),
                 TextButton.icon(
@@ -880,7 +880,7 @@ class _MaintenancePageState extends State<MaintenancePage>
     return <_MaintenanceDepartmentSectionData>[
       _MaintenanceDepartmentSectionData(
         title: 'Apartamentos',
-        description: 'Quartos e unidades internas organizados por piso.',
+        description: 'Quartos e unidades internas organizados por andar.',
         icon: Icons.apartment_rounded,
         tint: CostaNorteBrand.royalBlueDeep,
         layout: _MaintenanceSectionLayout.fixedGrid,
@@ -948,16 +948,16 @@ class _MaintenancePageState extends State<MaintenancePage>
   String _floorLabelForLocation(MaintenanceLocation location) {
     final String? floor = location.floor?.trim();
     if (floor != null && floor.isNotEmpty) {
-      return floor;
+      return _normalizeFloorLabel(floor);
     }
     final int? sequence = _locationSequence(location);
     if (sequence != null && sequence >= 100) {
-      return 'Piso ${sequence ~/ 100}';
+      return 'Andar ${sequence ~/ 100}';
     }
     if (_locationCategory(location) == _MaintenanceLocationCategory.chalet) {
       return 'Chalets';
     }
-    return 'Sem piso';
+    return 'Sem andar';
   }
 
   String _subtitleForLocation(MaintenanceLocation location) {
@@ -965,24 +965,42 @@ class _MaintenancePageState extends State<MaintenancePage>
     final String floor = _floorLabelForLocation(location);
     switch (_locationCategory(location)) {
       case _MaintenanceLocationCategory.apartment:
-        if (code.isEmpty) {
-          return floor;
-        }
-        return '$floor · $code';
+        return code.isEmpty ? floor : '$floor - Ref. $code';
       case _MaintenanceLocationCategory.chalet:
-        return code.isEmpty ? 'Unidade externa' : code;
+        return code.isEmpty ? 'Unidade externa' : 'Ref. $code';
       case _MaintenanceLocationCategory.commonArea:
-        return code.isEmpty ? 'Area comum' : 'Area comum · $code';
+        return code.isEmpty ? 'Area comum' : 'Area comum - Ref. $code';
     }
   }
 
   String _summaryLabelForLocation(MaintenanceLocation location) {
+    final String baseLabel = _normalizeLocationDisplayLabel(location.label);
     final String code = location.code.trim();
-    final String baseLabel = code.isNotEmpty ? code : location.label.trim();
+    if (_locationCategory(location) == _MaintenanceLocationCategory.apartment) {
+      return _compactApartmentLabel(baseLabel, fallbackCode: code);
+    }
     if (_locationCategory(location) == _MaintenanceLocationCategory.chalet) {
       return _compactChaletLabel(baseLabel);
     }
     return baseLabel;
+  }
+
+  String _compactApartmentLabel(String value, {String fallbackCode = ''}) {
+    final String compact = value.replaceFirst(
+      RegExp(
+        r'^\s*(habitacion|habitacao|quarto|apartamento|apto)\s*[-#:]*\s*',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    final String normalized = compact.trim();
+    if (normalized.isNotEmpty) {
+      return normalized;
+    }
+    if (fallbackCode.isNotEmpty) {
+      return fallbackCode;
+    }
+    return value.trim();
   }
 
   String _compactChaletLabel(String value) {
@@ -1021,7 +1039,50 @@ class _MaintenancePageState extends State<MaintenancePage>
   }
 
   String _locationFingerprint(MaintenanceLocation location) {
-    return '${location.code} ${location.label}'.toLowerCase();
+    final String label = _normalizeLocationDisplayLabel(location.label);
+    final String floor = _normalizeFloorLabel(location.floor?.trim() ?? '');
+    final String code = location.code.trim();
+    return '$label $floor $code'.toLowerCase();
+  }
+
+  String _normalizeFloorLabel(String value) {
+    final String normalized = _normalizeLocationDisplayLabel(value).trim();
+    if (normalized.isEmpty) {
+      return normalized;
+    }
+    if (RegExp(r'^andar\b', caseSensitive: false).hasMatch(normalized)) {
+      return normalized;
+    }
+    if (RegExp(r'^\d+$').hasMatch(normalized)) {
+      return 'Andar $normalized';
+    }
+    final RegExpMatch? match = RegExp(
+      r'^(?:piso|andar)\s*(\d+)$',
+      caseSensitive: false,
+    ).firstMatch(normalized);
+    if (match != null) {
+      return 'Andar ${match.group(1)!}';
+    }
+    return 'Andar $normalized';
+  }
+
+  String _normalizeLocationDisplayLabel(String value) {
+    String normalized = value.trim();
+    if (normalized.isEmpty) {
+      return normalized;
+    }
+    final List<MapEntry<RegExp, String>> replacements =
+        <MapEntry<RegExp, String>>[
+          MapEntry(RegExp(r'\bescalera\b', caseSensitive: false), 'Escada'),
+          MapEntry(RegExp(r'\brecepcion\b', caseSensitive: false), 'Recepcao'),
+          MapEntry(RegExp(r'\bpasillo\b', caseSensitive: false), 'Corredor'),
+          MapEntry(RegExp(r'\bpiso\b', caseSensitive: false), 'Andar'),
+          MapEntry(RegExp(r'\bhabitacion\b', caseSensitive: false), 'Quarto'),
+        ];
+    for (final MapEntry<RegExp, String> entry in replacements) {
+      normalized = normalized.replaceAll(entry.key, entry.value);
+    }
+    return normalized;
   }
 
   int _sortLocations(MaintenanceLocation a, MaintenanceLocation b) {
@@ -1051,7 +1112,16 @@ class _MaintenancePageState extends State<MaintenancePage>
   }
 
   int? _locationSequence(MaintenanceLocation location) {
-    final String fingerprint = '${location.code} ${location.label}';
+    final String labelFirst = [
+      location.label.trim(),
+      location.floor?.trim() ?? '',
+      location.code.trim(),
+    ].where((String value) => value.isNotEmpty).join(' ');
+    final String fallback = [
+      location.code.trim(),
+      location.label.trim(),
+    ].where((String value) => value.isNotEmpty).join(' ');
+    final String fingerprint = labelFirst.isEmpty ? fallback : labelFirst;
     final RegExpMatch? match = RegExp(r'(\d+)').firstMatch(fingerprint);
     return int.tryParse(match?.group(1) ?? '');
   }
@@ -1078,7 +1148,7 @@ class _MaintenancePageState extends State<MaintenancePage>
       await showDialog<void>(
         context: context,
         builder: (BuildContext dialogContext) => AlertDialog(
-          title: Text(location.label),
+          title: Text(_summaryLabelForLocation(location)),
           content: SizedBox(
             width: 920,
             child: SingleChildScrollView(
@@ -1086,6 +1156,14 @@ class _MaintenancePageState extends State<MaintenancePage>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: <Widget>[
+                  if (location.code.trim().isNotEmpty) ...<Widget>[
+                    Text(
+                      'Ref. ${location.code.trim()}',
+                      style: Theme.of(dialogContext).textTheme.bodySmall
+                          ?.copyWith(color: CostaNorteBrand.mutedInk),
+                    ),
+                    const SizedBox(height: 8),
+                  ],
                   Text(
                     'Resumo de ${_fullDate(_selectedDate)}',
                     style: Theme.of(dialogContext).textTheme.titleMedium,
@@ -1537,7 +1615,7 @@ class _MaintenancePageState extends State<MaintenancePage>
           history: history,
           locationLabel: history.isEmpty
               ? 'Local'
-              : history.first.locationLabelSnapshot,
+              : history.first.locationDisplayLabel,
         ),
       );
     } catch (error) {
@@ -1615,7 +1693,7 @@ class _MaintenancePageState extends State<MaintenancePage>
               (MaintenanceOrder item) => SimpleDialogOption(
                 onPressed: () => Navigator.of(context).pop(item),
                 child: Text(
-                  '${item.title} Â· ${item.locationLabelSnapshot} Â· ${item.providerNameSnapshot}',
+                  '${item.title} - ${item.locationDisplayLabel} - ${item.providerNameSnapshot}',
                 ),
               ),
             )
@@ -1635,7 +1713,7 @@ class _MaintenancePageState extends State<MaintenancePage>
     final StringBuffer buffer = StringBuffer()
       ..writeln('Ordem de manutencao Hotel Costa Norte')
       ..writeln('Titulo: ${order.title}')
-      ..writeln('Local: ${order.locationLabelSnapshot}')
+      ..writeln('Local: ${order.locationDisplayLabel}')
       ..writeln('Prestador: ${order.providerLabel}')
       ..writeln(
         'Contato: ${provider != null && (provider.contact ?? '').isNotEmpty ? provider.contact : 'nao informado'}',
@@ -1699,7 +1777,7 @@ class _MaintenanceOrderActionDialog extends StatelessWidget {
           Text(order.title, style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 6),
           Text(
-            '${order.locationLabelSnapshot} Â· ${order.providerLabel}',
+            '${order.locationDisplayLabel} - ${order.providerLabel}',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
           const SizedBox(height: 16),
@@ -1722,7 +1800,7 @@ class _MaintenanceOrderActionDialog extends StatelessWidget {
                 icon: Icon(
                   sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
                 ),
-                label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+                label: Text(sharing ? 'Compartilhando...' : 'Compartilhar'),
               ),
               OutlinedButton.icon(
                 onPressed: canStart
@@ -2174,6 +2252,7 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
   late final TextEditingController _guestReferenceController;
   late final TextEditingController _assignedUsernameController;
   late final TextEditingController _estimatedMinutesController;
+  late final TextEditingController _locationController;
 
   @override
   void initState() {
@@ -2207,6 +2286,7 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
     _estimatedMinutesController = TextEditingController(
       text: order?.estimatedExecutionMinutes?.toString() ?? '',
     );
+    _locationController = TextEditingController(text: _selectedLocationTitle);
   }
 
   @override
@@ -2217,13 +2297,74 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
     _guestReferenceController.dispose();
     _assignedUsernameController.dispose();
     _estimatedMinutesController.dispose();
+    _locationController.dispose();
     super.dispose();
+  }
+
+  MaintenanceLocation get _selectedLocation => widget.locations.firstWhere(
+    (MaintenanceLocation item) => item.id == _locationId,
+    orElse: () => widget.locations.first,
+  );
+
+  String get _selectedLocationTitle =>
+      _formatLocationPickerTitle(_selectedLocation);
+
+  String _formatLocationPickerTitle(MaintenanceLocation location) {
+    final String code = location.code.trim();
+    final String label = location.label.trim();
+    if (location.locationCategory == MaintenanceLocationCategory.apartment) {
+      final String compact = label
+          .replaceFirst(
+            RegExp(
+              r'^\s*(habitacion|habitacao|quarto|apartamento|apto)\s*[-#:]*\s*',
+              caseSensitive: false,
+            ),
+            '',
+          )
+          .trim();
+      if (compact.isNotEmpty) {
+        return compact;
+      }
+      if (code.isNotEmpty) {
+        return code;
+      }
+    }
+    return label.isNotEmpty ? label : code;
+  }
+
+  String _formatLocationPickerSubtitle(MaintenanceLocation location) {
+    final List<String> parts = <String>[
+      if (location.floor != null && location.floor!.trim().isNotEmpty)
+        location.floor!.trim(),
+      location.locationCategory.label,
+      if (location.code.trim().isNotEmpty) 'Ref. ${location.code.trim()}',
+    ];
+    return parts.join(' - ');
+  }
+
+  Future<void> _pickLocation() async {
+    final MaintenanceLocation? selected = await showDialog<MaintenanceLocation>(
+      context: context,
+      builder: (BuildContext context) => _LocationSearchDialog(
+        locations: widget.locations,
+        selectedLocationId: _locationId,
+        titleBuilder: _formatLocationPickerTitle,
+        subtitleBuilder: _formatLocationPickerSubtitle,
+      ),
+    );
+    if (selected == null || !mounted) {
+      return;
+    }
+    setState(() {
+      _locationId = selected.id;
+      _locationController.text = _formatLocationPickerTitle(selected);
+    });
   }
 
   @override
   Widget build(BuildContext context) {
     return AppDialogShell(
-      maxWidth: AppDialogDimensions.standardFormWidth,
+      maxWidth: AppDialogDimensions.wideFormWidth,
       child: SingleChildScrollView(
         child: Form(
           key: _formKey,
@@ -2236,20 +2377,15 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 16),
-              DropdownButtonFormField<int>(
-                value: _locationId,
-                decoration: const InputDecoration(labelText: 'Local'),
-                items: widget.locations
-                    .map(
-                      (MaintenanceLocation item) => DropdownMenuItem<int>(
-                        value: item.id,
-                        child: Text('${item.label} · ${item.code}'),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (int? value) {
-                  if (value != null) setState(() => _locationId = value);
-                },
+              TextFormField(
+                controller: _locationController,
+                readOnly: true,
+                decoration: InputDecoration(
+                  labelText: 'Local',
+                  helperText: _formatLocationPickerSubtitle(_selectedLocation),
+                  suffixIcon: const Icon(Icons.search_rounded),
+                ),
+                onTap: _pickLocation,
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<MaintenanceRequestOrigin>(
@@ -2305,11 +2441,16 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
               const SizedBox(height: 12),
               DropdownButtonFormField<int?>(
                 value: _providerId,
+                isExpanded: true,
+                style: const TextStyle(overflow: TextOverflow.ellipsis),
                 decoration: const InputDecoration(labelText: 'Prestador'),
                 items: <DropdownMenuItem<int?>>[
                   const DropdownMenuItem<int?>(
                     value: null,
-                    child: Text('Sem responsavel definido'),
+                    child: Text(
+                      'Sem responsavel definido',
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ),
                   ...widget.providers.map(
                     (MaintenanceProvider item) => DropdownMenuItem<int?>(
@@ -2580,6 +2721,149 @@ class _CompletionDraft {
 
   final DateTime? completedAt;
   final String resolutionNotes;
+}
+
+class _LocationSearchDialog extends StatefulWidget {
+  const _LocationSearchDialog({
+    required this.locations,
+    required this.selectedLocationId,
+    required this.titleBuilder,
+    required this.subtitleBuilder,
+  });
+
+  final List<MaintenanceLocation> locations;
+  final int selectedLocationId;
+  final String Function(MaintenanceLocation) titleBuilder;
+  final String Function(MaintenanceLocation) subtitleBuilder;
+
+  @override
+  State<_LocationSearchDialog> createState() => _LocationSearchDialogState();
+}
+
+class _LocationSearchDialogState extends State<_LocationSearchDialog> {
+  late final TextEditingController _searchController;
+  late List<MaintenanceLocation> _filteredLocations;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchController = TextEditingController();
+    _filteredLocations = List<MaintenanceLocation>.of(widget.locations);
+    _searchController.addListener(_applyFilter);
+  }
+
+  @override
+  void dispose() {
+    _searchController
+      ..removeListener(_applyFilter)
+      ..dispose();
+    super.dispose();
+  }
+
+  void _applyFilter() {
+    final String query = _searchController.text.trim().toLowerCase();
+    setState(() {
+      if (query.isEmpty) {
+        _filteredLocations = List<MaintenanceLocation>.of(widget.locations);
+        return;
+      }
+      _filteredLocations = widget.locations.where((MaintenanceLocation item) {
+        final String haystack = <String>[
+          widget.titleBuilder(item),
+          widget.subtitleBuilder(item),
+          item.label,
+          item.code,
+          item.floor ?? '',
+        ].join(' ').toLowerCase();
+        return haystack.contains(query);
+      }).toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppDialogShell(
+      maxWidth: 720,
+      child: SizedBox(
+        width: 720,
+        height: 520,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              'Selecionar local',
+              style: Theme.of(context).textTheme.headlineSmall,
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _searchController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                labelText: 'Buscar local',
+                hintText: 'Digite nome, numero, referencia ou andar',
+                prefixIcon: Icon(Icons.search_rounded),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '${_filteredLocations.length} resultado(s)',
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: CostaNorteBrand.mutedInk),
+            ),
+            const SizedBox(height: 12),
+            Expanded(
+              child: _filteredLocations.isEmpty
+                  ? _emptyScrollableBox(
+                      'Nenhum local encontrado para a busca informada.',
+                    )
+                  : ListView.separated(
+                      itemCount: _filteredLocations.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (BuildContext context, int index) {
+                        final MaintenanceLocation location =
+                            _filteredLocations[index];
+                        final bool selected =
+                            location.id == widget.selectedLocationId;
+                        return ListTile(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(16),
+                            side: BorderSide(
+                              color: selected
+                                  ? CostaNorteBrand.royalBlueDeep
+                                  : CostaNorteBrand.line,
+                            ),
+                          ),
+                          tileColor: selected
+                              ? CostaNorteBrand.mist
+                              : Colors.white,
+                          title: Text(widget.titleBuilder(location)),
+                          subtitle: Text(widget.subtitleBuilder(location)),
+                          trailing: selected
+                              ? const Icon(Icons.check_circle_rounded)
+                              : const Icon(Icons.chevron_right_rounded),
+                          onTap: () => Navigator.of(
+                            context,
+                          ).pop<MaintenanceLocation>(location),
+                        );
+                      },
+                    ),
+            ),
+            const SizedBox(height: 16),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancelar'),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _CompletionDialog extends StatefulWidget {
@@ -2965,7 +3249,7 @@ class _MaintenanceAttachmentsDialogState
                     ? null
                     : () => _pickAndUpload(MaintenanceAttachmentType.photo),
                 icon: const Icon(Icons.photo_camera_back_rounded),
-                label: const Text('Agregar foto'),
+                label: const Text('Adicionar foto'),
               ),
               OutlinedButton.icon(
                 onPressed: _saving
@@ -2973,7 +3257,7 @@ class _MaintenanceAttachmentsDialogState
                     : () =>
                           _pickAndUpload(MaintenanceAttachmentType.attachment),
                 icon: const Icon(Icons.attach_file_rounded),
-                label: const Text('Agregar arquivo'),
+                label: const Text('Adicionar arquivo'),
               ),
             ],
           ),
@@ -3181,6 +3465,44 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
     super.dispose();
   }
 
+  String _catalogLocationTitle(MaintenanceLocation location) {
+    final String normalized = location.label.trim();
+    if (location.locationCategory != MaintenanceLocationCategory.apartment) {
+      return _normalizeCatalogLabel(normalized);
+    }
+    final String compact = _normalizeCatalogLabel(normalized).replaceFirst(
+      RegExp(
+        r'^\s*(habitacion|habitacao|quarto|apartamento|apto)\s*[-#:]*\s*',
+        caseSensitive: false,
+      ),
+      '',
+    );
+    final String result = compact.trim();
+    if (result.isNotEmpty) {
+      return result;
+    }
+    if (location.code.trim().isNotEmpty) {
+      return location.code.trim();
+    }
+    return _normalizeCatalogLabel(normalized);
+  }
+
+  String _normalizeCatalogLabel(String value) {
+    String normalized = value;
+    final List<MapEntry<RegExp, String>> replacements =
+        <MapEntry<RegExp, String>>[
+          MapEntry(RegExp(r'\bescalera\b', caseSensitive: false), 'Escada'),
+          MapEntry(RegExp(r'\brecepcion\b', caseSensitive: false), 'Recepcao'),
+          MapEntry(RegExp(r'\bpasillo\b', caseSensitive: false), 'Corredor'),
+          MapEntry(RegExp(r'\bpiso\b', caseSensitive: false), 'Andar'),
+          MapEntry(RegExp(r'\bhabitacion\b', caseSensitive: false), 'Quarto'),
+        ];
+    for (final MapEntry<RegExp, String> entry in replacements) {
+      normalized = normalized.replaceAll(entry.key, entry.value);
+    }
+    return normalized.trim();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
@@ -3190,9 +3512,9 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
             children: widget.locations
                 .map(
                   (MaintenanceLocation item) => ListTile(
-                    title: Text(item.label),
+                    title: Text(_catalogLocationTitle(item)),
                     subtitle: Text(
-                      '${item.locationType.label} - ${item.locationCategory.label} - ${item.code}',
+                      '${item.locationType.label} - ${item.locationCategory.label}${item.code.trim().isEmpty ? '' : ' - Ref. ${item.code}'}',
                     ),
                     trailing: Text(item.active ? 'Ativo' : 'Inativo'),
                     selected: _selected?.id == item.id,
@@ -3267,7 +3589,10 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
               const SizedBox(height: 12),
               TextField(
                 controller: _codeController,
-                decoration: const InputDecoration(labelText: 'Codigo'),
+                decoration: const InputDecoration(
+                  labelText: 'Referencia interna',
+                  helperText: 'Opcional. Si queda vacio, el sistema la genera.',
+                ),
               ),
               const SizedBox(height: 12),
               TextField(
@@ -3348,12 +3673,11 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
   }
 
   Future<void> _save() async {
-    if (_codeController.text.trim().isEmpty ||
-        _labelController.text.trim().isEmpty) {
+    if (_labelController.text.trim().isEmpty) {
       await AppAlerts.warning(
         context,
         title: 'Campos obrigatorios',
-        message: 'Informe codigo e nome do local.',
+        message: 'Informe o nome do local.',
       );
       return;
     }
