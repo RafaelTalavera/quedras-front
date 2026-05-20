@@ -41,6 +41,14 @@ final class PtBrErrorTranslator {
         return 'J\u00e1 existe uma reserva ativa para esse hor\u00e1rio.';
       case 'Court booking overlaps with an existing active booking.':
         return 'Ja existe uma reserva ativa para esse horario da quadra.';
+      case 'Recurring court bookings are only available for partner coaches.':
+        return 'Reservas recorrentes de quadra estao disponiveis apenas para professores parceiros.';
+      case 'Recurring booking end date is required.':
+        return 'Informe a data final da recorrencia.';
+      case 'Recurring booking end date must be on or after the first booking date.':
+        return 'A data final da recorrencia deve ser igual ou posterior a primeira reserva.';
+      case 'Only recurring court bookings can be cancelled as a series.':
+        return 'Somente reservas recorrentes podem ser canceladas como serie.';
       case 'Partner coach name must match an active predefined coach.':
         return 'Selecione um professor parceiro ativo previamente cadastrado.';
       case 'Court partner coach name already exists.':

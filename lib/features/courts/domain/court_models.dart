@@ -81,6 +81,16 @@ enum CourtPaymentMethod {
   }
 }
 
+enum CourtBookingCancellationScope {
+  single('SINGLE', 'Somente este dia'),
+  series('SERIES', 'Toda a recorrencia');
+
+  const CourtBookingCancellationScope(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+}
+
 enum CourtMaterialCode {
   racket('RACKET', 'Raqueta'),
   ball('BALL', 'Pelota');
@@ -280,6 +290,9 @@ class CourtBooking {
     required this.paymentNotes,
     required this.status,
     required this.cancellationNotes,
+    required this.recurrenceGroupId,
+    required this.recurrenceStartDate,
+    required this.recurrenceEndDate,
     required this.materials,
     required this.createdAt,
     required this.updatedAt,
@@ -309,6 +322,9 @@ class CourtBooking {
   final String? paymentNotes;
   final CourtBookingStatus status;
   final String? cancellationNotes;
+  final String? recurrenceGroupId;
+  final DateTime? recurrenceStartDate;
+  final DateTime? recurrenceEndDate;
   final List<CourtBookingMaterial> materials;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -346,6 +362,11 @@ class CourtBooking {
       paymentNotes: _trimOrNull(_readString(json, 'paymentNotes')),
       status: CourtBookingStatus.tryParse(_readString(json, 'status')),
       cancellationNotes: _trimOrNull(_readString(json, 'cancellationNotes')),
+      recurrenceGroupId: _trimOrNull(_readString(json, 'recurrenceGroupId')),
+      recurrenceStartDate: _tryParseDate(
+        _readString(json, 'recurrenceStartDate'),
+      ),
+      recurrenceEndDate: _tryParseDate(_readString(json, 'recurrenceEndDate')),
       materials: materialsRaw is List
           ? materialsRaw
                 .map<CourtBookingMaterial>(
@@ -363,6 +384,12 @@ class CourtBooking {
   }
 
   double get durationHours => durationMinutes / 60;
+
+  bool get isRecurring =>
+      recurrenceGroupId != null &&
+      recurrenceGroupId!.trim().isNotEmpty &&
+      recurrenceStartDate != null &&
+      recurrenceEndDate != null;
 }
 
 class CourtSummaryReport {
@@ -456,6 +483,7 @@ class CourtSummaryReport {
 
 class CourtSummaryBreakdown {
   const CourtSummaryBreakdown({
+    required this.groupKey,
     required this.code,
     required this.label,
     required this.scheduledCount,
@@ -467,6 +495,7 @@ class CourtSummaryBreakdown {
     required this.totalAmount,
   });
 
+  final String groupKey;
   final String code;
   final String label;
   final int scheduledCount;
@@ -479,6 +508,8 @@ class CourtSummaryBreakdown {
 
   factory CourtSummaryBreakdown.fromJson(Map<String, dynamic> json) {
     return CourtSummaryBreakdown(
+      groupKey:
+          _readString(json, 'groupKey') ?? _readString(json, 'code') ?? '',
       code: _readString(json, 'code') ?? '',
       label: _readString(json, 'label') ?? '',
       scheduledCount: _readInt(json, 'scheduledCount') ?? 0,
@@ -504,6 +535,7 @@ class CreateCourtBookingModel {
     required this.paymentMethod,
     required this.paymentDate,
     required this.paymentNotes,
+    required this.recurrenceEndDate,
     required this.materials,
   });
 
@@ -517,6 +549,7 @@ class CreateCourtBookingModel {
   final CourtPaymentMethod? paymentMethod;
   final String? paymentDate;
   final String? paymentNotes;
+  final String? recurrenceEndDate;
   final List<CreateCourtBookingMaterialModel> materials;
 
   Map<String, dynamic> toJson() {
@@ -531,6 +564,9 @@ class CreateCourtBookingModel {
       'paymentMethod': paymentMethod?.apiValue,
       'paymentDate': paymentDate,
       'paymentNotes': _trimOrNull(paymentNotes),
+      'recurrence': recurrenceEndDate == null
+          ? null
+          : <String, dynamic>{'endDate': recurrenceEndDate},
       'materials': materials
           .map<Map<String, dynamic>>(
             (CreateCourtBookingMaterialModel item) => item.toJson(),
@@ -569,8 +605,16 @@ class UpdateCourtBookingModel extends CreateCourtBookingModel {
     required super.paymentMethod,
     required super.paymentDate,
     required super.paymentNotes,
+    super.recurrenceEndDate,
     required super.materials,
   });
+
+  @override
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> json = super.toJson();
+    json.remove('recurrence');
+    return json;
+  }
 }
 
 class UpdateCourtPaymentModel {
@@ -594,13 +638,18 @@ class UpdateCourtPaymentModel {
 }
 
 class CancelCourtBookingModel {
-  const CancelCourtBookingModel({required this.cancellationNotes});
+  const CancelCourtBookingModel({
+    required this.cancellationNotes,
+    this.cancellationScope = CourtBookingCancellationScope.single,
+  });
 
   final String cancellationNotes;
+  final CourtBookingCancellationScope cancellationScope;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'cancellationNotes': _trimOrNull(cancellationNotes),
+      'cancellationScope': cancellationScope.apiValue,
     };
   }
 }

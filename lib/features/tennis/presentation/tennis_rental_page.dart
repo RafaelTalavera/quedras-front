@@ -25,6 +25,16 @@ const List<String> _courtWeekLabels = <String>[
   'Dom',
 ];
 
+const List<String> _courtWeekFullLabels = <String>[
+  'Segunda-feira',
+  'Terca-feira',
+  'Quarta-feira',
+  'Quinta-feira',
+  'Sexta-feira',
+  'Sabado',
+  'Domingo',
+];
+
 const List<String> _courtMonthLabels = <String>[
   'Janeiro',
   'Fevereiro',
@@ -503,6 +513,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
         'Horario: ${booking.startTime.substring(0, 5)} - ${booking.endTime.substring(0, 5)}',
       )
       ..writeln('Tipo: ${booking.customerType.label}')
+      ..writeln('Recorrencia: ${booking.isRecurring ? 'Semanal' : 'Nao'}')
       ..writeln('Referencia: ${booking.customerReference}')
       ..writeln('Quadra: ${_formatCurrency(booking.courtAmount)}')
       ..writeln('Materiais: ${_formatCurrency(booking.materialsAmount)}')
@@ -1250,7 +1261,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                     'Reservas ativas do tipo ${item.label.toLowerCase()} no periodo consultado.',
                 bookingsBuilder: (CourtSummaryBreakdown item) =>
                     _filterReportBookingsByCustomerType(
-                      _customerTypeFromBreakdownCode(item.code),
+                      _customerTypeFromBreakdownGroupKey(item.groupKey),
                     ),
               ),
               const SizedBox(height: 18),
@@ -1268,7 +1279,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                 bookingsBuilder: (CourtSummaryBreakdown item) =>
                     _activeReportBookings.where((CourtBooking booking) {
                       return booking.pricingPeriod ==
-                          _pricingPeriodFromBreakdownCode(item.code);
+                          _pricingPeriodFromBreakdownGroupKey(item.groupKey);
                     }).toList(),
               ),
               const SizedBox(height: 18),
@@ -1289,7 +1300,9 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                       return booking.status == CourtBookingStatus.scheduled &&
                           booking.paid &&
                           booking.paymentMethod ==
-                              _paymentMethodFromBreakdownCode(item.code);
+                              _paymentMethodFromBreakdownGroupKey(
+                                item.groupKey,
+                              );
                     }).toList(),
               ),
             ],
@@ -1351,7 +1364,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                 const DataColumn(label: Text('Total')),
               ],
               rows: items.map((CourtSummaryBreakdown item) {
-                final String selectionKey = '$selectionPrefix:${item.code}';
+                final String selectionKey = '$selectionPrefix:${item.groupKey}';
                 return DataRow(
                   selected: _selectedSummaryDetailKey == selectionKey,
                   onSelectChanged: (_) => _openSummaryDetail(
@@ -1873,7 +1886,9 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       await AppAlerts.success(
         context,
         title: 'Reserva salva',
-        message: 'A reserva da quadra foi registrada com sucesso.',
+        message: result.occurrenceCount > 1
+            ? 'Foram registradas ${result.occurrenceCount} reservas recorrentes com sucesso.'
+            : 'A reserva da quadra foi registrada com sucesso.',
       );
     } catch (error) {
       if (!mounted) {
@@ -2105,32 +2120,13 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     if (selected == null || !mounted) {
       return;
     }
-    final TextEditingController notesController = TextEditingController();
-    final bool? confirmed = await showDialog<bool>(
-      context: context,
-      builder: (BuildContext context) {
-        return AlertDialog(
-          title: const Text('Cancelar reserva'),
-          content: TextField(
-            controller: notesController,
-            decoration: const InputDecoration(labelText: 'Motivo'),
-            maxLines: 3,
-          ),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Voltar'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Cancelar reserva'),
-            ),
-          ],
+    final _CourtBookingCancellationResult? cancellation =
+        await showDialog<_CourtBookingCancellationResult>(
+          context: context,
+          builder: (BuildContext context) =>
+              _CancelCourtBookingDialog(booking: selected),
         );
-      },
-    );
-    if (confirmed != true) {
-      notesController.dispose();
+    if (cancellation == null) {
       return;
     }
     setState(() {
@@ -2139,7 +2135,10 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     try {
       await widget.courtAppService.cancelBooking(
         selected.id,
-        CancelCourtBookingModel(cancellationNotes: notesController.text.trim()),
+        CancelCourtBookingModel(
+          cancellationNotes: cancellation.notes,
+          cancellationScope: cancellation.scope,
+        ),
       );
       if (!mounted) {
         return;
@@ -2151,7 +2150,9 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       await AppAlerts.success(
         context,
         title: 'Reserva cancelada',
-        message: 'La reserva fue cancelada y quedó en el histórico.',
+        message: cancellation.scope == CourtBookingCancellationScope.series
+            ? 'Toda a recorrencia foi cancelada e mantida no historico.'
+            : 'A reserva foi cancelada e mantida no historico.',
       );
     } catch (error) {
       if (!mounted) {
@@ -2163,7 +2164,6 @@ class _TennisRentalPageState extends State<TennisRentalPage>
         message: error.toString().replaceFirst('Bad state: ', ''),
       );
     } finally {
-      notesController.dispose();
       if (mounted) {
         setState(() {
           _saving = false;
@@ -2455,7 +2455,7 @@ class _CourtBookingTile extends StatelessWidget {
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        '${booking.startTime.substring(0, 5)} - ${booking.endTime.substring(0, 5)} | ${booking.customerType.label} | ${booking.durationHours.toStringAsFixed(1)} h',
+                        '${booking.startTime.substring(0, 5)} - ${booking.endTime.substring(0, 5)} | ${booking.customerType.label} | ${booking.durationHours.toStringAsFixed(1)} h${booking.isRecurring ? ' | Recorrente' : ''}',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                     ],
@@ -2842,9 +2842,11 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
   String _manualCustomerName = '';
   bool _paid = false;
   CourtPaymentMethod _paymentMethod = CourtPaymentMethod.pix;
+  bool _recurring = false;
   TimeOfDay _startTime = const TimeOfDay(hour: 9, minute: 0);
   TimeOfDay _endTime = const TimeOfDay(hour: 10, minute: 0);
   DateTime _bookingDate = DateTime.now();
+  DateTime? _recurrenceEndDate;
 
   @override
   void initState() {
@@ -2857,6 +2859,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
         : null;
     _paid = booking?.paid ?? false;
     _paymentMethod = booking?.paymentMethod ?? CourtPaymentMethod.pix;
+    _recurring = false;
     _startTime = booking == null
         ? const TimeOfDay(hour: 9, minute: 0)
         : _parseTimeOfDay(booking.startTime.substring(0, 5));
@@ -2864,6 +2867,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
         ? const TimeOfDay(hour: 10, minute: 0)
         : _parseTimeOfDay(booking.endTime.substring(0, 5));
     _bookingDate = booking?.bookingDate ?? DateTime.now();
+    _recurrenceEndDate = booking?.recurrenceEndDate;
     final int rackets = booking == null
         ? 0
         : booking.materials
@@ -2969,19 +2973,54 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _referenceController,
-                  decoration: const InputDecoration(labelText: 'Referencia'),
+                  decoration: const InputDecoration(
+                    labelText: 'Hospede / unidade',
+                    helperText:
+                        'Use apartamento, quarto, nome do hospede ou outra referencia operacional.',
+                  ),
                   validator: (String? value) =>
                       value == null || value.trim().isEmpty
-                      ? 'Informe la referencia'
+                      ? 'Informe el hospede o la unidad'
                       : null,
                 ),
                 const SizedBox(height: 12),
+                if (widget.initialBooking == null &&
+                    _customerType ==
+                        CourtCustomerType.partnerCoach) ...<Widget>[
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    value: _recurring,
+                    onChanged: (bool value) {
+                      setState(() {
+                        _recurring = value;
+                        _recurrenceEndDate ??= _bookingDate;
+                      });
+                    },
+                    title: const Text('Reserva recorrente semanal'),
+                    subtitle: const Text(
+                      'Repete a reserva toda semana no mesmo dia e horario.',
+                    ),
+                  ),
+                  if (_recurring) ...<Widget>[
+                    const SizedBox(height: 8),
+                    OutlinedButton.icon(
+                      onPressed: _pickRecurrenceEndDate,
+                      icon: const Icon(Icons.event_repeat_rounded),
+                      label: Text(
+                        'Repetir ate ${_formatShortDate(_recurrenceEndDate ?? _bookingDate)}',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ],
                 Row(
                   children: <Widget>[
                     Expanded(
                       child: OutlinedButton(
                         onPressed: _pickDate,
-                        child: Text('Fecha: ${_formatShortDate(_bookingDate)}'),
+                        child: Text(
+                          'Fecha: ${_formatBookingDateWithWeekday(_bookingDate)}',
+                        ),
                       ),
                     ),
                     const SizedBox(width: 12),
@@ -3135,6 +3174,9 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                 customerType: _customerType,
                 paid: _paid,
                 paymentMethod: _paid ? _paymentMethod : null,
+                recurrenceEndDate: _recurring
+                    ? _formatDate(_recurrenceEndDate ?? _bookingDate)
+                    : null,
                 rackets: int.tryParse(_racketsController.text) ?? 0,
                 balls: int.tryParse(_ballsController.text) ?? 0,
               ),
@@ -3163,12 +3205,34 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
     }
     setState(() {
       _bookingDate = picked;
+      if (_recurrenceEndDate != null &&
+          _recurrenceEndDate!.isBefore(_bookingDate)) {
+        _recurrenceEndDate = _bookingDate;
+      }
     });
   }
 
   void _setPaidValue(bool value) {
     setState(() {
       _paid = value;
+    });
+  }
+
+  Future<void> _pickRecurrenceEndDate() async {
+    final DateTime initialDate = _recurrenceEndDate ?? _bookingDate;
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: initialDate.isBefore(_bookingDate)
+          ? _bookingDate
+          : initialDate,
+      firstDate: _bookingDate,
+      lastDate: DateTime(_bookingDate.year + 1, 12, 31),
+    );
+    if (picked == null) {
+      return;
+    }
+    setState(() {
+      _recurrenceEndDate = DateTime(picked.year, picked.month, picked.day);
     });
   }
 
@@ -3316,8 +3380,11 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
         _selectedPartnerCoachName = null;
         _nameController.clear();
       }
+      _recurrenceEndDate ??= _bookingDate;
       return;
     }
+    _recurring = false;
+    _recurrenceEndDate = null;
     _nameController.text = _manualCustomerName;
   }
 
@@ -4052,6 +4119,7 @@ class _CourtBookingFormResult {
     required this.customerType,
     required this.paid,
     required this.paymentMethod,
+    required this.recurrenceEndDate,
     required this.rackets,
     required this.balls,
   });
@@ -4064,6 +4132,7 @@ class _CourtBookingFormResult {
   final CourtCustomerType customerType;
   final bool paid;
   final CourtPaymentMethod? paymentMethod;
+  final String? recurrenceEndDate;
   final int rackets;
   final int balls;
 
@@ -4079,6 +4148,7 @@ class _CourtBookingFormResult {
       paymentMethod: paymentMethod,
       paymentDate: paid ? _formatDate(DateTime.now()) : null,
       paymentNotes: null,
+      recurrenceEndDate: recurrenceEndDate,
       materials: _materials,
     );
   }
@@ -4095,6 +4165,7 @@ class _CourtBookingFormResult {
       paymentMethod: paymentMethod,
       paymentDate: paid ? _formatDate(DateTime.now()) : null,
       paymentNotes: null,
+      recurrenceEndDate: null,
       materials: _materials,
     );
   }
@@ -4112,6 +4183,136 @@ class _CourtBookingFormResult {
             quantity: balls,
           ),
       ];
+
+  int get occurrenceCount {
+    if (recurrenceEndDate == null) {
+      return 1;
+    }
+    final DateTime endDate = DateTime.parse(recurrenceEndDate!);
+    int count = 0;
+    DateTime current = DateTime(
+      bookingDate.year,
+      bookingDate.month,
+      bookingDate.day,
+    );
+    final DateTime normalizedEnd = DateTime(
+      endDate.year,
+      endDate.month,
+      endDate.day,
+    );
+    while (!current.isAfter(normalizedEnd)) {
+      count += 1;
+      current = current.add(const Duration(days: 7));
+    }
+    return count;
+  }
+}
+
+class _CourtBookingCancellationResult {
+  const _CourtBookingCancellationResult({
+    required this.notes,
+    required this.scope,
+  });
+
+  final String notes;
+  final CourtBookingCancellationScope scope;
+}
+
+class _CancelCourtBookingDialog extends StatefulWidget {
+  const _CancelCourtBookingDialog({required this.booking});
+
+  final CourtBooking booking;
+
+  @override
+  State<_CancelCourtBookingDialog> createState() =>
+      _CancelCourtBookingDialogState();
+}
+
+class _CancelCourtBookingDialogState extends State<_CancelCourtBookingDialog> {
+  late final TextEditingController _notesController;
+  CourtBookingCancellationScope _scope = CourtBookingCancellationScope.single;
+
+  @override
+  void initState() {
+    super.initState();
+    _notesController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _notesController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Cancelar reserva'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: <Widget>[
+            if (widget.booking.isRecurring) ...<Widget>[
+              RadioListTile<CourtBookingCancellationScope>(
+                contentPadding: EdgeInsets.zero,
+                value: CourtBookingCancellationScope.single,
+                groupValue: _scope,
+                onChanged: (CourtBookingCancellationScope? value) {
+                  if (value == null) {
+                    return;
+                  }
+                  setState(() {
+                    _scope = value;
+                  });
+                },
+                title: const Text('Cancelar somente este dia'),
+              ),
+              RadioListTile<CourtBookingCancellationScope>(
+                contentPadding: EdgeInsets.zero,
+                value: CourtBookingCancellationScope.series,
+                groupValue: _scope,
+                onChanged: (CourtBookingCancellationScope? value) {
+                  if (value == null) {
+                    return;
+                  }
+                  setState(() {
+                    _scope = value;
+                  });
+                },
+                title: const Text('Cancelar toda a recorrencia'),
+              ),
+              const SizedBox(height: 8),
+            ],
+            TextField(
+              controller: _notesController,
+              decoration: const InputDecoration(labelText: 'Motivo'),
+              maxLines: 3,
+            ),
+          ],
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Voltar'),
+        ),
+        FilledButton(
+          onPressed: () {
+            Navigator.of(context).pop(
+              _CourtBookingCancellationResult(
+                notes: _notesController.text.trim(),
+                scope: widget.booking.isRecurring
+                    ? _scope
+                    : CourtBookingCancellationScope.single,
+              ),
+            );
+          },
+          child: const Text('Cancelar reserva'),
+        ),
+      ],
+    );
+  }
 }
 
 class _PaymentResult {
@@ -4140,6 +4341,12 @@ String _statusDescription(CourtBooking booking) {
         : 'Cancelada: ${booking.cancellationNotes}';
   }
   if (!booking.paid) {
+    if (booking.isRecurring) {
+      final String endLabel = booking.recurrenceEndDate == null
+          ? ''
+          : ' Ate ${_formatShortDate(booking.recurrenceEndDate!)}.';
+      return 'Reserva recorrente semanal.$endLabel Pagamento pendente.';
+    }
     return 'Pagamento pendente.';
   }
   final String methodLabel =
@@ -4147,6 +4354,12 @@ String _statusDescription(CourtBooking booking) {
   final String dateLabel = booking.paymentDate == null
       ? 'data nao informada'
       : _formatShortDate(booking.paymentDate!);
+  if (booking.isRecurring) {
+    final String endLabel = booking.recurrenceEndDate == null
+        ? ''
+        : ' Ate ${_formatShortDate(booking.recurrenceEndDate!)}.';
+    return 'Reserva recorrente semanal.$endLabel Pago em $dateLabel via $methodLabel.';
+  }
   return 'Pago em $dateLabel via $methodLabel.';
 }
 
@@ -4173,16 +4386,16 @@ int _compareBookingsByDateTime(CourtBooking a, CourtBooking b) {
   return a.startTime.compareTo(b.startTime);
 }
 
-CourtCustomerType _customerTypeFromBreakdownCode(String code) {
-  return CourtCustomerType.tryParse(code);
+CourtCustomerType _customerTypeFromBreakdownGroupKey(String groupKey) {
+  return CourtCustomerType.tryParse(groupKey);
 }
 
-CourtPricingPeriod _pricingPeriodFromBreakdownCode(String code) {
-  return CourtPricingPeriod.tryParse(code);
+CourtPricingPeriod _pricingPeriodFromBreakdownGroupKey(String groupKey) {
+  return CourtPricingPeriod.tryParse(groupKey);
 }
 
-CourtPaymentMethod? _paymentMethodFromBreakdownCode(String code) {
-  return CourtPaymentMethod.tryParse(code);
+CourtPaymentMethod? _paymentMethodFromBreakdownGroupKey(String groupKey) {
+  return CourtPaymentMethod.tryParse(groupKey);
 }
 
 String _formatDate(DateTime value) {
@@ -4195,6 +4408,10 @@ String _formatShortDate(DateTime value) {
   final String month = value.month.toString().padLeft(2, '0');
   final String day = value.day.toString().padLeft(2, '0');
   return '$day/$month/${value.year}';
+}
+
+String _formatBookingDateWithWeekday(DateTime value) {
+  return '${_courtWeekFullLabels[value.weekday - 1]} · ${_formatShortDate(value)}';
 }
 
 String _formatReportRangeLabel(DateTime start, DateTime end) {

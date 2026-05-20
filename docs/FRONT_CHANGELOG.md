@@ -1,5 +1,23 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-05-20 | Quadras | Formulario con recurrencia para profesor parceiro y fecha con dia de la semana
+- Componente afectado: Frontend (`Quadras`)
+- Archivos tocados:
+  - `lib/features/tennis/presentation/tennis_rental_page.dart`
+  - `lib/features/courts/domain/court_models.dart`
+  - `lib/core/localization/pt_br_error_translator.dart`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: acompañar el nuevo flujo operativo de reservas recurrentes de quadra y mejorar la referencia visual de la fecha en el formulario de lanzamiento.
+- Impacto funcional:
+  - el formulario muestra la opcion de `reserva recorrente semanal` solo para `Professor parceiro`
+  - el operador puede definir la fecha final de la recurrencia y el frontend informa cuantas ocurrencias se registraron
+  - la cancelacion de reservas recurrentes permite elegir entre `somente este dia` o `toda a recorrencia`
+  - la fecha del formulario ahora muestra `dia da semana + data`, por ejemplo `Segunda-feira · 20/05/2026`
+  - las reservas recurrentes quedan identificadas visualmente en la tarjeta y en el texto compartido
+- Validacion ejecutada:
+  - `dart format lib/features/courts/domain/court_models.dart lib/features/tennis/presentation/tennis_rental_page.dart lib/core/localization/pt_br_error_translator.dart`
+  - `flutter analyze lib/features/courts/domain/court_models.dart lib/features/tennis/presentation/tennis_rental_page.dart lib/core/localization/pt_br_error_translator.dart`
+
 ## 2026-05-19 | UX operativa | Massagens elimina comparticion de PDF en detalle por prestador
 - Componente afectado: Frontend (`Massagens`) + documentacion funcional
 - Archivos tocados:
