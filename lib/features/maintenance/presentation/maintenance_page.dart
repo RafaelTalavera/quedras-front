@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/feedback/app_share.dart';
+import '../../../core/files/file_save_result.dart';
 import '../../../core/sync/schedule_sync_event.dart';
 import '../../../core/sync/schedule_sync_service.dart';
 import '../../../core/theme/costa_norte_brand.dart';
@@ -14,6 +15,7 @@ import '../../../core/widgets/app_dialog_dimensions.dart';
 import '../../../core/widgets/app_dialog_shell.dart';
 import '../../../core/widgets/brand_section_hero.dart';
 import '../application/maintenance_app_service.dart';
+import '../application/maintenance_daily_report_pdf_exporter.dart';
 import '../domain/maintenance_models.dart';
 
 const List<String> _monthLabels = <String>[
@@ -40,6 +42,8 @@ const List<String> _weekLabels = <String>[
   'Sab',
   'Dom',
 ];
+
+const String _generalCommonAreasGroupTitle = 'Areas comuns gerais';
 
 enum MaintenanceSection { operationalSummary }
 
@@ -87,17 +91,22 @@ class _MaintenancePageState extends State<MaintenancePage>
   List<MaintenanceLocation> _locations = const <MaintenanceLocation>[];
   List<MaintenanceProvider> _providers = const <MaintenanceProvider>[];
   List<MaintenanceOrder> _orders = const <MaintenanceOrder>[];
+  MaintenanceDailyExecutiveReport? _executiveReport;
   late DateTime _selectedDate;
   bool _loading = true;
   bool _refreshingData = false;
   bool _loadingProviders = false;
   bool _saving = false;
   bool _providersLoaded = false;
+  bool _exportingDailyReport = false;
+  bool _openingDailyReport = false;
   int? _sharingOrderId;
   String? _errorMessage;
   int? _selectedOrderId;
   int? _selectedLocationId;
   MaintenanceSection _currentSection = MaintenanceSection.operationalSummary;
+  final MaintenanceDailyReportPdfExporter _dailyReportPdfExporter =
+      DefaultMaintenanceDailyReportPdfExporter();
 
   @override
   void initState() {
@@ -187,7 +196,14 @@ class _MaintenancePageState extends State<MaintenancePage>
               ),
             )
           else
-            _buildOperationalSummaryCard(),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                _buildExecutiveSummaryCard(),
+                const SizedBox(height: 18),
+                _buildOperationalSummaryCard(),
+              ],
+            ),
         ],
       ),
     );
@@ -215,6 +231,9 @@ class _MaintenancePageState extends State<MaintenancePage>
         ..sort((MaintenanceOrder a, MaintenanceOrder b) {
           return a.referenceDate.compareTo(b.referenceDate);
         });
+
+  List<MaintenanceOrder> get _openDayOrders =>
+      _dayOrders.where(_isOrderOpenForExecutiveSummary).toList();
 
   Future<void> _scrollToSection(MaintenanceSection section) async {
     _setCurrentSection(section);
@@ -257,14 +276,22 @@ class _MaintenancePageState extends State<MaintenancePage>
             dateFrom: _formatDateApi(_selectedDate),
             dateTo: _formatDateApi(_selectedDate),
           );
+      final Future<MaintenanceDailyExecutiveReport> executiveReportFuture =
+          widget.maintenanceAppService.getDailyExecutiveReport(
+            date: _formatDateApi(_selectedDate),
+          );
       final List<MaintenanceLocation> locations = await locationsFuture;
       final List<MaintenanceOrder> orders = await ordersFuture;
+      final MaintenanceDailyExecutiveReport executiveReport =
+          await executiveReportFuture;
       if (!mounted) {
         return;
       }
       setState(() {
-        _locations = locations;
+        _locations = List<MaintenanceLocation>.of(locations)
+          ..sort(_compareLocationCatalogOrder);
         _orders = orders;
+        _executiveReport = executiveReport;
         _loading = false;
         _refreshingData = false;
         if (_selectedOrderId != null &&
@@ -347,7 +374,27 @@ class _MaintenancePageState extends State<MaintenancePage>
   }
 
   bool _isRelevantSyncEvent(ScheduleSyncEvent event) {
-    return event.affectsDay(_selectedDate);
+    return event.affectsDay(_selectedDate) ||
+        _mayAffectExecutiveCarryOver(event);
+  }
+
+  bool _mayAffectExecutiveCarryOver(ScheduleSyncEvent event) {
+    final DateTime? start = event.dateFrom;
+    final DateTime? end = event.dateTo;
+    if (start == null && end == null) {
+      return true;
+    }
+    final DateTime effectiveStart = DateTime(
+      (start ?? end!).year,
+      (start ?? end!).month,
+      (start ?? end!).day,
+    );
+    final DateTime selected = DateTime(
+      _selectedDate.year,
+      _selectedDate.month,
+      _selectedDate.day,
+    );
+    return effectiveStart.isBefore(selected);
   }
 
   Future<void> _pickSelectedDate() async {
@@ -364,6 +411,203 @@ class _MaintenancePageState extends State<MaintenancePage>
       _selectedDate = DateTime(picked.year, picked.month, picked.day);
     });
     await _load(showLoading: false);
+  }
+
+  Widget _buildExecutiveSummaryCard() {
+    final MaintenanceDailyExecutiveReport? executiveReport = _executiveReport;
+    final List<MaintenanceOrder> openOrders =
+        executiveReport?.allOpenOrders ?? _openDayOrders;
+    final List<MaintenanceOrder> carryOverOrders =
+        executiveReport?.carryOverOrders ?? const <MaintenanceOrder>[];
+    final int urgentCount = openOrders
+        .where(
+          (MaintenanceOrder order) =>
+              order.priority == MaintenancePriority.urgent ||
+              order.businessPriority ==
+                  MaintenanceBusinessPriority.criticalOperation,
+        )
+        .length;
+    final int scheduledCount = openOrders
+        .where(
+          (MaintenanceOrder order) =>
+              order.status == MaintenanceOrderStatus.scheduled,
+        )
+        .length;
+    final int inProgressCount = openOrders
+        .where(
+          (MaintenanceOrder order) =>
+              order.status == MaintenanceOrderStatus.inProgress,
+        )
+        .length;
+    final int unassignedCount = openOrders
+        .where((MaintenanceOrder order) => order.providerId == null)
+        .length;
+    final List<MaintenanceOrder> previewOrders = openOrders.take(5).toList();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Resumo executivo do dia',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Pantallazo rapido das ordens abertas em ${_fullDate(_selectedDate)}, incluindo pendencias nao fechadas de dias anteriores.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 10,
+                  alignment: WrapAlignment.end,
+                  children: <Widget>[
+                    OutlinedButton.icon(
+                      onPressed: _exportingDailyReport || _openingDailyReport
+                          ? null
+                          : _downloadDailyReportPdf,
+                      icon: Icon(
+                        _exportingDailyReport
+                            ? Icons.hourglass_top_rounded
+                            : Icons.download_rounded,
+                      ),
+                      label: Text(
+                        _exportingDailyReport ? 'Gerando PDF...' : 'Baixar PDF',
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _exportingDailyReport || _openingDailyReport
+                          ? null
+                          : _openDailyReportForPrinting,
+                      icon: Icon(
+                        _openingDailyReport
+                            ? Icons.hourglass_top_rounded
+                            : Icons.print_rounded,
+                      ),
+                      label: Text(
+                        _openingDailyReport ? 'Preparando...' : 'Imprimir',
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: <Widget>[
+                _metricChip(
+                  'Ordens abertas',
+                  '${openOrders.length}',
+                  Icons.assignment_late_rounded,
+                ),
+                _metricChip(
+                  'Pendentes anteriores',
+                  '${carryOverOrders.length}',
+                  Icons.history_toggle_off_rounded,
+                ),
+                _metricChip(
+                  'Urgentes',
+                  '$urgentCount',
+                  Icons.priority_high_rounded,
+                ),
+                _metricChip(
+                  'Agendadas',
+                  '$scheduledCount',
+                  Icons.event_available_rounded,
+                ),
+                _metricChip(
+                  'Em andamento',
+                  '$inProgressCount',
+                  Icons.handyman_rounded,
+                ),
+                _metricChip(
+                  'Sem prestador',
+                  '$unassignedCount',
+                  Icons.person_off_rounded,
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            if (openOrders.isEmpty)
+              _emptyBox(
+                'Nao ha ordens abertas para o dia selecionado. O PDF pode ser gerado mesmo assim como comprovante do painel vazio.',
+              )
+            else
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFCFCFB),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: CostaNorteBrand.line),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      'Ordens abertas agora',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      carryOverOrders.isEmpty
+                          ? 'Lista curta para leitura rapida. O PDF leva a relacao completa das ordens abertas do dia.'
+                          : 'Lista curta para leitura rapida. Pendencias anteriores aparecem junto al dia para acelerar o follow-up operacional.',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                    if (carryOverOrders.isNotEmpty) ...<Widget>[
+                      const SizedBox(height: 12),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFFFF8E8),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: CostaNorteBrand.line),
+                        ),
+                        child: Text(
+                          'Hay ${carryOverOrders.length} ordem(ns) pendente(s) arrastrada(s) de dias anteriores e ainda sem fechamento.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ),
+                    ],
+                    const SizedBox(height: 14),
+                    ...previewOrders.map(
+                      (MaintenanceOrder order) => Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _buildExecutiveOrderRow(order),
+                      ),
+                    ),
+                    if (openOrders.length > previewOrders.length)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          'E mais ${openOrders.length - previewOrders.length} ordem(ns) aberta(s) no relatorio completo.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildOperationalSummaryCard() {
@@ -573,7 +817,11 @@ class _MaintenancePageState extends State<MaintenancePage>
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
                       const SizedBox(height: 10),
-                      _buildSectionLocationLayout(section, group.locations),
+                      _buildSectionLocationLayout(
+                        section,
+                        group.locations,
+                        groupTitle: group.title,
+                      ),
                     ],
                   ),
                 ),
@@ -586,18 +834,81 @@ class _MaintenancePageState extends State<MaintenancePage>
     );
   }
 
+  Widget _buildExecutiveOrderRow(MaintenanceOrder order) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      order.title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${order.locationDisplayLabel} - ${order.providerLabel}',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              _statusPill(order),
+            ],
+          ),
+          if (order.description != null && order.description!.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                order.description!.trim(),
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: CostaNorteBrand.mutedInk,
+                ),
+              ),
+            ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              _tag(_orderScheduleLabel(order)),
+              _tag(order.serviceLabel),
+              if (order.priority == MaintenancePriority.urgent) _tag('Urgente'),
+              if (order.assignedUsername != null &&
+                  order.assignedUsername!.trim().isNotEmpty)
+                _tag('Atribuido: ${order.assignedUsername!}'),
+              if (order.guestLabel != null)
+                _tag('Hospede: ${order.guestLabel!}'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildSectionLocationLayout(
     _MaintenanceDepartmentSectionData section,
-    List<_MaintenanceDepartmentLocationData> locations,
-  ) {
+    List<_MaintenanceDepartmentLocationData> locations, {
+    String? groupTitle,
+  }) {
     switch (section.layout) {
       case _MaintenanceSectionLayout.adaptive:
-        return _buildAdaptiveLocationWrap(locations);
+        return _buildAdaptiveLocationWrap(locations, groupTitle: groupTitle);
       case _MaintenanceSectionLayout.fixedGrid:
-        return _buildFixedLocationGrid(
-          locations,
-          crossAxisCount: section.crossAxisCount,
-        );
+        return _buildFixedLocationGrid(locations, crossAxisCount: 6);
     }
   }
 
@@ -611,8 +922,27 @@ class _MaintenancePageState extends State<MaintenancePage>
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
         const double spacing = 6;
-        final double itemWidth =
-            (maxWidth - (crossAxisCount - 1) * spacing) / crossAxisCount;
+        const double preferredItemWidth = 148;
+        const double minItemWidth = 128;
+        int effectiveCrossAxisCount =
+            ((maxWidth + spacing) / (preferredItemWidth + spacing)).floor();
+        if (effectiveCrossAxisCount < 1) {
+          effectiveCrossAxisCount = 1;
+        }
+        if (effectiveCrossAxisCount > crossAxisCount) {
+          effectiveCrossAxisCount = crossAxisCount;
+        }
+
+        double itemWidth =
+            (maxWidth - (effectiveCrossAxisCount - 1) * spacing) /
+            effectiveCrossAxisCount;
+        while (effectiveCrossAxisCount > 1 && itemWidth < minItemWidth) {
+          effectiveCrossAxisCount -= 1;
+          itemWidth =
+              (maxWidth - (effectiveCrossAxisCount - 1) * spacing) /
+              effectiveCrossAxisCount;
+        }
+
         return Wrap(
           spacing: spacing,
           runSpacing: spacing,
@@ -621,7 +951,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                 (_MaintenanceDepartmentLocationData item) => SizedBox(
                   width: itemWidth,
                   child: _MaintenanceLocationCard(
-                    title: _summaryLabelForLocation(item.location),
+                    title: item.title,
                     subtitle: item.subtitle,
                     icon: item.icon,
                     dayOrders: item.dayOrders,
@@ -638,14 +968,23 @@ class _MaintenancePageState extends State<MaintenancePage>
   }
 
   Widget _buildAdaptiveLocationWrap(
-    List<_MaintenanceDepartmentLocationData> locations,
-  ) {
+    List<_MaintenanceDepartmentLocationData> locations, {
+    String? groupTitle,
+  }) {
     return LayoutBuilder(
       builder: (BuildContext context, BoxConstraints constraints) {
         final double maxWidth = constraints.maxWidth.isFinite
             ? constraints.maxWidth
             : MediaQuery.sizeOf(context).width;
-        final double maxCardWidth = maxWidth >= 420 ? 420 : maxWidth;
+        final double maxCardWidth = maxWidth >= 240 ? 240 : maxWidth;
+        final bool useStandardWidthForPb = _isPbGroupTitle(groupTitle);
+        final double? standardPbCardWidth = useStandardWidthForPb
+            ? _standardWidthForPbButtons(
+                context,
+                locations,
+                maxAvailableWidth: maxCardWidth,
+              )
+            : null;
         return Align(
           alignment: Alignment.centerLeft,
           child: Wrap(
@@ -655,11 +994,11 @@ class _MaintenancePageState extends State<MaintenancePage>
                 .map(
                   (_MaintenanceDepartmentLocationData item) => ConstrainedBox(
                     constraints: BoxConstraints(
-                      minWidth: 150,
-                      maxWidth: maxCardWidth,
+                      minWidth: standardPbCardWidth ?? 72,
+                      maxWidth: standardPbCardWidth ?? maxCardWidth,
                     ),
                     child: _MaintenanceLocationCard(
-                      title: _summaryLabelForLocation(item.location),
+                      title: item.title,
                       subtitle: item.subtitle,
                       icon: item.icon,
                       dayOrders: item.dayOrders,
@@ -732,7 +1071,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                 _tag(order.businessPriority.label),
                 _tag(order.serviceLabel),
                 if (order.assignedUsername != null)
-                  _tag('Asignado: ${order.assignedUsername}'),
+                  _tag('Atribuido: ${order.assignedUsername}'),
                 if (order.estimatedExecutionMinutes != null)
                   _tag('${order.estimatedExecutionMinutes} min'),
                 if (order.guestLabel != null)
@@ -821,15 +1160,15 @@ class _MaintenancePageState extends State<MaintenancePage>
     commonAreas.sort(_sortLocations);
     chalets.sort(_sortLocations);
 
-    final Map<String, List<_MaintenanceDepartmentLocationData>>
-    apartmentGroups = <String, List<_MaintenanceDepartmentLocationData>>{};
+    final Map<String, List<_MaintenanceDepartmentLocationData>> floorGroups =
+        <String, List<_MaintenanceDepartmentLocationData>>{};
     for (final MaintenanceLocation location in apartments) {
       final String groupLabel = _floorLabelForLocation(location);
-      apartmentGroups.putIfAbsent(
+      floorGroups.putIfAbsent(
         groupLabel,
         () => <_MaintenanceDepartmentLocationData>[],
       );
-      apartmentGroups[groupLabel]!.add(
+      floorGroups[groupLabel]!.add(
         _buildDepartmentLocationData(
           location,
           dayOrdersByLocation[location.id] ?? const <MaintenanceOrder>[],
@@ -837,36 +1176,56 @@ class _MaintenancePageState extends State<MaintenancePage>
       );
     }
 
-    final List<_MaintenanceDepartmentGroupData> apartmentGroupList =
-        apartmentGroups.entries
-            .map(
-              (
-                MapEntry<String, List<_MaintenanceDepartmentLocationData>>
-                entry,
-              ) => _MaintenanceDepartmentGroupData(
-                title: entry.key,
-                locations: entry.value,
-              ),
-            )
-            .toList()
-          ..sort(
-            (
-              _MaintenanceDepartmentGroupData a,
-              _MaintenanceDepartmentGroupData b,
-            ) => _departmentGroupSortValue(
-              a.title,
-            ).compareTo(_departmentGroupSortValue(b.title)),
-          );
+    final List<MaintenanceLocation> generalCommonAreas =
+        <MaintenanceLocation>[];
+    for (final MaintenanceLocation location in commonAreas) {
+      final String groupLabel = _commonAreaFloorGroup(location);
+      if (groupLabel == _generalCommonAreasGroupTitle) {
+        generalCommonAreas.add(location);
+        continue;
+      }
+      floorGroups.putIfAbsent(
+        groupLabel,
+        () => <_MaintenanceDepartmentLocationData>[],
+      );
+      floorGroups[groupLabel]!.add(
+        _buildDepartmentLocationData(
+          location,
+          dayOrdersByLocation[location.id] ?? const <MaintenanceOrder>[],
+        ),
+      );
+    }
 
-    final List<_MaintenanceDepartmentLocationData> commonAreaLocations =
-        commonAreas
+    final List<_MaintenanceDepartmentGroupData> floorGroupList =
+        floorGroups.entries.map((
+          MapEntry<String, List<_MaintenanceDepartmentLocationData>> entry,
+        ) {
+          final List<_MaintenanceDepartmentLocationData> sortedLocations =
+              List<_MaintenanceDepartmentLocationData>.of(entry.value)
+                ..sort(_compareDepartmentGroupItems);
+          return _MaintenanceDepartmentGroupData(
+            title: entry.key,
+            locations: sortedLocations,
+          );
+        }).toList()..sort(
+          (
+            _MaintenanceDepartmentGroupData a,
+            _MaintenanceDepartmentGroupData b,
+          ) => _departmentGroupSortValue(
+            a.title,
+          ).compareTo(_departmentGroupSortValue(b.title)),
+        );
+
+    final List<_MaintenanceDepartmentLocationData> generalCommonAreaLocations =
+        generalCommonAreas
             .map(
               (MaintenanceLocation location) => _buildDepartmentLocationData(
                 location,
                 dayOrdersByLocation[location.id] ?? const <MaintenanceOrder>[],
               ),
             )
-            .toList();
+            .toList()
+          ..sort(_compareDepartmentGroupItems);
 
     final List<_MaintenanceDepartmentLocationData> chaletLocations = chalets
         .map(
@@ -879,34 +1238,35 @@ class _MaintenancePageState extends State<MaintenancePage>
 
     return <_MaintenanceDepartmentSectionData>[
       _MaintenanceDepartmentSectionData(
-        title: 'Apartamentos',
-        description: 'Quartos e unidades internas organizados por andar.',
+        title: 'Andares',
+        description:
+            'Apartamentos e areas comuns organizados por andar, com leitura uniforme na grade.',
         icon: Icons.apartment_rounded,
         tint: CostaNorteBrand.royalBlueDeep,
-        layout: _MaintenanceSectionLayout.fixedGrid,
-        crossAxisCount: 6,
-        groups: apartmentGroupList,
-      ),
-      _MaintenanceDepartmentSectionData(
-        title: 'Areas comuns',
-        description: 'Lobby, circulacoes e espacos coletivos do hotel.',
-        icon: Icons.weekend_rounded,
-        tint: CostaNorteBrand.goldDeep,
         layout: _MaintenanceSectionLayout.adaptive,
-        groups: <_MaintenanceDepartmentGroupData>[
-          _MaintenanceDepartmentGroupData(
-            title: 'Espacos compartilhados',
-            locations: commonAreaLocations,
-          ),
-        ],
+        groups: floorGroupList,
       ),
+      if (generalCommonAreaLocations.isNotEmpty)
+        _MaintenanceDepartmentSectionData(
+          title: 'Areas comuns gerais',
+          description:
+              'Locais compartilhados sem andar operacional definido no cadastro.',
+          icon: Icons.weekend_rounded,
+          tint: CostaNorteBrand.goldDeep,
+          layout: _MaintenanceSectionLayout.adaptive,
+          groups: <_MaintenanceDepartmentGroupData>[
+            _MaintenanceDepartmentGroupData(
+              title: _generalCommonAreasGroupTitle,
+              locations: generalCommonAreaLocations,
+            ),
+          ],
+        ),
       _MaintenanceDepartmentSectionData(
         title: 'Chalets',
         description: 'Unidades externas com manutencao dedicada.',
         icon: Icons.cabin_rounded,
         tint: CostaNorteBrand.success,
-        layout: _MaintenanceSectionLayout.fixedGrid,
-        crossAxisCount: 6,
+        layout: _MaintenanceSectionLayout.adaptive,
         groups: <_MaintenanceDepartmentGroupData>[
           _MaintenanceDepartmentGroupData(
             title: 'Conjunto de chalets',
@@ -928,6 +1288,7 @@ class _MaintenancePageState extends State<MaintenancePage>
           });
     return _MaintenanceDepartmentLocationData(
       location: location,
+      title: _panelTitleForLocation(location),
       icon: _iconForLocation(location),
       subtitle: _subtitleForLocation(location),
       dayOrders: sortedOrders,
@@ -985,10 +1346,18 @@ class _MaintenancePageState extends State<MaintenancePage>
     return baseLabel;
   }
 
+  String _panelTitleForLocation(MaintenanceLocation location) {
+    if (_locationCategory(location) ==
+        _MaintenanceLocationCategory.commonArea) {
+      return _compactCommonAreaLabel(location);
+    }
+    return _summaryLabelForLocation(location);
+  }
+
   String _compactApartmentLabel(String value, {String fallbackCode = ''}) {
     final String compact = value.replaceFirst(
       RegExp(
-        r'^\s*(habitacion|habitacao|quarto|apartamento|apto)\s*[-#:]*\s*',
+        r'^\s*(?:habitacion(?:es)?|habitaci\u00f3n(?:es)?|habitacao|quarto|apartamento|apto)\s*[-#:]*\s*',
         caseSensitive: false,
       ),
       '',
@@ -1010,6 +1379,109 @@ class _MaintenancePageState extends State<MaintenancePage>
     );
     final String normalized = compact.trim();
     return normalized.isEmpty ? value.trim() : normalized;
+  }
+
+  String _compactCommonAreaLabel(MaintenanceLocation location) {
+    final String code = location.code.trim();
+    final String label = _normalizeLocationDisplayLabel(location.label);
+    final String shortLabel = _shortCommonAreaName(label, code: code);
+    if (code.isNotEmpty) {
+      return '$code - $shortLabel';
+    }
+    return shortLabel;
+  }
+
+  String _shortCommonAreaName(String value, {String code = ''}) {
+    const Map<String, String> forcedLabels = <String, String>{
+      '100': 'Areas comunes',
+      '200': 'Areas comunes',
+      '300': 'Areas comunes',
+      '400': 'Areas comunes',
+      '509': 'Financiero',
+      '510': 'Elevador Servicio',
+    };
+    String normalized = value.trim();
+    if (normalized.isEmpty) {
+      return 'Area comum';
+    }
+
+    final String? forcedLabel = forcedLabels[code];
+    if (forcedLabel != null) {
+      return forcedLabel;
+    }
+
+    if (code.isNotEmpty) {
+      normalized = normalized.replaceFirst(
+        RegExp('^${RegExp.escape(code)}\\s*[-:]*\\s*', caseSensitive: false),
+        '',
+      );
+    }
+
+    normalized = normalized
+        .replaceFirst(RegExp(r'\bandares?\s*\d+\b', caseSensitive: false), '')
+        .replaceFirst(RegExp(r'\bpiso(?:s)?\s*\d+\b', caseSensitive: false), '')
+        .trim();
+
+    final List<MapEntry<RegExp, String>>
+    replacements = <MapEntry<RegExp, String>>[
+      MapEntry(
+        RegExp(r'\bareas?\s+comuns?\b', caseSensitive: false),
+        'Area comum',
+      ),
+      MapEntry(RegExp(r'\belevadores?\b', caseSensitive: false), 'Elevador'),
+      MapEntry(RegExp(r'\brecepcoes?\b', caseSensitive: false), 'Recepcao'),
+      MapEntry(RegExp(r'\breservas?\b', caseSensitive: false), 'Reservas'),
+      MapEntry(RegExp(r'\bcorredores?\b', caseSensitive: false), 'Corredor'),
+      MapEntry(RegExp(r'\bescadas?\b', caseSensitive: false), 'Escada'),
+      MapEntry(RegExp(r'\blobby\b', caseSensitive: false), 'Lobby'),
+      MapEntry(RegExp(r'\bestacionamento\b', caseSensitive: false), 'Estac.'),
+      MapEntry(RegExp(r'\bsala de jogos\b', caseSensitive: false), 'Jogos'),
+      MapEntry(RegExp(r'\btelevisao\b', caseSensitive: false), 'TV'),
+    ];
+
+    for (final MapEntry<RegExp, String> entry in replacements) {
+      if (entry.key.hasMatch(normalized)) {
+        return entry.value;
+      }
+    }
+
+    return normalized;
+  }
+
+  String _commonAreaFloorGroup(MaintenanceLocation location) {
+    final String? floor = location.floor?.trim();
+    if (floor != null && floor.isNotEmpty) {
+      return _normalizeFloorLabel(floor);
+    }
+    final int? sequence = _locationSequence(location);
+    if (sequence != null && sequence >= 100) {
+      return 'Andar ${sequence ~/ 100}';
+    }
+    return _generalCommonAreasGroupTitle;
+  }
+
+  int _compareDepartmentGroupItems(
+    _MaintenanceDepartmentLocationData a,
+    _MaintenanceDepartmentLocationData b,
+  ) {
+    final int categoryCompare = _departmentLocationCategorySortValue(
+      a.location,
+    ).compareTo(_departmentLocationCategorySortValue(b.location));
+    if (categoryCompare != 0) {
+      return categoryCompare;
+    }
+    return _compareLocationCatalogOrder(a.location, b.location);
+  }
+
+  int _departmentLocationCategorySortValue(MaintenanceLocation location) {
+    switch (_locationCategory(location)) {
+      case _MaintenanceLocationCategory.apartment:
+        return 0;
+      case _MaintenanceLocationCategory.commonArea:
+        return 1;
+      case _MaintenanceLocationCategory.chalet:
+        return 2;
+    }
   }
 
   IconData _iconForLocation(MaintenanceLocation location) {
@@ -1050,14 +1522,17 @@ class _MaintenancePageState extends State<MaintenancePage>
     if (normalized.isEmpty) {
       return normalized;
     }
-    if (RegExp(r'^andar\b', caseSensitive: false).hasMatch(normalized)) {
+    if (RegExp(
+      r'^anda(?:r|res)\b',
+      caseSensitive: false,
+    ).hasMatch(normalized)) {
       return normalized;
     }
     if (RegExp(r'^\d+$').hasMatch(normalized)) {
       return 'Andar $normalized';
     }
     final RegExpMatch? match = RegExp(
-      r'^(?:piso|andar)\s*(\d+)$',
+      r'^(?:piso|pisos|andar|andares)\s*(\d+)$',
       caseSensitive: false,
     ).firstMatch(normalized);
     if (match != null) {
@@ -1067,48 +1542,61 @@ class _MaintenancePageState extends State<MaintenancePage>
   }
 
   String _normalizeLocationDisplayLabel(String value) {
-    String normalized = value.trim();
-    if (normalized.isEmpty) {
-      return normalized;
-    }
-    final List<MapEntry<RegExp, String>> replacements =
-        <MapEntry<RegExp, String>>[
-          MapEntry(RegExp(r'\bescalera\b', caseSensitive: false), 'Escada'),
-          MapEntry(RegExp(r'\brecepcion\b', caseSensitive: false), 'Recepcao'),
-          MapEntry(RegExp(r'\bpasillo\b', caseSensitive: false), 'Corredor'),
-          MapEntry(RegExp(r'\bpiso\b', caseSensitive: false), 'Andar'),
-          MapEntry(RegExp(r'\bhabitacion\b', caseSensitive: false), 'Quarto'),
-        ];
-    for (final MapEntry<RegExp, String> entry in replacements) {
-      normalized = normalized.replaceAll(entry.key, entry.value);
-    }
-    return normalized;
+    return _normalizeMaintenanceLocationLabel(value);
   }
 
   int _sortLocations(MaintenanceLocation a, MaintenanceLocation b) {
-    final int categoryCompare = _locationCategory(
-      a,
-    ).index.compareTo(_locationCategory(b).index);
-    if (categoryCompare != 0) {
-      return categoryCompare;
-    }
-    final int floorCompare = _departmentGroupSortValue(
-      _floorLabelForLocation(a),
-    ).compareTo(_departmentGroupSortValue(_floorLabelForLocation(b)));
-    if (floorCompare != 0) {
-      return floorCompare;
-    }
-    final int? aSequence = _locationSequence(a);
-    final int? bSequence = _locationSequence(b);
-    if (aSequence != null && bSequence != null && aSequence != bSequence) {
-      return aSequence.compareTo(bSequence);
-    }
-    return a.label.compareTo(b.label);
+    return _compareLocationCatalogOrder(a, b);
   }
 
   int _departmentGroupSortValue(String label) {
     final RegExpMatch? match = RegExp(r'(\d+)').firstMatch(label);
     return int.tryParse(match?.group(1) ?? '') ?? 9999;
+  }
+
+  bool _isPbGroupTitle(String? value) {
+    if (value == null) {
+      return false;
+    }
+    return value.trim().toLowerCase() == 'andar pb';
+  }
+
+  double _standardWidthForPbButtons(
+    BuildContext context,
+    List<_MaintenanceDepartmentLocationData> locations, {
+    required double maxAvailableWidth,
+  }) {
+    final TextStyle textStyle =
+        Theme.of(
+          context,
+        ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w600) ??
+        const TextStyle(fontSize: 14, fontWeight: FontWeight.w600);
+    double longestTextWidth = 0;
+    for (final _MaintenanceDepartmentLocationData item in locations) {
+      final TextPainter painter = TextPainter(
+        text: TextSpan(text: item.title, style: textStyle),
+        maxLines: 1,
+        textDirection: TextDirection.ltr,
+      )..layout();
+      if (painter.width > longestTextWidth) {
+        longestTextWidth = painter.width;
+      }
+    }
+    const double horizontalPadding = 7 + 7;
+    const double iconWidth = 14;
+    const double iconBadgePadding = 5 + 5;
+    const double gapAfterIcon = 6;
+    const double gapBeforeBadge = 10;
+    const double badgeWidth = 28;
+    final double standardWidth =
+        longestTextWidth +
+        horizontalPadding +
+        iconWidth +
+        iconBadgePadding +
+        gapAfterIcon +
+        gapBeforeBadge +
+        badgeWidth;
+    return standardWidth.clamp(72, maxAvailableWidth).toDouble();
   }
 
   int? _locationSequence(MaintenanceLocation location) {
@@ -1124,6 +1612,45 @@ class _MaintenancePageState extends State<MaintenancePage>
     final String fingerprint = labelFirst.isEmpty ? fallback : labelFirst;
     final RegExpMatch? match = RegExp(r'(\d+)').firstMatch(fingerprint);
     return int.tryParse(match?.group(1) ?? '');
+  }
+
+  int _compareLocationCatalogOrder(
+    MaintenanceLocation a,
+    MaintenanceLocation b,
+  ) {
+    final int groupCompare = _locationCatalogGroup(
+      a,
+    ).compareTo(_locationCatalogGroup(b));
+    if (groupCompare != 0) {
+      return groupCompare;
+    }
+    final int? aNumericCode = _locationCatalogNumericCode(a);
+    final int? bNumericCode = _locationCatalogNumericCode(b);
+    if (aNumericCode != null &&
+        bNumericCode != null &&
+        aNumericCode != bNumericCode) {
+      return aNumericCode.compareTo(bNumericCode);
+    }
+    final int codeCompare = a.code.toLowerCase().compareTo(
+      b.code.toLowerCase(),
+    );
+    if (codeCompare != 0) {
+      return codeCompare;
+    }
+    return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+  }
+
+  int _locationCatalogGroup(MaintenanceLocation location) {
+    final String code = location.code.trim();
+    if (RegExp(r'^\d+$').hasMatch(code)) {
+      return code.length <= 2 ? 1 : 0;
+    }
+    return 2;
+  }
+
+  int? _locationCatalogNumericCode(MaintenanceLocation location) {
+    final String code = location.code.trim();
+    return RegExp(r'^\d+$').hasMatch(code) ? int.tryParse(code) : null;
   }
 
   Future<void> _openLocationDailyView(
@@ -1386,6 +1913,142 @@ class _MaintenancePageState extends State<MaintenancePage>
       if (mounted) {
         setState(() {
           _sharingOrderId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _downloadDailyReportPdf() async {
+    setState(() {
+      _exportingDailyReport = true;
+    });
+    try {
+      final FileSaveResult? result = await _dailyReportPdfExporter.savePdf(
+        date: _selectedDate,
+        report:
+            _executiveReport ??
+            MaintenanceDailyExecutiveReport(
+              carryOverOpenCount: 0,
+              dayOpenCount: _openDayOrders.length,
+              totalOpenCount: _openDayOrders.length,
+              urgentCount: _openDayOrders
+                  .where(
+                    (MaintenanceOrder order) =>
+                        order.priority == MaintenancePriority.urgent ||
+                        order.businessPriority ==
+                            MaintenanceBusinessPriority.criticalOperation,
+                  )
+                  .length,
+              scheduledCount: _openDayOrders
+                  .where(
+                    (MaintenanceOrder order) =>
+                        order.status == MaintenanceOrderStatus.scheduled,
+                  )
+                  .length,
+              inProgressCount: _openDayOrders
+                  .where(
+                    (MaintenanceOrder order) =>
+                        order.status == MaintenanceOrderStatus.inProgress,
+                  )
+                  .length,
+              unassignedCount: _openDayOrders
+                  .where((MaintenanceOrder order) => order.providerId == null)
+                  .length,
+              carryOverOrders: const <MaintenanceOrder>[],
+              dayOpenOrders: _openDayOrders,
+            ),
+      );
+      if (result == null || !mounted) {
+        return;
+      }
+      await AppAlerts.success(
+        context,
+        title: 'PDF salvo',
+        message: result.hasLocalPath
+            ? 'Resumo executivo salvo em:\n${result.path}'
+            : 'Download do PDF iniciado no navegador:\n${result.fileName}',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.error(
+        context,
+        title: 'Falha ao gerar PDF',
+        message: 'Nao foi possivel salvar o resumo executivo: $error',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _exportingDailyReport = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _openDailyReportForPrinting() async {
+    setState(() {
+      _openingDailyReport = true;
+    });
+    try {
+      final File file = await _dailyReportPdfExporter.createTemporaryPdf(
+        date: _selectedDate,
+        report:
+            _executiveReport ??
+            MaintenanceDailyExecutiveReport(
+              carryOverOpenCount: 0,
+              dayOpenCount: _openDayOrders.length,
+              totalOpenCount: _openDayOrders.length,
+              urgentCount: _openDayOrders
+                  .where(
+                    (MaintenanceOrder order) =>
+                        order.priority == MaintenancePriority.urgent ||
+                        order.businessPriority ==
+                            MaintenanceBusinessPriority.criticalOperation,
+                  )
+                  .length,
+              scheduledCount: _openDayOrders
+                  .where(
+                    (MaintenanceOrder order) =>
+                        order.status == MaintenanceOrderStatus.scheduled,
+                  )
+                  .length,
+              inProgressCount: _openDayOrders
+                  .where(
+                    (MaintenanceOrder order) =>
+                        order.status == MaintenanceOrderStatus.inProgress,
+                  )
+                  .length,
+              unassignedCount: _openDayOrders
+                  .where((MaintenanceOrder order) => order.providerId == null)
+                  .length,
+              carryOverOrders: const <MaintenanceOrder>[],
+              dayOpenOrders: _openDayOrders,
+            ),
+      );
+      await _openFileWithSystem(file.path);
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.info(
+        context,
+        title: 'PDF pronto para impressao',
+        message:
+            'O resumo foi aberto no visor PDF do sistema.\n\nArquivo temporario:\n${file.path}',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.error(
+        context,
+        title: 'Falha ao preparar impressao',
+        message: 'Nao foi possivel abrir o resumo executivo: $error',
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _openingDailyReport = false;
         });
       }
     }
@@ -1728,7 +2391,7 @@ class _MaintenancePageState extends State<MaintenancePage>
       buffer.writeln('Hospede: ${order.guestLabel}');
     }
     if (order.assignedUsername != null) {
-      buffer.writeln('Asignado a: ${order.assignedUsername}');
+      buffer.writeln('Atribuido a: ${order.assignedUsername}');
     }
     if (order.estimatedExecutionMinutes != null) {
       buffer.writeln('Tempo estimado: ${order.estimatedExecutionMinutes} min');
@@ -1878,7 +2541,6 @@ class _MaintenanceDepartmentSectionData {
     required this.tint,
     required this.layout,
     required this.groups,
-    this.crossAxisCount = 4,
   });
 
   final String title;
@@ -1887,7 +2549,6 @@ class _MaintenanceDepartmentSectionData {
   final Color tint;
   final _MaintenanceSectionLayout layout;
   final List<_MaintenanceDepartmentGroupData> groups;
-  final int crossAxisCount;
 
   List<_MaintenanceDepartmentLocationData> get locations => groups
       .expand((_MaintenanceDepartmentGroupData group) => group.locations)
@@ -1920,12 +2581,14 @@ class _MaintenanceDepartmentGroupData {
 class _MaintenanceDepartmentLocationData {
   const _MaintenanceDepartmentLocationData({
     required this.location,
+    required this.title,
     required this.icon,
     required this.subtitle,
     required this.dayOrders,
   });
 
   final MaintenanceLocation location;
+  final String title;
   final IconData icon;
   final String subtitle;
   final List<MaintenanceOrder> dayOrders;
@@ -1989,6 +2652,7 @@ class _MaintenanceLocationCard extends StatelessWidget {
       borderRadius: BorderRadius.circular(12),
       onTap: onTap,
       child: Container(
+        constraints: const BoxConstraints(minHeight: 42),
         padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(12),
@@ -2084,6 +2748,27 @@ bool _isOverdueStatic(MaintenanceOrder order) {
   return deadline.isBefore(DateTime.now());
 }
 
+bool _isOrderOpenForExecutiveSummary(MaintenanceOrder order) {
+  return order.status != MaintenanceOrderStatus.completed &&
+      order.status != MaintenanceOrderStatus.cancelled;
+}
+
+Future<void> _openFileWithSystem(String path) async {
+  if (Platform.isWindows) {
+    await Process.start('cmd', <String>['/c', 'start', '', path]);
+    return;
+  }
+  if (Platform.isMacOS) {
+    await Process.start('open', <String>[path]);
+    return;
+  }
+  if (Platform.isLinux) {
+    await Process.start('xdg-open', <String>[path]);
+    return;
+  }
+  throw UnsupportedError('Abertura de PDF nao suportada nesta plataforma.');
+}
+
 _MaintenanceLocationVisualState _locationVisualStateFor(
   List<MaintenanceOrder> dayOrders,
 ) {
@@ -2145,14 +2830,11 @@ class _MaintenanceOrderDraft {
     required this.providerId,
     required this.title,
     required this.description,
-    required this.priority,
     required this.requestOrigin,
     required this.requestedForGuest,
     required this.guestName,
     required this.guestReference,
     required this.businessPriority,
-    required this.estimatedExecutionMinutes,
-    required this.assignedUsername,
     required this.scheduledStartAt,
     required this.scheduledEndAt,
   });
@@ -2161,14 +2843,11 @@ class _MaintenanceOrderDraft {
   final int? providerId;
   final String title;
   final String? description;
-  final MaintenancePriority priority;
   final MaintenanceRequestOrigin requestOrigin;
   final bool requestedForGuest;
   final String? guestName;
   final String? guestReference;
   final MaintenanceBusinessPriority businessPriority;
-  final int? estimatedExecutionMinutes;
-  final String? assignedUsername;
   final DateTime? scheduledStartAt;
   final DateTime? scheduledEndAt;
 
@@ -2178,14 +2857,11 @@ class _MaintenanceOrderDraft {
       providerId: providerId,
       title: title,
       description: description,
-      priority: priority,
       requestOrigin: requestOrigin,
       requestedForGuest: requestedForGuest,
       guestName: guestName,
       guestReference: guestReference,
       businessPriority: businessPriority,
-      estimatedExecutionMinutes: estimatedExecutionMinutes,
-      assignedUsername: assignedUsername,
       scheduledStartAt: scheduledStartAt == null
           ? null
           : _formatLocalDateTimeApi(scheduledStartAt!),
@@ -2201,14 +2877,11 @@ class _MaintenanceOrderDraft {
       providerId: providerId,
       title: title,
       description: description,
-      priority: priority,
       requestOrigin: requestOrigin,
       requestedForGuest: requestedForGuest,
       guestName: guestName,
       guestReference: guestReference,
       businessPriority: businessPriority,
-      estimatedExecutionMinutes: estimatedExecutionMinutes,
-      assignedUsername: assignedUsername,
       scheduledStartAt: scheduledStartAt == null
           ? null
           : _formatLocalDateTimeApi(scheduledStartAt!),
@@ -2239,7 +2912,6 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   late int _locationId;
   int? _providerId;
-  late MaintenancePriority _priority;
   late MaintenanceRequestOrigin _requestOrigin;
   late MaintenanceBusinessPriority _businessPriority;
   late bool _hasSchedule;
@@ -2250,8 +2922,6 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
   late final TextEditingController _descriptionController;
   late final TextEditingController _guestNameController;
   late final TextEditingController _guestReferenceController;
-  late final TextEditingController _assignedUsernameController;
-  late final TextEditingController _estimatedMinutesController;
   late final TextEditingController _locationController;
 
   @override
@@ -2260,7 +2930,6 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
     final MaintenanceOrder? order = widget.initialOrder;
     _locationId = order?.locationId ?? widget.locations.first.id;
     _providerId = order?.providerId;
-    _priority = order?.priority ?? MaintenancePriority.medium;
     _requestOrigin =
         order?.requestOrigin ?? MaintenanceRequestOrigin.internalRole;
     _businessPriority =
@@ -2280,12 +2949,6 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
     _guestReferenceController = TextEditingController(
       text: order?.guestReference ?? '',
     );
-    _assignedUsernameController = TextEditingController(
-      text: order?.assignedUsername ?? '',
-    );
-    _estimatedMinutesController = TextEditingController(
-      text: order?.estimatedExecutionMinutes?.toString() ?? '',
-    );
     _locationController = TextEditingController(text: _selectedLocationTitle);
   }
 
@@ -2295,8 +2958,6 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
     _descriptionController.dispose();
     _guestNameController.dispose();
     _guestReferenceController.dispose();
-    _assignedUsernameController.dispose();
-    _estimatedMinutesController.dispose();
     _locationController.dispose();
     super.dispose();
   }
@@ -2311,12 +2972,12 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
 
   String _formatLocationPickerTitle(MaintenanceLocation location) {
     final String code = location.code.trim();
-    final String label = location.label.trim();
+    final String label = _normalizeMaintenanceLocationLabel(location.label);
     if (location.locationCategory == MaintenanceLocationCategory.apartment) {
       final String compact = label
           .replaceFirst(
             RegExp(
-              r'^\s*(habitacion|habitacao|quarto|apartamento|apto)\s*[-#:]*\s*',
+              r'^\s*(?:habitacion(?:es)?|habitaci\u00f3n(?:es)?|habitacao|quarto|apartamento|apto)\s*[-#:]*\s*',
               caseSensitive: false,
             ),
             '',
@@ -2335,11 +2996,35 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
   String _formatLocationPickerSubtitle(MaintenanceLocation location) {
     final List<String> parts = <String>[
       if (location.floor != null && location.floor!.trim().isNotEmpty)
-        location.floor!.trim(),
+        _normalizeLocationPickerFloor(location.floor!),
       location.locationCategory.label,
       if (location.code.trim().isNotEmpty) 'Ref. ${location.code.trim()}',
     ];
     return parts.join(' - ');
+  }
+
+  String _normalizeLocationPickerFloor(String value) {
+    final String normalized = _normalizeMaintenanceLocationLabel(value).trim();
+    if (normalized.isEmpty) {
+      return normalized;
+    }
+    if (RegExp(
+      r'^anda(?:r|res)\b',
+      caseSensitive: false,
+    ).hasMatch(normalized)) {
+      return normalized;
+    }
+    if (RegExp(r'^\d+$').hasMatch(normalized)) {
+      return 'Andar $normalized';
+    }
+    final RegExpMatch? match = RegExp(
+      r'^(?:piso|pisos|andar|andares)\s*(\d+)$',
+      caseSensitive: false,
+    ).firstMatch(normalized);
+    if (match != null) {
+      return 'Andar ${match.group(1)!}';
+    }
+    return normalized;
   }
 
   Future<void> _pickLocation() async {
@@ -2465,13 +3150,6 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
               ),
               const SizedBox(height: 12),
               TextFormField(
-                controller: _assignedUsernameController,
-                decoration: const InputDecoration(
-                  labelText: 'Usuario asignado',
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextFormField(
                 controller: _titleController,
                 decoration: const InputDecoration(labelText: 'Titulo'),
                 validator: (String? value) {
@@ -2509,33 +3187,6 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
                 ),
                 const SizedBox(height: 12),
               ],
-              TextFormField(
-                controller: _estimatedMinutesController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Tempo estimado (minutos)',
-                ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<MaintenancePriority>(
-                value: _priority,
-                decoration: const InputDecoration(
-                  labelText: 'Prioridade tecnica',
-                ),
-                items: MaintenancePriority.values
-                    .map(
-                      (MaintenancePriority item) =>
-                          DropdownMenuItem<MaintenancePriority>(
-                            value: item,
-                            child: Text(item.label),
-                          ),
-                    )
-                    .toList(),
-                onChanged: (MaintenancePriority? value) {
-                  if (value != null) setState(() => _priority = value);
-                },
-              ),
-              const SizedBox(height: 12),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 value: _hasSchedule,
@@ -2646,20 +3297,6 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
       return;
     }
 
-    final String estimatedRaw = _estimatedMinutesController.text.trim();
-    final int? estimatedMinutes = estimatedRaw.isEmpty
-        ? null
-        : int.tryParse(estimatedRaw);
-    if (estimatedRaw.isNotEmpty &&
-        (estimatedMinutes == null || estimatedMinutes <= 0)) {
-      AppAlerts.warning(
-        context,
-        title: 'Tempo invalido',
-        message: 'Informe um tempo estimado em minutos maior que zero.',
-      );
-      return;
-    }
-
     DateTime? startAt;
     DateTime? endAt;
     if (_hasSchedule) {
@@ -2693,19 +3330,12 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
         providerId: _providerId,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
-        priority: _priority,
         requestOrigin: _requestOrigin,
         requestedForGuest:
             _requestOrigin == MaintenanceRequestOrigin.guestRequest,
         guestName: guestName,
         guestReference: guestReference,
         businessPriority: _businessPriority,
-        estimatedExecutionMinutes: startAt != null && endAt != null
-            ? endAt.difference(startAt).inMinutes
-            : estimatedMinutes,
-        assignedUsername: _assignedUsernameController.text.trim().isEmpty
-            ? null
-            : _assignedUsernameController.text.trim(),
         scheduledStartAt: startAt,
         scheduledEndAt: endAt,
       ),
@@ -3129,9 +3759,7 @@ class _MaintenanceCatalogsDialogState
     );
     setState(() {
       _locations = <MaintenanceLocation>[..._locations, location]
-        ..sort((MaintenanceLocation a, MaintenanceLocation b) {
-          return a.label.toLowerCase().compareTo(b.label.toLowerCase());
-        });
+        ..sort(_compareLocations);
     });
     return location;
   }
@@ -3152,11 +3780,45 @@ class _MaintenanceCatalogsDialogState
                     item.id == location.id ? location : item,
               )
               .toList()
-            ..sort((MaintenanceLocation a, MaintenanceLocation b) {
-              return a.label.toLowerCase().compareTo(b.label.toLowerCase());
-            });
+            ..sort(_compareLocations);
     });
     return location;
+  }
+
+  int _compareLocations(MaintenanceLocation a, MaintenanceLocation b) {
+    final int groupCompare = _locationCatalogGroup(
+      a,
+    ).compareTo(_locationCatalogGroup(b));
+    if (groupCompare != 0) {
+      return groupCompare;
+    }
+    final int? aNumericCode = _locationCatalogNumericCode(a);
+    final int? bNumericCode = _locationCatalogNumericCode(b);
+    if (aNumericCode != null &&
+        bNumericCode != null &&
+        aNumericCode != bNumericCode) {
+      return aNumericCode.compareTo(bNumericCode);
+    }
+    final int codeCompare = a.code.toLowerCase().compareTo(
+      b.code.toLowerCase(),
+    );
+    if (codeCompare != 0) {
+      return codeCompare;
+    }
+    return a.label.toLowerCase().compareTo(b.label.toLowerCase());
+  }
+
+  int _locationCatalogGroup(MaintenanceLocation location) {
+    final String code = location.code.trim();
+    if (RegExp(r'^\d+$').hasMatch(code)) {
+      return code.length <= 2 ? 1 : 0;
+    }
+    return 2;
+  }
+
+  int? _locationCatalogNumericCode(MaintenanceLocation location) {
+    final String code = location.code.trim();
+    return RegExp(r'^\d+$').hasMatch(code) ? int.tryParse(code) : null;
   }
 
   Future<MaintenanceProvider> _createProvider(
@@ -3472,7 +4134,7 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
     }
     final String compact = _normalizeCatalogLabel(normalized).replaceFirst(
       RegExp(
-        r'^\s*(habitacion|habitacao|quarto|apartamento|apto)\s*[-#:]*\s*',
+        r'^\s*(?:habitacion(?:es)?|habitaci\u00f3n(?:es)?|habitacao|quarto|apartamento|apto)\s*[-#:]*\s*',
         caseSensitive: false,
       ),
       '',
@@ -3488,19 +4150,7 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
   }
 
   String _normalizeCatalogLabel(String value) {
-    String normalized = value;
-    final List<MapEntry<RegExp, String>> replacements =
-        <MapEntry<RegExp, String>>[
-          MapEntry(RegExp(r'\bescalera\b', caseSensitive: false), 'Escada'),
-          MapEntry(RegExp(r'\brecepcion\b', caseSensitive: false), 'Recepcao'),
-          MapEntry(RegExp(r'\bpasillo\b', caseSensitive: false), 'Corredor'),
-          MapEntry(RegExp(r'\bpiso\b', caseSensitive: false), 'Andar'),
-          MapEntry(RegExp(r'\bhabitacion\b', caseSensitive: false), 'Quarto'),
-        ];
-    for (final MapEntry<RegExp, String> entry in replacements) {
-      normalized = normalized.replaceAll(entry.key, entry.value);
-    }
-    return normalized.trim();
+    return _normalizeMaintenanceLocationLabel(value);
   }
 
   @override
@@ -3589,9 +4239,10 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
               const SizedBox(height: 12),
               TextField(
                 controller: _codeController,
+                keyboardType: TextInputType.number,
                 decoration: const InputDecoration(
-                  labelText: 'Referencia interna',
-                  helperText: 'Opcional. Si queda vacio, el sistema la genera.',
+                  labelText: 'Referencia numerica',
+                  helperText: 'Obrigatoria. Use 2 ou 3 digitos numericos.',
                 ),
               ),
               const SizedBox(height: 12),
@@ -3673,6 +4324,15 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
   }
 
   Future<void> _save() async {
+    final String code = _codeController.text.trim();
+    if (!RegExp(r'^\d{2,3}$').hasMatch(code)) {
+      await AppAlerts.warning(
+        context,
+        title: 'Campos obrigatorios',
+        message: 'Informe uma referencia numerica de 2 ou 3 digitos.',
+      );
+      return;
+    }
     if (_labelController.text.trim().isEmpty) {
       await AppAlerts.warning(
         context,
@@ -3690,7 +4350,7 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
             locationCategory: _type == MaintenanceLocationType.commonArea
                 ? MaintenanceLocationCategory.commonArea
                 : _category,
-            code: _codeController.text,
+            code: code,
             label: _labelController.text,
             floor: _floorController.text,
             description: _descriptionController.text,
@@ -3705,7 +4365,7 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
             locationCategory: _type == MaintenanceLocationType.commonArea
                 ? MaintenanceLocationCategory.commonArea
                 : _category,
-            code: _codeController.text,
+            code: code,
             label: _labelController.text,
             floor: _floorController.text,
             description: _descriptionController.text,
@@ -4045,6 +4705,47 @@ Widget _emptyScrollableBox(String message) {
     ),
     child: Text(message),
   );
+}
+
+String _normalizeMaintenanceLocationLabel(String value) {
+  String normalized = value.trim();
+  if (normalized.isEmpty) {
+    return normalized;
+  }
+
+  normalized = normalized.replaceAllMapped(
+    RegExp(r'\bescaleras?\b', caseSensitive: false),
+    (Match match) =>
+        match.group(0)!.toLowerCase().endsWith('s') ? 'Escadas' : 'Escada',
+  );
+  normalized = normalized.replaceAllMapped(
+    RegExp(
+      r'\b(?:recepcion(?:es)?|recepci\u00f3n(?:es)?)\b',
+      caseSensitive: false,
+    ),
+    (Match match) =>
+        match.group(0)!.toLowerCase().endsWith('s') ? 'Recepcoes' : 'Recepcao',
+  );
+  normalized = normalized.replaceAllMapped(
+    RegExp(r'\bpasillos?\b', caseSensitive: false),
+    (Match match) =>
+        match.group(0)!.toLowerCase().endsWith('s') ? 'Corredores' : 'Corredor',
+  );
+  normalized = normalized.replaceAllMapped(
+    RegExp(r'\bpisos?\b', caseSensitive: false),
+    (Match match) =>
+        match.group(0)!.toLowerCase().endsWith('s') ? 'Andares' : 'Andar',
+  );
+  normalized = normalized.replaceAllMapped(
+    RegExp(
+      r'\b(?:habitacion(?:es)?|habitaci\u00f3n(?:es)?)\b',
+      caseSensitive: false,
+    ),
+    (Match match) =>
+        match.group(0)!.toLowerCase().endsWith('s') ? 'Quartos' : 'Quarto',
+  );
+
+  return normalized;
 }
 
 String _contentTypeFor(String? extension) {

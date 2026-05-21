@@ -406,16 +406,37 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
   }
 
   @override
+  Future<MaintenanceDailyExecutiveReport> getDailyExecutiveReport({
+    required String date,
+  }) async {
+    final String query = Uri(
+      queryParameters: <String, String>{'date': date},
+    ).query;
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get(
+        'maintenance/reports/summary/daily-executive?$query',
+        headers: _jsonHeaders,
+      ),
+    );
+    return MaintenanceDailyExecutiveReport.fromJson(
+      _expectSuccessObject(
+        response,
+        invalidMessage: 'Resumo executivo invalido de manutencao.',
+      ),
+    );
+  }
+
+  @override
   Future<MaintenanceSummaryDetail> getSummaryDetails({
     required MaintenanceSummaryGroupBy groupBy,
-    required String code,
+    required String groupKey,
     required String dateFrom,
     required String dateTo,
   }) async {
     final String query = Uri(
       queryParameters: <String, String>{
         'groupBy': groupBy.apiValue,
-        'code': code,
+        'groupKey': groupKey,
         'dateFrom': dateFrom,
         'dateTo': dateTo,
       },

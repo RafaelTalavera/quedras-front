@@ -3,7 +3,9 @@ import '../domain/maintenance_models.dart';
 abstract interface class MaintenanceAppService {
   Future<List<MaintenanceLocation>> listLocations();
 
-  Future<MaintenanceLocation> createLocation(CreateMaintenanceLocationModel input);
+  Future<MaintenanceLocation> createLocation(
+    CreateMaintenanceLocationModel input,
+  );
 
   Future<MaintenanceLocation> updateLocation(
     int locationId,
@@ -14,7 +16,9 @@ abstract interface class MaintenanceAppService {
 
   Future<List<MaintenanceProvider>> listProviders();
 
-  Future<MaintenanceProvider> createProvider(CreateMaintenanceProviderModel input);
+  Future<MaintenanceProvider> createProvider(
+    CreateMaintenanceProviderModel input,
+  );
 
   Future<MaintenanceProvider> updateProvider(
     int providerId,
@@ -74,9 +78,13 @@ abstract interface class MaintenanceAppService {
     required String dateTo,
   });
 
+  Future<MaintenanceDailyExecutiveReport> getDailyExecutiveReport({
+    required String date,
+  });
+
   Future<MaintenanceSummaryDetail> getSummaryDetails({
     required MaintenanceSummaryGroupBy groupBy,
-    required String code,
+    required String groupKey,
     required String dateFrom,
     required String dateTo,
   });

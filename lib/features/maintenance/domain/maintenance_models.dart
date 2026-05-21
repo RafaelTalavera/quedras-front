@@ -8,7 +8,8 @@ enum MaintenanceLocationType {
   final String label;
 
   static MaintenanceLocationType tryParse(String? rawValue) {
-    for (final MaintenanceLocationType value in MaintenanceLocationType.values) {
+    for (final MaintenanceLocationType value
+        in MaintenanceLocationType.values) {
       if (value.apiValue == rawValue) {
         return value;
       }
@@ -54,7 +55,8 @@ enum MaintenanceProviderType {
   final String label;
 
   static MaintenanceProviderType tryParse(String? rawValue) {
-    for (final MaintenanceProviderType value in MaintenanceProviderType.values) {
+    for (final MaintenanceProviderType value
+        in MaintenanceProviderType.values) {
       if (value.apiValue == rawValue) {
         return value;
       }
@@ -66,7 +68,8 @@ enum MaintenanceProviderType {
     if (rawValue == null) {
       return null;
     }
-    for (final MaintenanceProviderType value in MaintenanceProviderType.values) {
+    for (final MaintenanceProviderType value
+        in MaintenanceProviderType.values) {
       if (value.apiValue == rawValue) {
         return value;
       }
@@ -244,7 +247,9 @@ class MaintenanceLocation {
   factory MaintenanceLocation.fromJson(Map<String, dynamic> json) {
     return MaintenanceLocation(
       id: _readInt(json, 'id') ?? 0,
-      locationType: MaintenanceLocationType.tryParse(_readString(json, 'locationType')),
+      locationType: MaintenanceLocationType.tryParse(
+        _readString(json, 'locationType'),
+      ),
       locationCategory: MaintenanceLocationCategory.tryParse(
         _readString(json, 'locationCategory'),
         fallbackType: MaintenanceLocationType.tryParse(
@@ -444,8 +449,12 @@ class MaintenanceOrder {
       providerTypeSnapshot: MaintenanceProviderType.tryParseNullable(
         _readString(json, 'providerTypeSnapshot'),
       ),
-      providerNameSnapshot: _trimOrNull(_readString(json, 'providerNameSnapshot')),
-      serviceLabelSnapshot: _trimOrNull(_readString(json, 'serviceLabelSnapshot')),
+      providerNameSnapshot: _trimOrNull(
+        _readString(json, 'providerNameSnapshot'),
+      ),
+      serviceLabelSnapshot: _trimOrNull(
+        _readString(json, 'serviceLabelSnapshot'),
+      ),
       title: _readString(json, 'title') ?? '',
       description: _trimOrNull(_readString(json, 'description')),
       priority: MaintenancePriority.tryParse(_readString(json, 'priority')),
@@ -455,7 +464,9 @@ class MaintenanceOrder {
       requestedForGuest: json['requestedForGuest'] as bool? ?? false,
       guestName: _trimOrNull(_readString(json, 'guestName')),
       guestReference: _trimOrNull(_readString(json, 'guestReference')),
-      requestedByUsername: _trimOrNull(_readString(json, 'requestedByUsername')),
+      requestedByUsername: _trimOrNull(
+        _readString(json, 'requestedByUsername'),
+      ),
       requestedByRole: _trimOrNull(_readString(json, 'requestedByRole')),
       businessPriority: MaintenanceBusinessPriority.tryParse(
         _readString(json, 'businessPriority'),
@@ -469,7 +480,9 @@ class MaintenanceOrder {
       expectedCompletionAt: _tryParseDateTime(
         _readString(json, 'expectedCompletionAt'),
       ),
-      scheduledStartAt: _tryParseDateTime(_readString(json, 'scheduledStartAt')),
+      scheduledStartAt: _tryParseDateTime(
+        _readString(json, 'scheduledStartAt'),
+      ),
       scheduledEndAt: _tryParseDateTime(_readString(json, 'scheduledEndAt')),
       startedAt: _tryParseDateTime(_readString(json, 'startedAt')),
       completedAt: _tryParseDateTime(_readString(json, 'completedAt')),
@@ -500,8 +513,27 @@ class MaintenanceOrder {
   String get serviceLabel =>
       _trimOrNull(serviceLabelSnapshot) ?? 'Servico nao definido';
 
+  String get locationLabel => locationLabelSnapshot.trim();
+
+  String? get locationReference {
+    final String code = locationCodeSnapshot.trim();
+    return code.isEmpty ? null : code;
+  }
+
+  String get locationDisplayLabel {
+    final String? reference = locationReference;
+    if (reference == null) {
+      return locationLabel;
+    }
+    if (locationLabel.trimLeft().startsWith('$reference -')) {
+      return locationLabel;
+    }
+    return '$locationLabel - Ref. $reference';
+  }
+
   bool get hasGuestContext =>
-      requestedForGuest || requestOrigin == MaintenanceRequestOrigin.guestRequest;
+      requestedForGuest ||
+      requestOrigin == MaintenanceRequestOrigin.guestRequest;
 
   String? get guestLabel {
     final String? name = _trimOrNull(guestName);
@@ -541,8 +573,12 @@ class MaintenanceConflict {
       title: _readString(json, 'title') ?? '',
       status: MaintenanceOrderStatus.tryParse(_readString(json, 'status')),
       locationLabelSnapshot: _readString(json, 'locationLabelSnapshot') ?? '',
-      providerNameSnapshot: _trimOrNull(_readString(json, 'providerNameSnapshot')),
-      scheduledStartAt: _tryParseDateTime(_readString(json, 'scheduledStartAt')),
+      providerNameSnapshot: _trimOrNull(
+        _readString(json, 'providerNameSnapshot'),
+      ),
+      scheduledStartAt: _tryParseDateTime(
+        _readString(json, 'scheduledStartAt'),
+      ),
       scheduledEndAt: _tryParseDateTime(_readString(json, 'scheduledEndAt')),
     );
   }
@@ -550,6 +586,7 @@ class MaintenanceConflict {
 
 class MaintenanceSummaryBreakdown {
   const MaintenanceSummaryBreakdown({
+    required this.groupKey,
     required this.code,
     required this.label,
     required this.openCount,
@@ -560,6 +597,7 @@ class MaintenanceSummaryBreakdown {
     required this.urgentCount,
   });
 
+  final String groupKey;
   final String code;
   final String label;
   final int openCount;
@@ -571,6 +609,8 @@ class MaintenanceSummaryBreakdown {
 
   factory MaintenanceSummaryBreakdown.fromJson(Map<String, dynamic> json) {
     return MaintenanceSummaryBreakdown(
+      groupKey:
+          _readString(json, 'groupKey') ?? _readString(json, 'code') ?? '',
       code: _readString(json, 'code') ?? '',
       label: _readString(json, 'label') ?? '',
       openCount: _readInt(json, 'openCount') ?? 0,
@@ -656,6 +696,54 @@ class MaintenanceSummaryReport {
   }
 }
 
+class MaintenanceDailyExecutiveReport {
+  const MaintenanceDailyExecutiveReport({
+    required this.carryOverOpenCount,
+    required this.dayOpenCount,
+    required this.totalOpenCount,
+    required this.urgentCount,
+    required this.scheduledCount,
+    required this.inProgressCount,
+    required this.unassignedCount,
+    required this.carryOverOrders,
+    required this.dayOpenOrders,
+  });
+
+  final int carryOverOpenCount;
+  final int dayOpenCount;
+  final int totalOpenCount;
+  final int urgentCount;
+  final int scheduledCount;
+  final int inProgressCount;
+  final int unassignedCount;
+  final List<MaintenanceOrder> carryOverOrders;
+  final List<MaintenanceOrder> dayOpenOrders;
+
+  List<MaintenanceOrder> get allOpenOrders =>
+      <MaintenanceOrder>[...carryOverOrders, ...dayOpenOrders]
+        ..sort((MaintenanceOrder a, MaintenanceOrder b) {
+          final int byReference = a.referenceDate.compareTo(b.referenceDate);
+          if (byReference != 0) {
+            return byReference;
+          }
+          return a.id.compareTo(b.id);
+        });
+
+  factory MaintenanceDailyExecutiveReport.fromJson(Map<String, dynamic> json) {
+    return MaintenanceDailyExecutiveReport(
+      carryOverOpenCount: _readInt(json, 'carryOverOpenCount') ?? 0,
+      dayOpenCount: _readInt(json, 'dayOpenCount') ?? 0,
+      totalOpenCount: _readInt(json, 'totalOpenCount') ?? 0,
+      urgentCount: _readInt(json, 'urgentCount') ?? 0,
+      scheduledCount: _readInt(json, 'scheduledCount') ?? 0,
+      inProgressCount: _readInt(json, 'inProgressCount') ?? 0,
+      unassignedCount: _readInt(json, 'unassignedCount') ?? 0,
+      carryOverOrders: _readOrderList(json['carryOverOrders']),
+      dayOpenOrders: _readOrderList(json['dayOpenOrders']),
+    );
+  }
+}
+
 class MaintenanceSummaryDetailItem {
   const MaintenanceSummaryDetailItem({
     required this.orderId,
@@ -729,7 +817,9 @@ class MaintenanceSummaryDetailItem {
       expectedCompletionAt: _tryParseDateTime(
         _readString(json, 'expectedCompletionAt'),
       ),
-      scheduledStartAt: _tryParseDateTime(_readString(json, 'scheduledStartAt')),
+      scheduledStartAt: _tryParseDateTime(
+        _readString(json, 'scheduledStartAt'),
+      ),
       scheduledEndAt: _tryParseDateTime(_readString(json, 'scheduledEndAt')),
       startedAt: _tryParseDateTime(_readString(json, 'startedAt')),
       completedAt: _tryParseDateTime(_readString(json, 'completedAt')),
@@ -740,6 +830,7 @@ class MaintenanceSummaryDetailItem {
 class MaintenanceSummaryDetail {
   const MaintenanceSummaryDetail({
     required this.groupBy,
+    required this.groupKey,
     required this.code,
     required this.label,
     required this.summary,
@@ -747,6 +838,7 @@ class MaintenanceSummaryDetail {
   });
 
   final MaintenanceSummaryGroupBy groupBy;
+  final String groupKey;
   final String code;
   final String label;
   final MaintenanceSummaryBreakdown summary;
@@ -760,6 +852,8 @@ class MaintenanceSummaryDetail {
             value.apiValue == _readString(json, 'groupBy'),
         orElse: () => MaintenanceSummaryGroupBy.status,
       ),
+      groupKey:
+          _readString(json, 'groupKey') ?? _readString(json, 'code') ?? '',
       code: _readString(json, 'code') ?? '',
       label: _readString(json, 'label') ?? '',
       summary: MaintenanceSummaryBreakdown.fromJson(_asMap(json['summary'])),
@@ -869,14 +963,11 @@ class CreateMaintenanceOrderModel {
     required this.providerId,
     required this.title,
     required this.description,
-    required this.priority,
     required this.requestOrigin,
     required this.requestedForGuest,
     required this.guestName,
     required this.guestReference,
     required this.businessPriority,
-    required this.estimatedExecutionMinutes,
-    required this.assignedUsername,
     required this.scheduledStartAt,
     required this.scheduledEndAt,
   });
@@ -885,14 +976,11 @@ class CreateMaintenanceOrderModel {
   final int? providerId;
   final String title;
   final String? description;
-  final MaintenancePriority priority;
   final MaintenanceRequestOrigin requestOrigin;
   final bool requestedForGuest;
   final String? guestName;
   final String? guestReference;
   final MaintenanceBusinessPriority businessPriority;
-  final int? estimatedExecutionMinutes;
-  final String? assignedUsername;
   final String? scheduledStartAt;
   final String? scheduledEndAt;
 
@@ -902,14 +990,11 @@ class CreateMaintenanceOrderModel {
       'providerId': providerId,
       'title': title.trim(),
       'description': _trimOrNull(description),
-      'priority': priority.apiValue,
       'requestOrigin': requestOrigin.apiValue,
       'requestedForGuest': requestedForGuest,
       'guestName': _trimOrNull(guestName),
       'guestReference': _trimOrNull(guestReference),
       'businessPriority': businessPriority.apiValue,
-      'estimatedExecutionMinutes': estimatedExecutionMinutes,
-      'assignedUsername': _trimOrNull(assignedUsername),
       'scheduledStartAt': _trimOrNull(scheduledStartAt),
       'scheduledEndAt': _trimOrNull(scheduledEndAt),
     };
@@ -922,14 +1007,11 @@ class UpdateMaintenanceOrderModel extends CreateMaintenanceOrderModel {
     required super.providerId,
     required super.title,
     required super.description,
-    required super.priority,
     required super.requestOrigin,
     required super.requestedForGuest,
     required super.guestName,
     required super.guestReference,
     required super.businessPriority,
-    required super.estimatedExecutionMinutes,
-    required super.assignedUsername,
     required super.scheduledStartAt,
     required super.scheduledEndAt,
   });
@@ -968,9 +1050,7 @@ class CancelMaintenanceOrderModel {
   final String cancellationNotes;
 
   Map<String, dynamic> toJson() {
-    return <String, dynamic>{
-      'cancellationNotes': cancellationNotes.trim(),
-    };
+    return <String, dynamic>{'cancellationNotes': cancellationNotes.trim()};
   }
 }
 
@@ -1004,6 +1084,17 @@ List<MaintenanceSummaryBreakdown> _readBreakdownList(Object? rawValue) {
   return rawValue
       .map<MaintenanceSummaryBreakdown>(
         (Object? item) => MaintenanceSummaryBreakdown.fromJson(_asMap(item)),
+      )
+      .toList();
+}
+
+List<MaintenanceOrder> _readOrderList(Object? rawValue) {
+  if (rawValue is! List) {
+    return const <MaintenanceOrder>[];
+  }
+  return rawValue
+      .map<MaintenanceOrder>(
+        (Object? item) => MaintenanceOrder.fromJson(_asMap(item)),
       )
       .toList();
 }

@@ -181,10 +181,14 @@ Para no dejar el catalogo atado a dos tipos rigidos, conviene pasar de un modelo
 Campos sugeridos:
 - `siteType`: `BUILDING`, `FLOOR`, `ROOM`, `COMMON_AREA`, `CHALET`, `STAIRS`
 - `parentLocationId`
-- `code`
+- `referenceCode`
 - `label`
 - `floor`
 - `active`
+
+Nota UX:
+- `label` debe ser la referencia principal visible para operacion diaria.
+- `referenceCode` debe mantenerse como referencia interna secundaria para soporte, auditoria e integraciones.
 
 Beneficios:
 - permite agregar nuevas areas sin cambiar enums cada vez
@@ -251,6 +255,22 @@ Reglas recomendadas:
 - una orden planificada debe reservar un bloque visible en el calendario
 - el calendario debe permitir detectar cruces o sobrecarga del equipo
 - el tiempo de ejecucion debe servir tanto para organizacion diaria como para analisis posterior
+
+## 7.6 Resumo ejecutivo diario
+
+Para operacion diaria no alcanza con mostrar solo lo generado en la fecha seleccionada.
+
+Regla operativa incorporada:
+- el resumen ejecutivo del dia debe mostrar tambien pendientes no cerradas de dias anteriores
+
+Decision de implementacion:
+- esta regla se resuelve en backend
+- el frontend consume un resumen diario consolidado en lugar de recomponer backlog historico localmente
+
+Motivo:
+- evita diferencias entre clientes
+- mantiene una sola fuente de verdad para backlog abierto
+- permite que el refresco en tiempo real reutilice el mismo contrato
 
 ## 8. Estados recomendados
 

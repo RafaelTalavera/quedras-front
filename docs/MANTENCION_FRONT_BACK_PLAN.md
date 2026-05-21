@@ -5,6 +5,24 @@ Modulo propuesto: `maintenance`
 Estado: `Implementado`
 Backend relacionado: `C:/Users/Public/Documents/Proyectos/quadras`
 
+## Actualizacion 2026-05-21
+- El `Resumo executivo do dia` ahora consume un endpoint dedicado:
+  - `GET /api/v1/maintenance/reports/summary/daily-executive?date=YYYY-MM-DD`
+- Cambio funcional:
+  - ya no muestra solo las ordenes abiertas del dia seleccionado
+  - ahora tambien muestra pendientes no cerradas de dias anteriores
+- Decision tecnica:
+  - no reconstruir backlog abierto en frontend con multiples listas
+  - consumir un contrato de backend especifico para mantener una sola fuente de verdad
+- Ajustes realizados en frontend:
+  - nuevo modelo `MaintenanceDailyExecutiveReport`
+  - refresh del resumen ejecutivo al cargar la pagina y al cambiar de fecha
+  - reaccion a eventos SSE de mantenimiento que puedan impactar backlog previo
+  - PDF diario alineado con el mismo resumen ejecutivo y con seccion separada para arrastre anterior
+- Validacion ejecutada:
+  - `flutter test test/features/maintenance/infrastructure/http_maintenance_app_service_test.dart`
+  - `flutter analyze lib/features/maintenance`
+
 ## Estado final implementado
 - Se incorporo la seccion `Manutencao` al shell principal.
 - Se implementaron:
@@ -122,6 +140,8 @@ Backend relacionado: `C:/Users/Public/Documents/Proyectos/quadras`
   - documento tecnico relacionado
 ### 6. Resumen estandar
 - Debe seguir el mismo criterio visual del sistema.
+- El usuario debe reconocer locales y responsables por nombre o etiqueta visible.
+- Si existe `code`, debe quedar solo como `Ref.` secundaria o metadata de soporte.
 - KPIs sugeridos:
   - abiertas
   - agendadas

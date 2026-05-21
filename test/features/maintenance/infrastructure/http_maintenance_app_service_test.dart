@@ -50,6 +50,36 @@ void main() {
   );
 
   test(
+    'HttpMaintenanceAppService carrega resumo executivo diario com pendencias anteriores',
+    () async {
+      final _FakeApiClient client = _FakeApiClient()
+        ..enqueue(
+          const ApiResponse(
+            statusCode: 200,
+            body:
+                '{"carryOverOpenCount":1,"dayOpenCount":1,"totalOpenCount":2,"urgentCount":1,"scheduledCount":2,"inProgressCount":0,"unassignedCount":1,"carryOverOrders":[{"id":10,"locationId":1,"locationTypeSnapshot":"ROOM","locationCodeSnapshot":"301","locationLabelSnapshot":"Apartamento 301","providerId":2,"providerTypeSnapshot":"INTERNAL","providerNameSnapshot":"Equipe interna","serviceLabelSnapshot":"Banho","title":"Revisar ducha","description":"Pendencia del dia anterior","priority":"URGENT","requestOrigin":"INTERNAL_ROLE","requestedForGuest":false,"guestName":null,"guestReference":null,"requestedByUsername":"operador.demo","requestedByRole":"OPERATOR","businessPriority":"CRITICAL_OPERATION","estimatedExecutionMinutes":60,"assignedUsername":"operador.demo","assignedAt":"2026-04-02T18:10:00Z","status":"SCHEDULED","reportedAt":"2026-04-02T18:00:00Z","expectedCompletionAt":"2026-04-02T19:00:00Z","scheduledStartAt":"2026-04-02T18:00:00","scheduledEndAt":"2026-04-02T19:00:00","startedAt":null,"completedAt":null,"resolutionNotes":null,"cancellationNotes":null,"attachments":[],"createdAt":"2026-04-02T18:00:00Z","updatedAt":"2026-04-02T18:00:00Z","cancelledAt":null,"createdBy":"operador.demo","updatedBy":"operador.demo","cancelledBy":null}],"dayOpenOrders":[{"id":11,"locationId":1,"locationTypeSnapshot":"ROOM","locationCodeSnapshot":"301","locationLabelSnapshot":"Apartamento 301","providerId":null,"providerTypeSnapshot":null,"providerNameSnapshot":null,"serviceLabelSnapshot":"Iluminacao","title":"Trocar lampada","description":"Solicitado na manha","priority":"MEDIUM","requestOrigin":"INTERNAL_ROLE","requestedForGuest":false,"guestName":null,"guestReference":null,"requestedByUsername":"operador.demo","requestedByRole":"OPERATOR","businessPriority":"INTERNAL_STANDARD","estimatedExecutionMinutes":30,"assignedUsername":null,"assignedAt":null,"status":"SCHEDULED","reportedAt":"2026-04-03T09:00:00Z","expectedCompletionAt":"2026-04-03T10:00:00Z","scheduledStartAt":"2026-04-03T09:00:00","scheduledEndAt":"2026-04-03T10:00:00","startedAt":null,"completedAt":null,"resolutionNotes":null,"cancellationNotes":null,"attachments":[],"createdAt":"2026-04-03T09:00:00Z","updatedAt":"2026-04-03T09:00:00Z","cancelledAt":null,"createdBy":"operador.demo","updatedBy":"operador.demo","cancelledBy":null}]}',
+          ),
+        );
+      final HttpMaintenanceAppService service = HttpMaintenanceAppService(
+        apiClient: client,
+      );
+
+      final MaintenanceDailyExecutiveReport report = await service
+          .getDailyExecutiveReport(date: '2026-04-03');
+
+      expect(report.carryOverOpenCount, 1);
+      expect(report.dayOpenCount, 1);
+      expect(report.totalOpenCount, 2);
+      expect(report.carryOverOrders.single.title, 'Revisar ducha');
+      expect(report.dayOpenOrders.single.providerId, isNull);
+      expect(
+        client.calls.single.path,
+        'maintenance/reports/summary/daily-executive?date=2026-04-03',
+      );
+    },
+  );
+
+  test(
     'HttpMaintenanceAppService envia categoria ao criar e atualizar local',
     () async {
       final _FakeApiClient client = _FakeApiClient()
@@ -108,6 +138,41 @@ void main() {
     },
   );
 
+  test(
+    'HttpMaintenanceAppService preserva referencia interna vazia para geracao no backend',
+    () async {
+      final _FakeApiClient client = _FakeApiClient()
+        ..enqueue(
+          const ApiResponse(
+            statusCode: 201,
+            body:
+                '{"id":2,"locationType":"ROOM","locationCategory":"APARTMENT","code":"LOC-APARTAMENTO-305","label":"Apartamento 305","floor":"3","description":null,"active":true,"createdAt":"2026-04-01T10:00:00Z","updatedAt":"2026-04-01T10:00:00Z","createdBy":"system","updatedBy":"system"}',
+          ),
+        );
+      final HttpMaintenanceAppService service = HttpMaintenanceAppService(
+        apiClient: client,
+      );
+
+      final MaintenanceLocation created = await service.createLocation(
+        const CreateMaintenanceLocationModel(
+          locationType: MaintenanceLocationType.room,
+          locationCategory: MaintenanceLocationCategory.apartment,
+          code: '',
+          label: 'Apartamento 305',
+          floor: '3',
+          description: null,
+          active: true,
+        ),
+      );
+
+      expect(created.code, 'LOC-APARTAMENTO-305');
+      expect(
+        client.calls.single.body,
+        '{"locationType":"ROOM","locationCategory":"APARTMENT","code":"","label":"Apartamento 305","floor":"3","description":null,"active":true}',
+      );
+    },
+  );
+
   test('HttpMaintenanceAppService traduz falha de rede', () async {
     final _FakeApiClient client = _FakeApiClient()
       ..nextError = const SocketException('Connection refused');
@@ -121,7 +186,7 @@ void main() {
         isA<ApiException>().having(
           (ApiException error) => error.message,
           'message',
-          'Nao foi possivel conectar ao backend local. Verifique o servidor e a rede interna.',
+          'Nao foi possivel conectar ao backend configurado. Verifique a URL e a conectividade.',
         ),
       ),
     );
