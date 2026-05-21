@@ -4,6 +4,8 @@ import 'dart:typed_data';
 import 'package:costanorte/features/courts/application/court_app_service.dart';
 import 'package:costanorte/features/courts/application/partner_coach_report_pdf_exporter.dart';
 import 'package:costanorte/features/courts/domain/court_models.dart';
+import 'package:costanorte/core/files/file_save_result.dart';
+import 'package:costanorte/core/sync/schedule_sync_service.dart';
 import 'package:costanorte/features/tennis/presentation/tennis_rental_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -21,11 +23,20 @@ void main() {
           home: Scaffold(
             body: TennisRentalPage(
               courtAppService: service,
+              scheduleSyncService: ScheduleSyncService(
+                baseUrl: 'http://localhost/api/v1/',
+                authorizationHeaderProvider: () => null,
+              ),
               partnerCoachReportPdfExporter: exporter,
             ),
           ),
         ),
       );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Periodo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Buscar'));
       await tester.pumpAndSettle();
 
       expect(find.text('Professores parceiros por nome'), findsOneWidget);
@@ -84,6 +95,9 @@ final class _FakeCourtAppService implements CourtAppService {
         paymentNotes: 'Pago no balcao',
         status: CourtBookingStatus.scheduled,
         cancellationNotes: null,
+        recurrenceGroupId: null,
+        recurrenceStartDate: null,
+        recurrenceEndDate: null,
         materials: const <CourtBookingMaterial>[
           CourtBookingMaterial(
             materialCode: CourtMaterialCode.ball,
@@ -141,7 +155,8 @@ final class _FakeCourtAppService implements CourtAppService {
       averageTicket: 140,
       customerTypeBreakdown: const <CourtSummaryBreakdown>[
         CourtSummaryBreakdown(
-          code: 'PARTNER_COACH',
+          groupKey: 'PARTNER_COACH',
+          code: '',
           label: 'Professor parceiro',
           scheduledCount: 1,
           paidCount: 1,
@@ -154,7 +169,8 @@ final class _FakeCourtAppService implements CourtAppService {
       ],
       pricingPeriodBreakdown: const <CourtSummaryBreakdown>[
         CourtSummaryBreakdown(
-          code: 'DAY',
+          groupKey: 'DAY',
+          code: '',
           label: 'Diurno',
           scheduledCount: 1,
           paidCount: 1,
@@ -167,7 +183,8 @@ final class _FakeCourtAppService implements CourtAppService {
       ],
       paymentMethodBreakdown: const <CourtSummaryBreakdown>[
         CourtSummaryBreakdown(
-          code: 'PIX',
+          groupKey: 'PIX',
+          code: '',
           label: 'Pix',
           scheduledCount: 1,
           paidCount: 1,
@@ -295,7 +312,7 @@ final class _FakePartnerCoachReportPdfExporter
   }
 
   @override
-  Future<File?> savePdf({
+  Future<FileSaveResult?> savePdf({
     required PartnerCoachReportDetail detail,
     required DateTime startDate,
     required DateTime endDate,
@@ -308,7 +325,7 @@ final class _FakePartnerCoachReportPdfExporter
       '${directory.path}${Platform.pathSeparator}${buildFileName(detail: detail, startDate: startDate, endDate: endDate)}',
     );
     await file.writeAsString('pdf');
-    return file;
+    return FileSaveResult(fileName: file.uri.pathSegments.last, path: file.path);
   }
 }
 
