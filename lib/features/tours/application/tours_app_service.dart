@@ -8,7 +8,7 @@ abstract interface class ToursAppService {
 
   Future<ToursSummaryDetail> getSummaryDetail({
     required ToursSummaryGroupBy groupBy,
-    required String code,
+    required String groupKey,
     required String dateFrom,
     required String dateTo,
   });

@@ -13,14 +13,14 @@ void main() {
         const ApiResponse(
           statusCode: 200,
           body:
-              '{"scheduledCount":3,"cancelledCount":1,"paidCount":2,"pendingCount":1,"totalHours":7.0,"grossAmount":1200.0,"paidAmount":900.0,"pendingAmount":300.0,"commissionAmount":170.0,"netAmount":1030.0,"averageTicket":400.0,"providerBreakdown":[{"code":"1","label":"Agencia A","active":true,"scheduledCount":2,"paidCount":1,"pendingCount":1,"totalHours":4.5,"grossAmount":700.0,"paidAmount":400.0,"pendingAmount":300.0,"commissionAmount":70.0}],"serviceTypeBreakdown":[{"code":"TOUR","label":"Tour","active":null,"scheduledCount":2,"paidCount":2,"pendingCount":0,"totalHours":5.5,"grossAmount":900.0,"paidAmount":900.0,"pendingAmount":0.0,"commissionAmount":140.0}],"paymentMethodBreakdown":[{"code":"PIX","label":"Pix","active":null,"scheduledCount":1,"paidCount":1,"pendingCount":0,"totalHours":2.5,"grossAmount":500.0,"paidAmount":500.0,"pendingAmount":0.0,"commissionAmount":100.0}]}',
+              '{"scheduledCount":3,"cancelledCount":1,"paidCount":2,"pendingCount":1,"totalHours":7.0,"grossAmount":1200.0,"paidAmount":900.0,"pendingAmount":300.0,"commissionAmount":170.0,"netAmount":1030.0,"averageTicket":400.0,"providerBreakdown":[{"groupKey":"1","label":"Agencia A","active":true,"scheduledCount":2,"paidCount":1,"pendingCount":1,"totalHours":4.5,"grossAmount":700.0,"paidAmount":400.0,"pendingAmount":300.0,"commissionAmount":70.0}],"serviceTypeBreakdown":[{"groupKey":"TOUR","label":"Tour","active":null,"scheduledCount":2,"paidCount":2,"pendingCount":0,"totalHours":5.5,"grossAmount":900.0,"paidAmount":900.0,"pendingAmount":0.0,"commissionAmount":140.0}],"paymentMethodBreakdown":[{"groupKey":"PIX","label":"Pix","active":null,"scheduledCount":1,"paidCount":1,"pendingCount":0,"totalHours":2.5,"grossAmount":500.0,"paidAmount":500.0,"pendingAmount":0.0,"commissionAmount":100.0}]}',
         ),
       )
       ..enqueue(
         const ApiResponse(
           statusCode: 200,
           body:
-              '{"groupBy":"PROVIDER","code":"1","label":"Agencia A","active":true,"summary":{"code":"1","label":"Agencia A","active":true,"scheduledCount":2,"paidCount":1,"pendingCount":1,"totalHours":4.5,"grossAmount":700.0,"paidAmount":400.0,"pendingAmount":300.0,"commissionAmount":70.0},"items":[{"bookingId":10,"startAt":"2026-04-10T09:00:00","endAt":"2026-04-10T12:00:00","serviceType":"TOUR","providerId":1,"providerName":"Agencia A","providerOfferingId":null,"providerOfferingName":null,"clientName":"Ana","guestReference":"Apto 101","amount":400.0,"commissionAmount":40.0,"paid":true,"paymentMethod":"CARD","paymentDate":"2026-04-10","status":"SCHEDULED","description":"Passeio maritimo"}]}',
+              '{"groupBy":"PROVIDER","groupKey":"1","label":"Agencia A","active":true,"summary":{"groupKey":"1","label":"Agencia A","active":true,"scheduledCount":2,"paidCount":1,"pendingCount":1,"totalHours":4.5,"grossAmount":700.0,"paidAmount":400.0,"pendingAmount":300.0,"commissionAmount":70.0},"items":[{"bookingId":10,"startAt":"2026-04-10T09:00:00","endAt":"2026-04-10T12:00:00","serviceType":"TOUR","providerId":1,"providerName":"Agencia A","providerOfferingId":null,"providerOfferingName":null,"clientName":"Ana","guestReference":"Apto 101","amount":400.0,"commissionAmount":40.0,"paid":true,"paymentMethod":"CARD","paymentDate":"2026-04-10","status":"SCHEDULED","description":"Passeio maritimo"}]}',
         ),
       );
     final HttpToursAppService service = HttpToursAppService(apiClient: client);
@@ -31,14 +31,16 @@ void main() {
     );
     final ToursSummaryDetail detail = await service.getSummaryDetail(
       groupBy: ToursSummaryGroupBy.provider,
-      code: '1',
+      groupKey: '1',
       dateFrom: '2026-04-01',
       dateTo: '2026-04-30',
     );
 
     expect(summary.scheduledCount, 3);
     expect(summary.providerBreakdown.single.label, 'Agencia A');
+    expect(summary.providerBreakdown.single.groupKey, '1');
     expect(detail.groupBy, ToursSummaryGroupBy.provider);
+    expect(detail.groupKey, '1');
     expect(detail.items.single.clientName, 'Ana');
     expect(
       client.calls.first.path,
@@ -46,8 +48,44 @@ void main() {
     );
     expect(
       client.calls.last.path,
-      'tours/reports/summary/details?groupBy=PROVIDER&code=1&dateFrom=2026-04-01&dateTo=2026-04-30',
+      'tours/reports/summary/details?groupBy=PROVIDER&groupKey=1&dateFrom=2026-04-01&dateTo=2026-04-30',
     );
+  });
+
+  test('HttpToursAppService mantiene fallback legacy cuando solo llega code', () async {
+    final _FakeApiClient client = _FakeApiClient()
+      ..enqueue(
+        const ApiResponse(
+          statusCode: 200,
+          body:
+              '{"scheduledCount":1,"cancelledCount":0,"paidCount":1,"pendingCount":0,"totalHours":2.0,"grossAmount":400.0,"paidAmount":400.0,"pendingAmount":0.0,"commissionAmount":40.0,"netAmount":360.0,"averageTicket":400.0,"providerBreakdown":[{"code":"17","label":"Agencia Legacy","active":true,"scheduledCount":1,"paidCount":1,"pendingCount":0,"totalHours":2.0,"grossAmount":400.0,"paidAmount":400.0,"pendingAmount":0.0,"commissionAmount":40.0}],"serviceTypeBreakdown":[],"paymentMethodBreakdown":[]}',
+        ),
+      )
+      ..enqueue(
+        const ApiResponse(
+          statusCode: 200,
+          body:
+              '{"groupBy":"PROVIDER","code":"17","label":"Agencia Legacy","active":true,"summary":{"code":"17","label":"Agencia Legacy","active":true,"scheduledCount":1,"paidCount":1,"pendingCount":0,"totalHours":2.0,"grossAmount":400.0,"paidAmount":400.0,"pendingAmount":0.0,"commissionAmount":40.0},"items":[]}',
+        ),
+      );
+    final HttpToursAppService service = HttpToursAppService(apiClient: client);
+
+    final ToursSummaryReport summary = await service.getSummaryReport(
+      dateFrom: '2026-04-01',
+      dateTo: '2026-04-30',
+    );
+    final ToursSummaryDetail detail = await service.getSummaryDetail(
+      groupBy: ToursSummaryGroupBy.provider,
+      groupKey: '17',
+      dateFrom: '2026-04-01',
+      dateTo: '2026-04-30',
+    );
+
+    expect(summary.providerBreakdown.single.groupKey, '17');
+    expect(summary.providerBreakdown.single.code, '17');
+    expect(detail.groupKey, '17');
+    expect(detail.summary.groupKey, '17');
+    expect(detail.code, '17');
   });
 
   test('HttpToursAppService traduce errores y red local', () async {
@@ -114,7 +152,7 @@ void main() {
             .having(
               (ApiException error) => error.message,
               'message',
-              'Nao foi possivel conectar ao backend local. Verifique o servidor e a rede interna.',
+              'Nao foi possivel conectar ao backend configurado. Verifique a URL e a conectividade.',
             )
             .having(
               (ApiException error) => error.kind,

@@ -46,14 +46,14 @@ final class HttpToursAppService implements ToursAppService {
   @override
   Future<ToursSummaryDetail> getSummaryDetail({
     required ToursSummaryGroupBy groupBy,
-    required String code,
+    required String groupKey,
     required String dateFrom,
     required String dateTo,
   }) async {
     final String query = Uri(
       queryParameters: <String, String>{
         'groupBy': groupBy.apiValue,
-        'code': code,
+        'groupKey': groupKey,
         'dateFrom': dateFrom,
         'dateTo': dateTo,
       },

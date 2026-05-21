@@ -1197,7 +1197,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       final ToursSummaryDetail detail = await widget.toursAppService
           .getSummaryDetail(
             groupBy: groupBy,
-            code: item.code,
+            groupKey: item.groupKey,
             dateFrom: _formatDate(_reportStart),
             dateTo: _formatDate(_reportEnd),
           );
@@ -1337,9 +1337,21 @@ class _ToursTravelPageState extends State<ToursTravelPage>
           Row(
             children: <Widget>[
               Expanded(
-                child: Text(
-                  '${booking.clientName} · ${booking.guestReference}',
-                  style: Theme.of(context).textTheme.titleMedium,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      booking.clientName,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Hospede / unidade: ${booking.guestReference}',
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: CostaNorteBrand.mutedInk,
+                      ),
+                    ),
+                  ],
                 ),
               ),
               Container(
@@ -1369,15 +1381,13 @@ class _ToursTravelPageState extends State<ToursTravelPage>
             children: <Widget>[
               _summaryBadge(
                 context,
-                '${booking.serviceType.label} · ${_short(booking.startAt)} ${_time(booking.startAt)}-${_time(booking.endAt)}',
+                '${booking.serviceType.label} - ${_short(booking.startAt)} ${_time(booking.startAt)}-${_time(booking.endAt)}',
               ),
-              _summaryBadge(
-                context,
-                booking.providerOfferingName ?? booking.providerName,
-              ),
+              _summaryBadge(context, booking.providerName),
+              if ((booking.providerOfferingName ?? '').trim().isNotEmpty)
+                _summaryBadge(context, booking.providerOfferingName!),
             ],
           ),
-          const SizedBox(height: 10),
           Text(
             '${_money(booking.amount)} · Comissao ${_money(booking.commissionAmount)}',
             style: Theme.of(context).textTheme.bodyLarge,
@@ -1970,8 +1980,15 @@ class _ToursTravelPageState extends State<ToursTravelPage>
             Text(b.clientName, style: Theme.of(context).textTheme.titleLarge),
             const SizedBox(height: 4),
             Text(
-              '${b.providerName} · ${b.guestReference}',
+              'Prestador: ${b.providerName}',
               style: Theme.of(context).textTheme.bodyMedium,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'Hospede / unidade: ${b.guestReference}',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: CostaNorteBrand.mutedInk,
+              ),
             ),
             if (b.providerOfferingName != null) ...<Widget>[
               const SizedBox(height: 4),
@@ -2477,13 +2494,15 @@ class _BookingDialogState extends State<_BookingDialog> {
                     DropdownButtonFormField<int?>(
                       value: _providerOfferingId,
                       decoration: const InputDecoration(
-                        labelText: 'Destino / viagem do fornecedor',
+                        labelText: 'Servico do fornecedor',
                         prefixIcon: Icon(Icons.place_rounded),
+                        helperText:
+                            'Escolha um servico cadastrado ou siga sem servico predefinido.',
                       ),
                       items: <DropdownMenuItem<int?>>[
                         const DropdownMenuItem<int?>(
                           value: null,
-                          child: Text('Informar manualmente'),
+                          child: Text('Sem servico predefinido'),
                         ),
                         ...offerings.map(
                           (
@@ -2544,12 +2563,14 @@ class _BookingDialogState extends State<_BookingDialog> {
                     TextFormField(
                       controller: _reference,
                       decoration: const InputDecoration(
-                        labelText: 'Referencia / quarto',
+                        labelText: 'Hospede / unidade',
                         prefixIcon: Icon(Icons.badge_rounded),
+                        helperText:
+                            'Informe apartamento, quarto, nome do hospede ou outra referencia operacional.',
                       ),
                       validator: (String? value) =>
                           value == null || value.trim().isEmpty
-                          ? 'Informe a referencia'
+                          ? 'Informe o hospede ou a unidade'
                           : null,
                     ),
                     const SizedBox(height: 12),

@@ -237,6 +237,7 @@ class ToursProviderSummary {
 
 class ToursSummaryBreakdown {
   const ToursSummaryBreakdown({
+    required this.groupKey,
     required this.code,
     required this.label,
     required this.active,
@@ -250,6 +251,7 @@ class ToursSummaryBreakdown {
     required this.commissionAmount,
   });
 
+  final String groupKey;
   final String code;
   final String label;
   final bool? active;
@@ -264,6 +266,8 @@ class ToursSummaryBreakdown {
 
   factory ToursSummaryBreakdown.fromJson(Map<String, dynamic> json) {
     return ToursSummaryBreakdown(
+      groupKey:
+          _readString(json, 'groupKey') ?? _readString(json, 'code') ?? '',
       code: _readString(json, 'code') ?? '',
       label: _readString(json, 'label') ?? '-',
       active: json['active'] as bool?,
@@ -404,6 +408,7 @@ class ToursSummaryDetailItem {
 class ToursSummaryDetail {
   const ToursSummaryDetail({
     required this.groupBy,
+    required this.groupKey,
     required this.code,
     required this.label,
     required this.active,
@@ -412,6 +417,7 @@ class ToursSummaryDetail {
   });
 
   final ToursSummaryGroupBy groupBy;
+  final String groupKey;
   final String code;
   final String label;
   final bool? active;
@@ -421,6 +427,8 @@ class ToursSummaryDetail {
   factory ToursSummaryDetail.fromJson(Map<String, dynamic> json) {
     return ToursSummaryDetail(
       groupBy: ToursSummaryGroupBy.tryParse(_readString(json, 'groupBy')),
+      groupKey:
+          _readString(json, 'groupKey') ?? _readString(json, 'code') ?? '',
       code: _readString(json, 'code') ?? '',
       label: _readString(json, 'label') ?? '-',
       active: json['active'] as bool?,
