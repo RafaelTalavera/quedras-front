@@ -835,66 +835,81 @@ class _MaintenancePageState extends State<MaintenancePage>
   }
 
   Widget _buildExecutiveOrderRow(MaintenanceOrder order) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: CostaNorteBrand.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Row(
+        onTap: () async {
+          setState(() {
+            _selectedOrderId = order.id;
+          });
+          await _openOrderActionDialog(order);
+        },
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: CostaNorteBrand.line),
+          ),
+          child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: <Widget>[
-                    Text(
-                      order.title,
-                      style: Theme.of(context).textTheme.titleMedium,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          order.title,
+                          style: Theme.of(context).textTheme.titleMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '${order.locationDisplayLabel} - ${order.providerLabel}',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '${order.locationDisplayLabel} - ${order.providerLabel}',
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 12),
+                  _statusPill(order),
+                ],
               ),
-              const SizedBox(width: 12),
-              _statusPill(order),
+              if (order.description != null &&
+                  order.description!.trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 10),
+                  child: Text(
+                    order.description!.trim(),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: CostaNorteBrand.mutedInk,
+                    ),
+                  ),
+                ),
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: <Widget>[
+                  _tag(_orderScheduleLabel(order)),
+                  _tag(order.serviceLabel),
+                  if (order.priority == MaintenancePriority.urgent)
+                    _tag('Urgente'),
+                  if (order.assignedUsername != null &&
+                      order.assignedUsername!.trim().isNotEmpty)
+                    _tag('Atribuido: ${order.assignedUsername!}'),
+                  if (order.guestLabel != null)
+                    _tag('Hospede: ${order.guestLabel!}'),
+                  _tag('Toque para ver detalhe'),
+                ],
+              ),
             ],
           ),
-          if (order.description != null && order.description!.trim().isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 10),
-              child: Text(
-                order.description!.trim(),
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: CostaNorteBrand.mutedInk,
-                ),
-              ),
-            ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: <Widget>[
-              _tag(_orderScheduleLabel(order)),
-              _tag(order.serviceLabel),
-              if (order.priority == MaintenancePriority.urgent) _tag('Urgente'),
-              if (order.assignedUsername != null &&
-                  order.assignedUsername!.trim().isNotEmpty)
-                _tag('Atribuido: ${order.assignedUsername!}'),
-              if (order.guestLabel != null)
-                _tag('Hospede: ${order.guestLabel!}'),
-            ],
-          ),
-        ],
+        ),
       ),
     );
   }
