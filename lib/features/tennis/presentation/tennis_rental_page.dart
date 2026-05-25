@@ -3,6 +3,8 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/audit/audit_models.dart';
+import '../../../core/audit/audit_timeline_dialog.dart';
 import '../../../core/files/file_save_result.dart';
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/feedback/app_share.dart';
@@ -138,6 +140,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
   bool _loadingSummary = false;
   bool _saving = false;
   int? _sharingBookingId;
+  int? _loadingHistoryBookingId;
   String? _errorMessage;
   String? _summaryErrorMessage;
   String? _selectedSummaryDetailKey;
@@ -856,6 +859,8 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                     onCancel: _isBookingEditable(booking)
                         ? () => _openCancelDialog(booking: booking)
                         : null,
+                    onHistory: () => _openBookingHistory(booking),
+                    loadingHistory: _loadingHistoryBookingId == booking.id,
                     sharing: _sharingBookingId == booking.id,
                     onShare: () => _shareBookingReceipt(booking),
                   ),
@@ -1668,6 +1673,8 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                             child: _CourtBookingTile(
                               booking: booking,
                               sharing: _sharingBookingId == booking.id,
+                              onHistory: () => _openBookingHistory(booking),
+                              loadingHistory: _loadingHistoryBookingId == booking.id,
                               onShare: () => _shareBookingReceipt(booking),
                             ),
                           ),
@@ -2106,6 +2113,43 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       case _CourtBookingAction.cancel:
         await _openCancelDialog(booking: booking);
         return;
+      case _CourtBookingAction.history:
+        await _openBookingHistory(booking);
+        return;
+    }
+  }
+
+  Future<void> _openBookingHistory(CourtBooking booking) async {
+    setState(() {
+      _loadingHistoryBookingId = booking.id;
+      _errorMessage = null;
+    });
+    try {
+      final List<AuditEventModel> history = await widget.courtAppService
+          .history(booking.id);
+      if (!mounted) {
+        return;
+      }
+      await showAuditTimelineDialog(
+        context: context,
+        title: 'Historial de ${booking.customerName}',
+        events: history,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.error(
+        context,
+        title: 'Historial de la reserva',
+        message: error.toString().replaceFirst('Bad state: ', ''),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingHistoryBookingId = null;
+        });
+      }
     }
   }
 
@@ -2402,6 +2446,8 @@ class _CourtBookingTile extends StatelessWidget {
     this.onPayment,
     this.onShare,
     this.onCancel,
+    this.onHistory,
+    this.loadingHistory = false,
     this.sharing = false,
   });
 
@@ -2411,6 +2457,8 @@ class _CourtBookingTile extends StatelessWidget {
   final VoidCallback? onPayment;
   final VoidCallback? onShare;
   final VoidCallback? onCancel;
+  final VoidCallback? onHistory;
+  final bool loadingHistory;
   final bool sharing;
 
   @override
@@ -2522,7 +2570,8 @@ class _CourtBookingTile extends StatelessWidget {
             if (onEdit != null ||
                 onPayment != null ||
                 onShare != null ||
-                onCancel != null) ...<Widget>[
+                onCancel != null ||
+                onHistory != null) ...<Widget>[
               const SizedBox(height: 14),
               Wrap(
                 spacing: 10,
@@ -2550,6 +2599,18 @@ class _CourtBookingTile extends StatelessWidget {
                       ),
                       label: Text(sharing ? 'Compartindo...' : 'Compartir'),
                     ),
+                  if (onHistory != null)
+                    OutlinedButton.icon(
+                      onPressed: loadingHistory ? null : onHistory,
+                      icon: Icon(
+                        loadingHistory
+                            ? Icons.hourglass_top_rounded
+                            : Icons.history_rounded,
+                      ),
+                      label: Text(
+                        loadingHistory ? 'Cargando...' : 'Historial',
+                      ),
+                    ),
                   if (onCancel != null)
                     OutlinedButton.icon(
                       onPressed: onCancel,
@@ -2566,7 +2627,7 @@ class _CourtBookingTile extends StatelessWidget {
   }
 }
 
-enum _CourtBookingAction { edit, payment, share, cancel }
+enum _CourtBookingAction { edit, payment, share, cancel, history }
 
 class _CourtBookingActionDialog extends StatelessWidget {
   const _CourtBookingActionDialog({
@@ -2627,6 +2688,12 @@ class _CourtBookingActionDialog extends StatelessWidget {
                   sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
                 ),
                 label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () =>
+                    Navigator.of(context).pop(_CourtBookingAction.history),
+                icon: const Icon(Icons.history_rounded),
+                label: const Text('Historial'),
               ),
               OutlinedButton.icon(
                 onPressed: canEdit
@@ -3594,6 +3661,8 @@ class _CourtSettingsDialog extends StatefulWidget {
 class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
   bool _loading = true;
   bool _saving = false;
+  String? _historyError;
+  String? _historyLoadingKey;
   List<CourtRateSetting> _rates = <CourtRateSetting>[];
   List<CourtMaterialSetting> _materials = <CourtMaterialSetting>[];
   List<CourtPartnerCoach> _partnerCoaches = <CourtPartnerCoach>[];
@@ -3626,6 +3695,13 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: <Widget>[
+                    if (_historyError != null) ...<Widget>[
+                      Text(
+                        _historyError!,
+                        style: const TextStyle(color: CostaNorteBrand.error),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
                     Text(
                       'Tarifas',
                       style: Theme.of(context).textTheme.titleMedium,
@@ -3638,9 +3714,24 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
                           '${rate.customerType.label} · ${rate.pricingPeriod.label}',
                         ),
                         subtitle: Text(_formatCurrency(rate.amount)),
-                        trailing: IconButton(
-                          onPressed: _saving ? null : () => _editRate(rate),
-                          icon: const Icon(Icons.edit_rounded),
+                        trailing: Wrap(
+                          spacing: 4,
+                          children: <Widget>[
+                            IconButton(
+                              onPressed: _historyLoadingKey == 'rate:${rate.id}'
+                                  ? null
+                                  : () => _openRateHistory(rate),
+                              icon: Icon(
+                                _historyLoadingKey == 'rate:${rate.id}'
+                                    ? Icons.hourglass_top_rounded
+                                    : Icons.history_rounded,
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: _saving ? null : () => _editRate(rate),
+                              icon: const Icon(Icons.edit_rounded),
+                            ),
+                          ],
                         ),
                       );
                     }),
@@ -3655,11 +3746,27 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
                         contentPadding: EdgeInsets.zero,
                         title: Text(material.label),
                         subtitle: Text(_formatCurrency(material.unitPrice)),
-                        trailing: IconButton(
-                          onPressed: _saving
-                              ? null
-                              : () => _editMaterial(material),
-                          icon: const Icon(Icons.edit_rounded),
+                        trailing: Wrap(
+                          spacing: 4,
+                          children: <Widget>[
+                            IconButton(
+                              onPressed:
+                                  _historyLoadingKey == 'material:${material.id}'
+                                  ? null
+                                  : () => _openMaterialHistory(material),
+                              icon: Icon(
+                                _historyLoadingKey == 'material:${material.id}'
+                                    ? Icons.hourglass_top_rounded
+                                    : Icons.history_rounded,
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: _saving
+                                  ? null
+                                  : () => _editMaterial(material),
+                              icon: const Icon(Icons.edit_rounded),
+                            ),
+                          ],
                         ),
                       );
                     }),
@@ -3713,11 +3820,27 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
                                   : CostaNorteBrand.mutedInk,
                             ),
                           ),
-                          trailing: IconButton(
-                            onPressed: _saving
-                                ? null
-                                : () => _editPartnerCoach(coach),
-                            icon: const Icon(Icons.edit_rounded),
+                          trailing: Wrap(
+                            spacing: 4,
+                            children: <Widget>[
+                              IconButton(
+                                onPressed:
+                                    _historyLoadingKey == 'coach:${coach.id}'
+                                    ? null
+                                    : () => _openPartnerCoachHistory(coach),
+                                icon: Icon(
+                                  _historyLoadingKey == 'coach:${coach.id}'
+                                      ? Icons.hourglass_top_rounded
+                                      : Icons.history_rounded,
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: _saving
+                                    ? null
+                                    : () => _editPartnerCoach(coach),
+                                icon: const Icon(Icons.edit_rounded),
+                              ),
+                            ],
                           ),
                         );
                       }),
@@ -3758,6 +3881,65 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
     return _partnerCoaches.where((CourtPartnerCoach coach) {
       return coach.name.toLowerCase().contains(_partnerCoachSearch);
     }).toList();
+  }
+
+  Future<void> _openRateHistory(CourtRateSetting rate) async {
+    await _openSettingsHistory(
+      loadingKey: 'rate:${rate.id}',
+      title: 'Historial de tarifa',
+      loader: () => widget.service.rateHistory(rate.id),
+    );
+  }
+
+  Future<void> _openMaterialHistory(CourtMaterialSetting material) async {
+    await _openSettingsHistory(
+      loadingKey: 'material:${material.id}',
+      title: 'Historial de material',
+      loader: () => widget.service.materialHistory(material.id),
+    );
+  }
+
+  Future<void> _openPartnerCoachHistory(CourtPartnerCoach coach) async {
+    await _openSettingsHistory(
+      loadingKey: 'coach:${coach.id}',
+      title: 'Historial de ${coach.name}',
+      loader: () => widget.service.partnerCoachHistory(coach.id),
+    );
+  }
+
+  Future<void> _openSettingsHistory({
+    required String loadingKey,
+    required String title,
+    required Future<List<AuditEventModel>> Function() loader,
+  }) async {
+    setState(() {
+      _historyLoadingKey = loadingKey;
+      _historyError = null;
+    });
+    try {
+      final List<AuditEventModel> events = await loader();
+      if (!mounted) {
+        return;
+      }
+      await showAuditTimelineDialog(
+        context: context,
+        title: title,
+        events: events,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _historyError = error.toString().replaceFirst('Bad state: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _historyLoadingKey = null;
+        });
+      }
+    }
   }
 
   Future<void> _editRate(CourtRateSetting rate) async {

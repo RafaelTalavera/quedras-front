@@ -1,3 +1,4 @@
+import '../../../core/audit/audit_models.dart';
 import '../domain/maintenance_models.dart';
 
 abstract interface class MaintenanceAppService {
@@ -12,6 +13,8 @@ abstract interface class MaintenanceAppService {
     UpdateMaintenanceLocationModel input,
   );
 
+  Future<List<AuditEventModel>> locationAudit(int locationId);
+
   Future<List<MaintenanceOrder>> getLocationHistory(int locationId);
 
   Future<List<MaintenanceProvider>> listProviders();
@@ -24,6 +27,8 @@ abstract interface class MaintenanceAppService {
     int providerId,
     UpdateMaintenanceProviderModel input,
   );
+
+  Future<List<AuditEventModel>> providerAudit(int providerId);
 
   Future<List<MaintenanceOrder>> listOrders({
     String? dateFrom,
@@ -72,6 +77,8 @@ abstract interface class MaintenanceAppService {
   );
 
   Future<void> deleteAttachment(int orderId, int attachmentId);
+
+  Future<List<AuditEventModel>> history(int orderId);
 
   Future<MaintenanceSummaryReport> getSummaryReport({
     required String dateFrom,

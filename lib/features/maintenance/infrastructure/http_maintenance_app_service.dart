@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import '../../../core/audit/audit_models.dart';
 import '../../../core/localization/pt_br_error_translator.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
@@ -71,6 +72,26 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
         invalidMessage: 'Resposta invalida do local.',
       ),
     );
+  }
+
+  @override
+  Future<List<AuditEventModel>> locationAudit(int locationId) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get(
+        'maintenance/locations/$locationId/audit',
+        headers: _jsonHeaders,
+      ),
+    );
+    final List<Object?> decoded = _expectSuccessList(
+      response,
+      invalidMessage: 'Formato invalido del historial de locales.',
+    );
+    return decoded
+        .whereType<Map>()
+        .map<AuditEventModel>(
+          (Map item) => AuditEventModel.fromJson(_asMap(item)),
+        )
+        .toList();
   }
 
   @override
@@ -145,6 +166,26 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
         invalidMessage: 'Resposta invalida do responsavel.',
       ),
     );
+  }
+
+  @override
+  Future<List<AuditEventModel>> providerAudit(int providerId) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get(
+        'maintenance/providers/$providerId/audit',
+        headers: _jsonHeaders,
+      ),
+    );
+    final List<Object?> decoded = _expectSuccessList(
+      response,
+      invalidMessage: 'Formato invalido del historial de responsables.',
+    );
+    return decoded
+        .whereType<Map>()
+        .map<AuditEventModel>(
+          (Map item) => AuditEventModel.fromJson(_asMap(item)),
+        )
+        .toList();
   }
 
   @override
@@ -381,6 +422,26 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
         statusCode: response.statusCode,
       );
     }
+  }
+
+  @override
+  Future<List<AuditEventModel>> history(int orderId) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get(
+        'maintenance/orders/$orderId/audit',
+        headers: _jsonHeaders,
+      ),
+    );
+    final List<Object?> decoded = _expectSuccessList(
+      response,
+      invalidMessage: 'Formato invalido del historial de ordenes de mantenimiento.',
+    );
+    return decoded
+        .whereType<Map>()
+        .map<AuditEventModel>(
+          (Map item) => AuditEventModel.fromJson(_asMap(item)),
+        )
+        .toList();
   }
 
   @override

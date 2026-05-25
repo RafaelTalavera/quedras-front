@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import '../../../core/audit/audit_models.dart';
 import '../../../core/localization/pt_br_error_translator.dart';
 import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
@@ -134,6 +135,55 @@ final class HttpToursAppService implements ToursAppService {
   }
 
   @override
+  Future<List<AuditEventModel>> providerHistory(int providerId) async {
+    final String path = 'tours/providers/$providerId/audit';
+    final ApiResponse response = await _runRequest(
+      method: 'GET',
+      path: path,
+      request: () => _apiClient.get(path, headers: _jsonHeaders),
+    );
+    final Object? decoded = _tryDecode(response.body);
+    if (decoded is! List) {
+      throw const ApiException(
+        'Formato invalido del historial de proveedores.',
+        kind: ApiErrorKind.invalidResponse,
+      );
+    }
+    return decoded
+        .whereType<Map>()
+        .map<AuditEventModel>(
+          (Map item) => AuditEventModel.fromJson(_asMap(item)),
+        )
+        .toList();
+  }
+
+  @override
+  Future<List<AuditEventModel>> offeringHistory(
+    int providerId,
+    int offeringId,
+  ) async {
+    final String path = 'tours/providers/$providerId/offerings/$offeringId/audit';
+    final ApiResponse response = await _runRequest(
+      method: 'GET',
+      path: path,
+      request: () => _apiClient.get(path, headers: _jsonHeaders),
+    );
+    final Object? decoded = _tryDecode(response.body);
+    if (decoded is! List) {
+      throw const ApiException(
+        'Formato invalido del historial de ofertas.',
+        kind: ApiErrorKind.invalidResponse,
+      );
+    }
+    return decoded
+        .whereType<Map>()
+        .map<AuditEventModel>(
+          (Map item) => AuditEventModel.fromJson(_asMap(item)),
+        )
+        .toList();
+  }
+
+  @override
   Future<List<ToursBooking>> listBookings({
     String? dateFrom,
     String? dateTo,
@@ -247,6 +297,29 @@ final class HttpToursAppService implements ToursAppService {
       ),
     );
     return ToursBooking.fromJson(_asMap(_tryDecode(response.body)));
+  }
+
+  @override
+  Future<List<AuditEventModel>> history(int bookingId) async {
+    final String path = 'tours/bookings/$bookingId/audit';
+    final ApiResponse response = await _runRequest(
+      method: 'GET',
+      path: path,
+      request: () => _apiClient.get(path, headers: _jsonHeaders),
+    );
+    final Object? decoded = _tryDecode(response.body);
+    if (decoded is! List) {
+      throw const ApiException(
+        'Formato invalido del historial de agendamentos.',
+        kind: ApiErrorKind.invalidResponse,
+      );
+    }
+    return decoded
+        .whereType<Map>()
+        .map<AuditEventModel>(
+          (Map item) => AuditEventModel.fromJson(_asMap(item)),
+        )
+        .toList();
   }
 
   Future<ApiResponse> _runRequest({

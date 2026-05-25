@@ -1,3 +1,4 @@
+import '../../../core/audit/audit_models.dart';
 import '../domain/court_models.dart';
 
 abstract interface class CourtAppService {
@@ -14,10 +15,14 @@ abstract interface class CourtAppService {
     UpdateCourtPartnerCoachModel input,
   );
 
+  Future<List<AuditEventModel>> partnerCoachHistory(int partnerCoachId);
+
   Future<CourtRateSetting> updateRate(
     int rateId,
     UpdateCourtRateSettingModel input,
   );
+
+  Future<List<AuditEventModel>> rateHistory(int rateId);
 
   Future<List<CourtMaterialSetting>> listMaterials();
 
@@ -25,6 +30,8 @@ abstract interface class CourtAppService {
     int materialId,
     UpdateCourtMaterialSettingModel input,
   );
+
+  Future<List<AuditEventModel>> materialHistory(int materialId);
 
   Future<List<CourtBooking>> listBookings({
     String? bookingDate,
@@ -50,6 +57,8 @@ abstract interface class CourtAppService {
     int bookingId,
     CancelCourtBookingModel input,
   );
+
+  Future<List<AuditEventModel>> history(int bookingId);
 
   Future<CourtSummaryReport> getSummaryReport({
     required String dateFrom,

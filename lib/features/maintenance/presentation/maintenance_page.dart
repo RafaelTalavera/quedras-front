@@ -5,6 +5,8 @@ import 'dart:io';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/audit/audit_models.dart';
+import '../../../core/audit/audit_timeline_dialog.dart';
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/feedback/app_share.dart';
 import '../../../core/files/file_save_result.dart';
@@ -101,6 +103,7 @@ class _MaintenancePageState extends State<MaintenancePage>
   bool _exportingDailyReport = false;
   bool _openingDailyReport = false;
   int? _sharingOrderId;
+  int? _loadingHistoryOrderId;
   String? _errorMessage;
   int? _selectedOrderId;
   int? _selectedLocationId;
@@ -2315,6 +2318,7 @@ class _MaintenancePageState extends State<MaintenancePage>
           builder: (BuildContext context) => _MaintenanceOrderActionDialog(
             order: order,
             sharing: _sharingOrderId == order.id,
+            loadingHistory: _loadingHistoryOrderId == order.id,
           ),
         );
     if (action == null || !mounted) {
@@ -2343,6 +2347,41 @@ class _MaintenancePageState extends State<MaintenancePage>
       case _MaintenanceOrderAction.attachments:
         await _manageAttachments();
         return;
+      case _MaintenanceOrderAction.history:
+        await _openOrderHistory(order);
+        return;
+    }
+  }
+
+  Future<void> _openOrderHistory(MaintenanceOrder order) async {
+    setState(() {
+      _loadingHistoryOrderId = order.id;
+      _errorMessage = null;
+    });
+    try {
+      final List<AuditEventModel> history = await widget.maintenanceAppService
+          .history(order.id);
+      if (!mounted) {
+        return;
+      }
+      await showAuditTimelineDialog(
+        context: context,
+        title: 'Historial de ${order.title}',
+        events: history,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.error(
+        context,
+        title: 'Historial de la orden',
+        message: error.toString().replaceFirst('Bad state: ', ''),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _loadingHistoryOrderId = null);
+      }
     }
   }
 
@@ -2425,16 +2464,19 @@ enum _MaintenanceOrderAction {
   complete,
   cancel,
   attachments,
+  history,
 }
 
 class _MaintenanceOrderActionDialog extends StatelessWidget {
   const _MaintenanceOrderActionDialog({
     required this.order,
     required this.sharing,
+    required this.loadingHistory,
   });
 
   final MaintenanceOrder order;
   final bool sharing;
+  final bool loadingHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -2513,6 +2555,17 @@ class _MaintenanceOrderActionDialog extends StatelessWidget {
                 ).pop(_MaintenanceOrderAction.attachments),
                 icon: const Icon(Icons.attach_file_rounded),
                 label: const Text('Anexos'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () => Navigator.of(
+                  context,
+                ).pop(_MaintenanceOrderAction.history),
+                icon: loadingHistory
+                    ? const Icon(Icons.hourglass_top_rounded)
+                    : const Icon(Icons.history_rounded),
+                label: Text(
+                  loadingHistory ? 'Cargando...' : 'Historial',
+                ),
               ),
             ],
           ),
@@ -3710,6 +3763,7 @@ class _MaintenanceCatalogsDialogState
     extends State<_MaintenanceCatalogsDialog> {
   late List<MaintenanceLocation> _locations;
   late List<MaintenanceProvider> _providers;
+  String? _historyError;
 
   @override
   void initState() {
@@ -3729,6 +3783,13 @@ class _MaintenanceCatalogsDialogState
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
             Text('Catalogos', style: Theme.of(context).textTheme.headlineSmall),
+            if (_historyError != null) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(
+                _historyError!,
+                style: const TextStyle(color: CostaNorteBrand.error),
+              ),
+            ],
             const SizedBox(height: 12),
             const TabBar(
               tabs: <Tab>[
@@ -3742,11 +3803,15 @@ class _MaintenanceCatalogsDialogState
                 children: <Widget>[
                   _CatalogLocationPane(
                     locations: _locations,
+                    service: widget.service,
+                    onHistoryError: _setHistoryError,
                     onCreate: _createLocation,
                     onUpdate: _updateLocation,
                   ),
                   _CatalogProviderPane(
                     providers: _providers,
+                    service: widget.service,
+                    onHistoryError: _setHistoryError,
                     onCreate: _createProvider,
                     onUpdate: _updateProvider,
                   ),
@@ -3872,6 +3937,12 @@ class _MaintenanceCatalogsDialogState
             });
     });
     return provider;
+  }
+
+  void _setHistoryError(String? message) {
+    setState(() {
+      _historyError = message;
+    });
   }
 }
 
@@ -4096,11 +4167,15 @@ class _MaintenanceAttachmentsDialogState
 class _CatalogLocationPane extends StatefulWidget {
   const _CatalogLocationPane({
     required this.locations,
+    required this.service,
+    required this.onHistoryError,
     required this.onCreate,
     required this.onUpdate,
   });
 
   final List<MaintenanceLocation> locations;
+  final MaintenanceAppService service;
+  final ValueChanged<String?> onHistoryError;
   final Future<MaintenanceLocation> Function(CreateMaintenanceLocationModel)
   onCreate;
   final Future<MaintenanceLocation> Function(
@@ -4123,6 +4198,7 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
   MaintenanceLocationCategory _category = MaintenanceLocationCategory.apartment;
   bool _active = true;
   bool _saving = false;
+  String? _historyLoadingKey;
 
   @override
   void initState() {
@@ -4181,7 +4257,23 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
                     subtitle: Text(
                       '${item.locationType.label} - ${item.locationCategory.label}${item.code.trim().isEmpty ? '' : ' - Ref. ${item.code}'}',
                     ),
-                    trailing: Text(item.active ? 'Ativo' : 'Inativo'),
+                    trailing: Wrap(
+                      spacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: <Widget>[
+                        Text(item.active ? 'Ativo' : 'Inativo'),
+                        IconButton(
+                          onPressed: _historyLoadingKey == 'location:${item.id}'
+                              ? null
+                              : () => _openLocationAudit(item),
+                          icon: Icon(
+                            _historyLoadingKey == 'location:${item.id}'
+                                ? Icons.hourglass_top_rounded
+                                : Icons.history_rounded,
+                          ),
+                        ),
+                      ],
+                    ),
                     selected: _selected?.id == item.id,
                     onTap: () => _load(item),
                   ),
@@ -4402,16 +4494,44 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
       if (mounted) setState(() => _saving = false);
     }
   }
+
+  Future<void> _openLocationAudit(MaintenanceLocation location) async {
+    setState(() => _historyLoadingKey = 'location:${location.id}');
+    widget.onHistoryError(null);
+    try {
+      final List<AuditEventModel> events = await widget.service.locationAudit(
+        location.id,
+      );
+      if (!mounted) {
+        return;
+      }
+      await showAuditTimelineDialog(
+        context: context,
+        title: 'Historial de ${_catalogLocationTitle(location)}',
+        events: events,
+      );
+    } catch (error) {
+      widget.onHistoryError(error.toString().replaceFirst('Bad state: ', ''));
+    } finally {
+      if (mounted) {
+        setState(() => _historyLoadingKey = null);
+      }
+    }
+  }
 }
 
 class _CatalogProviderPane extends StatefulWidget {
   const _CatalogProviderPane({
     required this.providers,
+    required this.service,
+    required this.onHistoryError,
     required this.onCreate,
     required this.onUpdate,
   });
 
   final List<MaintenanceProvider> providers;
+  final MaintenanceAppService service;
+  final ValueChanged<String?> onHistoryError;
   final Future<MaintenanceProvider> Function(CreateMaintenanceProviderModel)
   onCreate;
   final Future<MaintenanceProvider> Function(
@@ -4435,6 +4555,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
       MaintenanceProviderSpecialty.generalMaintenance;
   bool _active = true;
   bool _saving = false;
+  String? _historyLoadingKey;
 
   @override
   void initState() {
@@ -4467,7 +4588,23 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
                     subtitle: Text(
                       '${item.providerType.label} · ${item.specialty.label} · ${item.serviceLabel}',
                     ),
-                    trailing: Text(item.active ? 'Ativo' : 'Inativo'),
+                    trailing: Wrap(
+                      spacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: <Widget>[
+                        Text(item.active ? 'Ativo' : 'Inativo'),
+                        IconButton(
+                          onPressed: _historyLoadingKey == 'provider:${item.id}'
+                              ? null
+                              : () => _openProviderAudit(item),
+                          icon: Icon(
+                            _historyLoadingKey == 'provider:${item.id}'
+                                ? Icons.hourglass_top_rounded
+                                : Icons.history_rounded,
+                          ),
+                        ),
+                      ],
+                    ),
                     selected: _selected?.id == item.id,
                     onTap: () => _load(item),
                   ),
@@ -4646,6 +4783,30 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
       );
     } finally {
       if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _openProviderAudit(MaintenanceProvider provider) async {
+    setState(() => _historyLoadingKey = 'provider:${provider.id}');
+    widget.onHistoryError(null);
+    try {
+      final List<AuditEventModel> events = await widget.service.providerAudit(
+        provider.id,
+      );
+      if (!mounted) {
+        return;
+      }
+      await showAuditTimelineDialog(
+        context: context,
+        title: 'Historial de ${provider.name}',
+        events: events,
+      );
+    } catch (error) {
+      widget.onHistoryError(error.toString().replaceFirst('Bad state: ', ''));
+    } finally {
+      if (mounted) {
+        setState(() => _historyLoadingKey = null);
+      }
     }
   }
 }

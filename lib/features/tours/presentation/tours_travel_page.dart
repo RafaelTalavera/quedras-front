@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/audit/audit_models.dart';
+import '../../../core/audit/audit_timeline_dialog.dart';
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/feedback/app_share.dart';
 import '../../../core/network/api_exception.dart';
@@ -86,6 +88,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   bool _saving = false;
   bool _loadingSummary = false;
   int? _sharingBookingId;
+  int? _loadingHistoryBookingId;
   String? _error;
   String? _agendaError;
   String? _summaryError;
@@ -687,6 +690,8 @@ class _ToursTravelPageState extends State<ToursTravelPage>
                     onCancel: _isBookingEditable(b)
                         ? () => _cancelBooking(booking: b)
                         : null,
+                    onHistory: () => _openBookingHistory(b),
+                    loadingHistory: _loadingHistoryBookingId == b.id,
                     onDoubleTap: () => _openBookingActionDialog(b),
                   ),
                 ),
@@ -1648,6 +1653,41 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       case _ToursBookingAction.cancel:
         await _cancelBooking(booking: booking);
         return;
+      case _ToursBookingAction.history:
+        await _openBookingHistory(booking);
+        return;
+    }
+  }
+
+  Future<void> _openBookingHistory(ToursBooking booking) async {
+    setState(() {
+      _loadingHistoryBookingId = booking.id;
+      _error = null;
+    });
+    try {
+      final List<AuditEventModel> history = await widget.toursAppService
+          .history(booking.id);
+      if (!mounted) {
+        return;
+      }
+      await showAuditTimelineDialog(
+        context: context,
+        title: 'Historial de ${booking.clientName}',
+        events: history,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.error(
+        context,
+        title: 'Historial del agendamiento',
+        message: _describeError(error),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _loadingHistoryBookingId = null);
+      }
     }
   }
 
@@ -1658,7 +1698,10 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     }
     final _ProviderDraft? draft = await showDialog<_ProviderDraft>(
       context: context,
-      builder: (BuildContext context) => _ProviderDialog(providers: _providers),
+      builder: (BuildContext context) => _ProviderDialog(
+        providers: _providers,
+        toursAppService: widget.toursAppService,
+      ),
     );
     if (draft == null) return;
     if (draft.id == null) {
@@ -1906,8 +1949,10 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     VoidCallback? onPayment,
     VoidCallback? onShare,
     VoidCallback? onCancel,
+    VoidCallback? onHistory,
     VoidCallback? onDoubleTap,
     bool sharing = false,
+    bool loadingHistory = false,
   }) {
     final Color color = b.status == ToursBookingStatus.cancelled
         ? CostaNorteBrand.error
@@ -2032,7 +2077,8 @@ class _ToursTravelPageState extends State<ToursTravelPage>
             if (onEdit != null ||
                 onPayment != null ||
                 onShare != null ||
-                onCancel != null) ...<Widget>[
+                onCancel != null ||
+                onHistory != null) ...<Widget>[
               const SizedBox(height: 14),
               Wrap(
                 spacing: 10,
@@ -2059,6 +2105,18 @@ class _ToursTravelPageState extends State<ToursTravelPage>
                             : Icons.send_rounded,
                       ),
                       label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+                    ),
+                  if (onHistory != null)
+                    OutlinedButton.icon(
+                      onPressed: loadingHistory ? null : onHistory,
+                      icon: Icon(
+                        loadingHistory
+                            ? Icons.hourglass_top_rounded
+                            : Icons.history_rounded,
+                      ),
+                      label: Text(
+                        loadingHistory ? 'Cargando...' : 'Historial',
+                      ),
                     ),
                   if (onCancel != null)
                     OutlinedButton.icon(
@@ -2088,7 +2146,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   );
 }
 
-enum _ToursBookingAction { edit, payment, share, cancel }
+enum _ToursBookingAction { edit, payment, share, cancel, history }
 
 class _ToursBookingActionDialog extends StatelessWidget {
   const _ToursBookingActionDialog({
@@ -2149,6 +2207,12 @@ class _ToursBookingActionDialog extends StatelessWidget {
                   sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
                 ),
                 label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () =>
+                    Navigator.of(context).pop(_ToursBookingAction.history),
+                icon: const Icon(Icons.history_rounded),
+                label: const Text('Historial'),
               ),
               OutlinedButton.icon(
                 onPressed: canEdit
@@ -2945,8 +3009,12 @@ class _InlineStatusSwitch extends StatelessWidget {
 }
 
 class _ProviderDialog extends StatefulWidget {
-  const _ProviderDialog({required this.providers});
+  const _ProviderDialog({
+    required this.providers,
+    required this.toursAppService,
+  });
   final List<ToursProvider> providers;
+  final ToursAppService toursAppService;
   @override
   State<_ProviderDialog> createState() => _ProviderDialogState();
 }
@@ -2967,6 +3035,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   bool _offeringActive = true;
   int? _editingOfferingIndex;
   List<_ProviderOfferingDraft> _offerings = <_ProviderOfferingDraft>[];
+  String? _historyError;
+  String? _historyLoadingKey;
 
   ToursProvider? get _selectedProvider {
     for (final ToursProvider provider in widget.providers) {
@@ -2999,6 +3069,13 @@ class _ProviderDialogState extends State<_ProviderDialog> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
+              if (_historyError != null) ...<Widget>[
+                Text(
+                  _historyError!,
+                  style: const TextStyle(color: CostaNorteBrand.error),
+                ),
+                const SizedBox(height: 12),
+              ],
               DropdownButtonFormField<int?>(
                 value: _selectedId,
                 decoration: const InputDecoration(
@@ -3055,6 +3132,29 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                     : (bool value) => setState(() => _active = value),
                 title: const Text('Fornecedor ativo'),
               ),
+              if (_selectedProvider != null)
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: OutlinedButton.icon(
+                    onPressed:
+                        _historyLoadingKey ==
+                            'provider:${_selectedProvider!.id}'
+                        ? null
+                        : () => _openProviderHistory(_selectedProvider!),
+                    icon: Icon(
+                      _historyLoadingKey ==
+                              'provider:${_selectedProvider!.id}'
+                          ? Icons.hourglass_top_rounded
+                          : Icons.history_rounded,
+                    ),
+                    label: Text(
+                      _historyLoadingKey ==
+                              'provider:${_selectedProvider!.id}'
+                          ? 'Cargando...'
+                          : 'Historial del proveedor',
+                    ),
+                  ),
+                ),
               const SizedBox(height: 18),
               Text(
                 'Destinos e viagens do fornecedor',
@@ -3101,6 +3201,23 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                                 onPressed: () => _editOffering(index),
                                 child: const Text('Editar'),
                               ),
+                              if (_selectedProvider != null)
+                                TextButton(
+                                  onPressed:
+                                      _historyLoadingKey ==
+                                          'offering:${_selectedProvider!.id}:$index'
+                                      ? null
+                                      : () => _openOfferingHistory(
+                                          _selectedProvider!,
+                                          index,
+                                        ),
+                                  child: Text(
+                                    _historyLoadingKey ==
+                                            'offering:${_selectedProvider!.id}:$index'
+                                        ? 'Cargando...'
+                                        : 'Historial',
+                                  ),
+                                ),
                               TextButton(
                                 onPressed: () => _removeOffering(index),
                                 child: const Text('Excluir'),
@@ -3348,6 +3465,70 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     _offeringAmount.clear();
     _offeringDescription.clear();
     _offeringActive = true;
+  }
+
+  Future<void> _openProviderHistory(ToursProvider provider) async {
+    setState(() {
+      _historyLoadingKey = 'provider:${provider.id}';
+      _historyError = null;
+    });
+    try {
+      final List<AuditEventModel> events = await widget.toursAppService
+          .providerHistory(provider.id);
+      if (!mounted) {
+        return;
+      }
+      await showAuditTimelineDialog(
+        context: context,
+        title: 'Historial de ${provider.name}',
+        events: events,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _historyError = error.toString().replaceFirst('Bad state: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _historyLoadingKey = null);
+      }
+    }
+  }
+
+  Future<void> _openOfferingHistory(ToursProvider provider, int index) async {
+    if (index < 0 || index >= provider.offerings.length) {
+      return;
+    }
+    final ToursProviderOffering offering = provider.offerings[index];
+    setState(() {
+      _historyLoadingKey = 'offering:${provider.id}:$index';
+      _historyError = null;
+    });
+    try {
+      final List<AuditEventModel> events = await widget.toursAppService
+          .offeringHistory(provider.id, offering.id);
+      if (!mounted) {
+        return;
+      }
+      await showAuditTimelineDialog(
+        context: context,
+        title: 'Historial de ${offering.name}',
+        events: events,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _historyError = error.toString().replaceFirst('Bad state: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _historyLoadingKey = null);
+      }
+    }
   }
 }
 

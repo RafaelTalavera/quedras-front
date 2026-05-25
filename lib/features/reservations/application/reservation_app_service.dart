@@ -1,3 +1,4 @@
+import '../../../core/audit/audit_models.dart';
 import '../domain/create_reservation_model.dart';
 import '../domain/reservation_model.dart';
 import '../domain/reservation_status.dart';
@@ -14,6 +15,8 @@ abstract interface class ReservationAppService {
   );
 
   Future<ReservationModel> cancel(int reservationId);
+
+  Future<List<AuditEventModel>> history(int reservationId);
 }
 
 final class InMemoryReservationAppService implements ReservationAppService {
@@ -33,6 +36,10 @@ final class InMemoryReservationAppService implements ReservationAppService {
           notes: 'Aula individual',
           createdAt: DateTime.now().toUtc(),
           updatedAt: DateTime.now().toUtc(),
+          createdBy: 'system',
+          updatedBy: 'system',
+          cancelledAt: null,
+          cancelledBy: null,
         ),
         ReservationModel(
           id: 2,
@@ -44,6 +51,10 @@ final class InMemoryReservationAppService implements ReservationAppService {
           notes: 'Hóspede do apartamento 402',
           createdAt: DateTime.now().toUtc(),
           updatedAt: DateTime.now().toUtc(),
+          createdBy: 'system',
+          updatedBy: 'system',
+          cancelledAt: null,
+          cancelledBy: null,
         ),
       ];
 
@@ -93,6 +104,10 @@ final class InMemoryReservationAppService implements ReservationAppService {
       notes: _normalizeNotes(input.notes),
       createdAt: now,
       updatedAt: now,
+      createdBy: 'system',
+      updatedBy: 'system',
+      cancelledAt: null,
+      cancelledBy: null,
     );
     _items.add(created);
     return created;
@@ -137,6 +152,10 @@ final class InMemoryReservationAppService implements ReservationAppService {
       notes: _normalizeNotes(input.notes),
       createdAt: existing.createdAt,
       updatedAt: DateTime.now().toUtc(),
+      createdBy: existing.createdBy,
+      updatedBy: 'system',
+      cancelledAt: existing.cancelledAt,
+      cancelledBy: existing.cancelledBy,
     );
     _items[index] = updated;
     return updated;
@@ -169,9 +188,19 @@ final class InMemoryReservationAppService implements ReservationAppService {
       notes: existing.notes,
       createdAt: existing.createdAt,
       updatedAt: DateTime.now().toUtc(),
+      createdBy: existing.createdBy,
+      updatedBy: 'system',
+      cancelledAt: DateTime.now().toUtc(),
+      cancelledBy: 'system',
     );
     _items[index] = cancelled;
     return cancelled;
+  }
+
+  @override
+  Future<List<AuditEventModel>> history(int reservationId) async {
+    await Future<void>.delayed(const Duration(milliseconds: 180));
+    return const <AuditEventModel>[];
   }
 
   int _indexById(int reservationId) {

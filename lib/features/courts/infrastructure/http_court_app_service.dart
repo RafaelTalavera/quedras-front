@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import '../../../core/audit/audit_models.dart';
 import '../../../core/localization/pt_br_error_translator.dart';
 import '../../../core/network/api_client.dart';
 import '../application/court_app_service.dart';
@@ -100,6 +101,29 @@ final class HttpCourtAppService implements CourtAppService {
   }
 
   @override
+  Future<List<AuditEventModel>> partnerCoachHistory(int partnerCoachId) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get(
+        'courts/partner-coaches/$partnerCoachId/audit',
+        headers: _jsonHeaders,
+      ),
+    );
+    if (!response.isSuccess) {
+      throw StateError(_extractApiErrorMessage(response));
+    }
+    final Object? decoded = _tryDecode(response.body);
+    if (decoded is! List) {
+      throw StateError('Formato invalido del historial de profesores asociados.');
+    }
+    return decoded
+        .whereType<Map>()
+        .map<AuditEventModel>(
+          (Map item) => AuditEventModel.fromJson(_asMap(item)),
+        )
+        .toList();
+  }
+
+  @override
   Future<CourtRateSetting> updateRate(
     int rateId,
     UpdateCourtRateSettingModel input,
@@ -115,6 +139,26 @@ final class HttpCourtAppService implements CourtAppService {
       throw StateError(_extractApiErrorMessage(response));
     }
     return CourtRateSetting.fromJson(_asMap(_tryDecode(response.body)));
+  }
+
+  @override
+  Future<List<AuditEventModel>> rateHistory(int rateId) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get('courts/rates/$rateId/audit', headers: _jsonHeaders),
+    );
+    if (!response.isSuccess) {
+      throw StateError(_extractApiErrorMessage(response));
+    }
+    final Object? decoded = _tryDecode(response.body);
+    if (decoded is! List) {
+      throw StateError('Formato invalido del historial de tarifas.');
+    }
+    return decoded
+        .whereType<Map>()
+        .map<AuditEventModel>(
+          (Map item) => AuditEventModel.fromJson(_asMap(item)),
+        )
+        .toList();
   }
 
   @override
@@ -152,6 +196,29 @@ final class HttpCourtAppService implements CourtAppService {
       throw StateError(_extractApiErrorMessage(response));
     }
     return CourtMaterialSetting.fromJson(_asMap(_tryDecode(response.body)));
+  }
+
+  @override
+  Future<List<AuditEventModel>> materialHistory(int materialId) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get(
+        'courts/materials/$materialId/audit',
+        headers: _jsonHeaders,
+      ),
+    );
+    if (!response.isSuccess) {
+      throw StateError(_extractApiErrorMessage(response));
+    }
+    final Object? decoded = _tryDecode(response.body);
+    if (decoded is! List) {
+      throw StateError('Formato invalido del historial de materiales.');
+    }
+    return decoded
+        .whereType<Map>()
+        .map<AuditEventModel>(
+          (Map item) => AuditEventModel.fromJson(_asMap(item)),
+        )
+        .toList();
   }
 
   @override
@@ -265,6 +332,29 @@ final class HttpCourtAppService implements CourtAppService {
       throw StateError(_extractApiErrorMessage(response));
     }
     return CourtBooking.fromJson(_asMap(_tryDecode(response.body)));
+  }
+
+  @override
+  Future<List<AuditEventModel>> history(int bookingId) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get(
+        'courts/bookings/$bookingId/audit',
+        headers: _jsonHeaders,
+      ),
+    );
+    if (!response.isSuccess) {
+      throw StateError(_extractApiErrorMessage(response));
+    }
+    final Object? decoded = _tryDecode(response.body);
+    if (decoded is! List) {
+      throw StateError('Formato invalido del historial de reservas de quadras.');
+    }
+    return decoded
+        .whereType<Map>()
+        .map<AuditEventModel>(
+          (Map item) => AuditEventModel.fromJson(_asMap(item)),
+        )
+        .toList();
   }
 
   @override

@@ -1,3 +1,4 @@
+import '../../../core/audit/audit_models.dart';
 import '../domain/massage_models.dart';
 
 abstract interface class MassageAppService {
@@ -21,6 +22,8 @@ abstract interface class MassageAppService {
     UpdateMassageProviderModel input,
   );
 
+  Future<List<AuditEventModel>> providerHistory(int providerId);
+
   Future<MassageTherapist> createTherapist(
     int providerId,
     CreateMassageTherapistModel input,
@@ -31,6 +34,8 @@ abstract interface class MassageAppService {
     int therapistId,
     UpdateMassageTherapistModel input,
   );
+
+  Future<List<AuditEventModel>> therapistHistory(int providerId, int therapistId);
 
   Future<List<MassageBooking>> listBookings({
     String? bookingDate,
@@ -58,4 +63,6 @@ abstract interface class MassageAppService {
     int bookingId,
     CancelMassageBookingModel input,
   );
+
+  Future<List<AuditEventModel>> history(int bookingId);
 }

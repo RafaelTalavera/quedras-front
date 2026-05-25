@@ -11,6 +11,10 @@ final class ReservationModel {
     required this.notes,
     required this.createdAt,
     required this.updatedAt,
+    required this.createdBy,
+    required this.updatedBy,
+    required this.cancelledAt,
+    required this.cancelledBy,
   }) : guestName = guestName.trim();
 
   final int? id;
@@ -22,6 +26,10 @@ final class ReservationModel {
   final String? notes;
   final DateTime? createdAt;
   final DateTime? updatedAt;
+  final String? createdBy;
+  final String? updatedBy;
+  final DateTime? cancelledAt;
+  final String? cancelledBy;
 
   factory ReservationModel.fromJson(Map<String, dynamic> json) {
     return ReservationModel(
@@ -34,6 +42,10 @@ final class ReservationModel {
       notes: json['notes'] as String?,
       createdAt: _parseDateTime(json['createdAt']),
       updatedAt: _parseDateTime(json['updatedAt']),
+      createdBy: _trimOrNull(json['createdBy'] as String?),
+      updatedBy: _trimOrNull(json['updatedBy'] as String?),
+      cancelledAt: _parseDateTime(json['cancelledAt']),
+      cancelledBy: _trimOrNull(json['cancelledBy'] as String?),
     );
   }
 
@@ -48,6 +60,10 @@ final class ReservationModel {
       'notes': notes,
       'createdAt': createdAt?.toIso8601String(),
       'updatedAt': updatedAt?.toIso8601String(),
+      'createdBy': createdBy,
+      'updatedBy': updatedBy,
+      'cancelledAt': cancelledAt?.toIso8601String(),
+      'cancelledBy': cancelledBy,
     };
   }
 
@@ -59,5 +75,13 @@ final class ReservationModel {
       return DateTime.tryParse(value);
     }
     return null;
+  }
+
+  static String? _trimOrNull(String? value) {
+    if (value == null) {
+      return null;
+    }
+    final String normalized = value.trim();
+    return normalized.isEmpty ? null : normalized;
   }
 }

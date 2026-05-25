@@ -2,6 +2,8 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 
+import '../../../core/audit/audit_models.dart';
+import '../../../core/audit/audit_timeline_dialog.dart';
 import '../../../core/files/file_save_result.dart';
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/feedback/app_share.dart';
@@ -117,6 +119,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   bool _providersLoaded = false;
   int? _processingBookingId;
   int? _sharingBookingId;
+  int? _loadingHistoryBookingId;
   String? _errorMessage;
   String? _agendaErrorMessage;
   String? _reportErrorMessage;
@@ -1401,6 +1404,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                       therapist: _therapistName(booking),
                       processing: _processingBookingId == booking.id,
                       sharing: _sharingBookingId == booking.id,
+                      loadingHistory: _loadingHistoryBookingId == booking.id,
                       onEdit:
                           _processingBookingId == booking.id ||
                               !_isBookingEditable(booking)
@@ -1419,6 +1423,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                               !_isBookingEditable(booking)
                           ? null
                           : () => _openCancelBookingDialog(booking),
+                      onHistory: () => _openBookingHistory(booking),
                     ),
                   ),
                 ),
@@ -1765,8 +1770,46 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       case _BookingAction.cancel:
         await _openCancelBookingDialog(booking);
         return;
+      case _BookingAction.history:
+        await _openBookingHistory(booking);
+        return;
       case null:
         return;
+    }
+  }
+
+  Future<void> _openBookingHistory(MassageBooking booking) async {
+    setState(() {
+      _loadingHistoryBookingId = booking.id;
+      _errorMessage = null;
+    });
+
+    try {
+      final List<AuditEventModel> history = await widget.massageAppService
+          .history(booking.id);
+      if (!mounted) {
+        return;
+      }
+      await showAuditTimelineDialog(
+        context: context,
+        title: 'Historial de ${booking.clientName}',
+        events: history,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.error(
+        context,
+        title: 'Historial del masaje',
+        message: error.toString().replaceFirst('Bad state: ', ''),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingHistoryBookingId = null;
+        });
+      }
     }
   }
 
@@ -2341,6 +2384,8 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                           therapist: booking.therapistName,
                           processing: false,
                           sharing: false,
+                          loadingHistory: _loadingHistoryBookingId == booking.id,
+                          onHistory: () => _openBookingHistory(booking),
                         ),
                       ),
                     ),
@@ -2706,10 +2751,12 @@ class _BookingTile extends StatelessWidget {
     required this.therapist,
     required this.processing,
     required this.sharing,
+    this.loadingHistory = false,
     this.onEdit,
     this.onPayment,
     this.onShare,
     this.onCancel,
+    this.onHistory,
   });
 
   final MassageBooking booking;
@@ -2717,10 +2764,12 @@ class _BookingTile extends StatelessWidget {
   final String therapist;
   final bool processing;
   final bool sharing;
+  final bool loadingHistory;
   final VoidCallback? onEdit;
   final VoidCallback? onPayment;
   final VoidCallback? onShare;
   final VoidCallback? onCancel;
+  final VoidCallback? onHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -2789,7 +2838,8 @@ class _BookingTile extends StatelessWidget {
           if (onEdit != null ||
               onPayment != null ||
               onShare != null ||
-              onCancel != null) ...<Widget>[
+              onCancel != null ||
+              onHistory != null) ...<Widget>[
             const SizedBox(height: 14),
             Wrap(
               spacing: 10,
@@ -2816,6 +2866,18 @@ class _BookingTile extends StatelessWidget {
                           : Icons.send_rounded,
                     ),
                     label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+                  ),
+                if (onHistory != null)
+                  OutlinedButton.icon(
+                    onPressed: loadingHistory ? null : onHistory,
+                    icon: Icon(
+                      loadingHistory
+                          ? Icons.hourglass_top_rounded
+                          : Icons.history_rounded,
+                    ),
+                    label: Text(
+                      loadingHistory ? 'Cargando...' : 'Historial',
+                    ),
                   ),
                 if (onCancel != null)
                   OutlinedButton.icon(
@@ -3496,7 +3558,7 @@ class _InlineStatusSwitch extends StatelessWidget {
   }
 }
 
-enum _BookingAction { edit, payment, share, cancel }
+enum _BookingAction { edit, payment, share, cancel, history }
 
 class _BookingActionDialog extends StatelessWidget {
   const _BookingActionDialog({required this.booking, required this.sharing});
@@ -3556,6 +3618,12 @@ class _BookingActionDialog extends StatelessWidget {
                   sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
                 ),
                 label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+              ),
+              OutlinedButton.icon(
+                onPressed: () =>
+                    Navigator.of(context).pop(_BookingAction.history),
+                icon: const Icon(Icons.history_rounded),
+                label: const Text('Historial'),
               ),
               FilledButton.icon(
                 onPressed: booking.status == MassageBookingStatus.cancelled
@@ -3959,6 +4027,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   int? _selectedProviderId;
   bool _creatingProvider = false;
   bool _saving = false;
+  String? _historyError;
+  String? _historyLoadingKey;
 
   @override
   void initState() {
@@ -4018,6 +4088,13 @@ class _ProviderDialogState extends State<_ProviderDialog> {
               'Cadastre fornecedores aqui para disponibiliza-los no combo da agenda.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
+            if (_historyError != null) ...<Widget>[
+              const SizedBox(height: 10),
+              Text(
+                _historyError!,
+                style: const TextStyle(color: CostaNorteBrand.error),
+              ),
+            ],
             const SizedBox(height: 14),
             _buildProviderSummary(context),
             const SizedBox(height: 12),
@@ -4155,6 +4232,22 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                                       Column(
                                         mainAxisSize: MainAxisSize.min,
                                         children: <Widget>[
+                                          IconButton(
+                                            onPressed:
+                                                _historyLoadingKey ==
+                                                    'provider:${provider.id}'
+                                                ? null
+                                                : () => _openProviderHistory(
+                                                    provider,
+                                                  ),
+                                            icon: Icon(
+                                              _historyLoadingKey ==
+                                                      'provider:${provider.id}'
+                                                  ? Icons
+                                                        .hourglass_top_rounded
+                                                  : Icons.history_rounded,
+                                            ),
+                                          ),
                                           Text(
                                             provider.active ? 'ON' : 'OFF',
                                             style: Theme.of(context)
@@ -4473,6 +4566,22 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                                       value,
                                     ),
                             ),
+                            IconButton(
+                              onPressed:
+                                  _historyLoadingKey ==
+                                      'therapist:${therapist.id}'
+                                  ? null
+                                  : () => _openTherapistHistory(
+                                      _selectedProvider!,
+                                      therapist,
+                                    ),
+                              icon: Icon(
+                                _historyLoadingKey ==
+                                        'therapist:${therapist.id}'
+                                    ? Icons.hourglass_top_rounded
+                                    : Icons.history_rounded,
+                              ),
+                            ),
                           ],
                         ),
                       );
@@ -4659,6 +4768,63 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   }
 
   bool get _isEditingProvider => _creatingProvider || _selectedProvider != null;
+
+  Future<void> _openProviderHistory(MassageProvider provider) async {
+    await _openCatalogHistory(
+      loadingKey: 'provider:${provider.id}',
+      title: 'Historial de ${provider.name}',
+      loader: () => widget.massageAppService.providerHistory(provider.id),
+    );
+  }
+
+  Future<void> _openTherapistHistory(
+    MassageProvider provider,
+    MassageTherapist therapist,
+  ) async {
+    await _openCatalogHistory(
+      loadingKey: 'therapist:${therapist.id}',
+      title: 'Historial de ${therapist.name}',
+      loader: () => widget.massageAppService.therapistHistory(
+        provider.id,
+        therapist.id,
+      ),
+    );
+  }
+
+  Future<void> _openCatalogHistory({
+    required String loadingKey,
+    required String title,
+    required Future<List<AuditEventModel>> Function() loader,
+  }) async {
+    setState(() {
+      _historyLoadingKey = loadingKey;
+      _historyError = null;
+    });
+    try {
+      final List<AuditEventModel> events = await loader();
+      if (!mounted) {
+        return;
+      }
+      await showAuditTimelineDialog(
+        context: context,
+        title: title,
+        events: events,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _historyError = error.toString().replaceFirst('Bad state: ', '');
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _historyLoadingKey = null;
+        });
+      }
+    }
+  }
 
   void _prepareNewProvider() {
     setState(() {

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import '../../../core/audit/audit_models.dart';
 import '../../../core/localization/pt_br_error_translator.dart';
 import '../../../core/network/api_client.dart';
 import '../application/reservation_app_service.dart';
@@ -91,6 +92,29 @@ final class HttpReservationAppService implements ReservationAppService {
       throw StateError(_extractApiErrorMessage(response));
     }
     return _parseReservation(response.body);
+  }
+
+  @override
+  Future<List<AuditEventModel>> history(int reservationId) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get(
+        'reservations/$reservationId/audit',
+        headers: _jsonHeaders,
+      ),
+    );
+    if (!response.isSuccess) {
+      throw StateError(_extractApiErrorMessage(response));
+    }
+
+    final Object? decoded = _tryDecode(response.body);
+    if (decoded is! List) {
+      throw StateError('Formato invalido del historial retornado por el backend.');
+    }
+    return decoded
+        .map<AuditEventModel>(
+          (Object? item) => AuditEventModel.fromJson(_asMap(item)),
+        )
+        .toList();
   }
 
   Future<ApiResponse> _runRequest(

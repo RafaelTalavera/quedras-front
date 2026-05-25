@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import '../../../core/audit/audit_models.dart';
 import '../../../core/localization/pt_br_error_translator.dart';
 import '../../../core/network/api_client.dart';
 import '../application/massage_app_service.dart';
@@ -218,6 +219,29 @@ final class HttpMassageAppService implements MassageAppService {
   }
 
   @override
+  Future<List<AuditEventModel>> providerHistory(int providerId) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get(
+        'massages/providers/$providerId/audit',
+        headers: _jsonHeaders,
+      ),
+    );
+    if (!response.isSuccess) {
+      throw StateError(_extractApiErrorMessage(response));
+    }
+    final Object? decoded = _tryDecode(response.body);
+    if (decoded is! List) {
+      throw StateError('Formato invalido del historial de prestadores.');
+    }
+    return decoded
+        .whereType<Map>()
+        .map<AuditEventModel>(
+          (Map item) => AuditEventModel.fromJson(_asMap(item)),
+        )
+        .toList();
+  }
+
+  @override
   Future<MassageTherapist> createTherapist(
     int providerId,
     CreateMassageTherapistModel input,
@@ -262,6 +286,32 @@ final class HttpMassageAppService implements MassageAppService {
   }
 
   @override
+  Future<List<AuditEventModel>> therapistHistory(
+    int providerId,
+    int therapistId,
+  ) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get(
+        'massages/providers/$providerId/therapists/$therapistId/audit',
+        headers: _jsonHeaders,
+      ),
+    );
+    if (!response.isSuccess) {
+      throw StateError(_extractApiErrorMessage(response));
+    }
+    final Object? decoded = _tryDecode(response.body);
+    if (decoded is! List) {
+      throw StateError('Formato invalido del historial de masajistas.');
+    }
+    return decoded
+        .whereType<Map>()
+        .map<AuditEventModel>(
+          (Map item) => AuditEventModel.fromJson(_asMap(item)),
+        )
+        .toList();
+  }
+
+  @override
   Future<MassageBooking> updatePayment(
     int bookingId,
     UpdateMassagePaymentModel input,
@@ -295,6 +345,29 @@ final class HttpMassageAppService implements MassageAppService {
       throw StateError(_extractApiErrorMessage(response));
     }
     return MassageBooking.fromJson(_asMap(_tryDecode(response.body)));
+  }
+
+  @override
+  Future<List<AuditEventModel>> history(int bookingId) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get(
+        'massages/bookings/$bookingId/audit',
+        headers: _jsonHeaders,
+      ),
+    );
+    if (!response.isSuccess) {
+      throw StateError(_extractApiErrorMessage(response));
+    }
+    final Object? decoded = _tryDecode(response.body);
+    if (decoded is! List) {
+      throw StateError('Formato invalido del historial de atenciones.');
+    }
+    return decoded
+        .whereType<Map>()
+        .map<AuditEventModel>(
+          (Map item) => AuditEventModel.fromJson(_asMap(item)),
+        )
+        .toList();
   }
 
   Future<ApiResponse> _runRequest(

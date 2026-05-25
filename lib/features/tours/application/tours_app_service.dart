@@ -1,3 +1,4 @@
+import '../../../core/audit/audit_models.dart';
 import '../domain/tours_models.dart';
 
 abstract interface class ToursAppService {
@@ -21,6 +22,10 @@ abstract interface class ToursAppService {
     int providerId,
     UpdateToursProviderModel input,
   );
+
+  Future<List<AuditEventModel>> providerHistory(int providerId);
+
+  Future<List<AuditEventModel>> offeringHistory(int providerId, int offeringId);
 
   Future<List<ToursBooking>> listBookings({
     String? dateFrom,
@@ -46,4 +51,6 @@ abstract interface class ToursAppService {
     int bookingId,
     CancelToursBookingModel input,
   );
+
+  Future<List<AuditEventModel>> history(int bookingId);
 }

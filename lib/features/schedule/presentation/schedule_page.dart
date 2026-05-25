@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/audit/audit_models.dart';
+import '../../../core/audit/audit_timeline_dialog.dart';
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/app_dialog_dimensions.dart';
@@ -23,6 +25,7 @@ class _SchedulePageState extends State<SchedulePage> {
   bool _loading = false;
   String? _error;
   int? _processingReservationId;
+  int? _loadingHistoryReservationId;
   List<ReservationModel> _reservations = const <ReservationModel>[];
 
   @override
@@ -74,6 +77,8 @@ class _SchedulePageState extends State<SchedulePage> {
                     child: _ReservationTile(
                       reservation: reservation,
                       processing: _processingReservationId == reservation.id,
+                      loadingHistory:
+                          _loadingHistoryReservationId == reservation.id,
                       onEdit: reservation.status == ReservationStatus.scheduled
                           ? () => _openEditReservation(reservation)
                           : null,
@@ -81,6 +86,7 @@ class _SchedulePageState extends State<SchedulePage> {
                           reservation.status == ReservationStatus.scheduled
                           ? () => _cancelReservation(reservation)
                           : null,
+                      onHistory: () => _openReservationHistory(reservation),
                     ),
                   ),
                 )
@@ -277,6 +283,44 @@ class _SchedulePageState extends State<SchedulePage> {
       if (mounted) {
         setState(() {
           _processingReservationId = null;
+        });
+      }
+    }
+  }
+
+  Future<void> _openReservationHistory(ReservationModel reservation) async {
+    final int? reservationId = reservation.id;
+    if (reservationId == null) {
+      return;
+    }
+
+    setState(() {
+      _loadingHistoryReservationId = reservationId;
+      _error = null;
+    });
+
+    try {
+      final List<AuditEventModel> history = await widget.reservationAppService
+          .history(reservationId);
+      if (!mounted) {
+        return;
+      }
+      await showAuditTimelineDialog(
+        context: context,
+        title: 'Historial de ${reservation.guestName}',
+        events: history,
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _error = 'No fue posible cargar el historial: ${_resolveErrorMessage(error)}';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _loadingHistoryReservationId = null;
         });
       }
     }
@@ -705,14 +749,18 @@ class _ReservationTile extends StatelessWidget {
   const _ReservationTile({
     required this.reservation,
     required this.processing,
+    required this.loadingHistory,
     this.onEdit,
     this.onCancel,
+    this.onHistory,
   });
 
   final ReservationModel reservation;
   final bool processing;
+  final bool loadingHistory;
   final VoidCallback? onEdit;
   final VoidCallback? onCancel;
+  final VoidCallback? onHistory;
 
   @override
   Widget build(BuildContext context) {
@@ -786,6 +834,11 @@ class _ReservationTile extends StatelessWidget {
                 spacing: 10,
                 runSpacing: 8,
                 children: <Widget>[
+                  OutlinedButton.icon(
+                    onPressed: loadingHistory ? null : onHistory,
+                    icon: const Icon(Icons.history_rounded),
+                    label: Text(loadingHistory ? 'Cargando...' : 'Historial'),
+                  ),
                   OutlinedButton.icon(
                     onPressed: processing ? null : onEdit,
                     icon: const Icon(Icons.edit_calendar_rounded),
