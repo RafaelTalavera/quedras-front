@@ -44,7 +44,7 @@ final class DefaultMaintenanceDailyReportPdfExporter
   static const String _fontBoldAssetPath = 'assets/fonts/Lato-Bold.ttf';
   static const String _hotelName = 'Hotel Costa Norte';
   static const String _reportTitle =
-      'Resumo executivo de ordens abertas de manutencao';
+      'Folha de rota de ordens abertas de manutencao';
 
   static final PdfColor _inkColor = PdfColor.fromHex('#000000');
   static final PdfColor _mutedColor = PdfColor.fromHex('#4A4A4A');
@@ -81,20 +81,7 @@ final class DefaultMaintenanceDailyReportPdfExporter
       ),
     );
 
-    final List<MaintenanceOrder> carryOverOrders =
-        List<MaintenanceOrder>.of(report.carryOverOrders)
-          ..sort((MaintenanceOrder a, MaintenanceOrder b) {
-            return a.referenceDate.compareTo(b.referenceDate);
-          });
-    final List<MaintenanceOrder> dayOpenOrders =
-        List<MaintenanceOrder>.of(report.dayOpenOrders)
-          ..sort((MaintenanceOrder a, MaintenanceOrder b) {
-            return a.referenceDate.compareTo(b.referenceDate);
-          });
-    final List<MaintenanceOrder> openOrders = <MaintenanceOrder>[
-      ...carryOverOrders,
-      ...dayOpenOrders,
-    ];
+    final List<MaintenanceOrder> openOrders = report.allOpenOrders;
     final DateTime generatedAt = DateTime.now();
     final int guestCount = openOrders
         .where((MaintenanceOrder order) => order.hasGuestContext)
@@ -102,7 +89,7 @@ final class DefaultMaintenanceDailyReportPdfExporter
 
     final pw.PageTheme pageTheme = pw.PageTheme(
       pageFormat: PdfPageFormat.a4,
-      margin: const pw.EdgeInsets.all(28),
+      margin: const pw.EdgeInsets.fromLTRB(22, 24, 22, 20),
       theme: pw.ThemeData.withFont(base: regularFont, bold: boldFont),
     );
 
@@ -123,49 +110,35 @@ final class DefaultMaintenanceDailyReportPdfExporter
             children: <pw.Widget>[
               pw.Text(
                 _hotelName,
-                style: pw.TextStyle(fontSize: 8.5, color: _mutedColor),
+                style: pw.TextStyle(fontSize: 8.3, color: _mutedColor),
               ),
               pw.Text(
                 'Pagina ${context.pageNumber} de ${context.pagesCount}',
-                style: pw.TextStyle(fontSize: 8.5, color: _mutedColor),
+                style: pw.TextStyle(fontSize: 8.3, color: _mutedColor),
               ),
             ],
           ),
         ),
         build: (pw.Context context) {
           return <pw.Widget>[
-            _buildOverview(
-              date: date,
-              generatedAt: generatedAt,
+            _buildSummaryStrip(
               dayOrdersCount: report.dayOpenCount,
               openOrdersCount: report.totalOpenCount,
               carryOverOpenCount: report.carryOverOpenCount,
-            ),
-            pw.SizedBox(height: 16),
-            _buildMetricsGrid(
-              openOrdersCount: report.totalOpenCount,
               scheduledCount: report.scheduledCount,
               inProgressCount: report.inProgressCount,
               urgentCount: report.urgentCount,
               unassignedCount: report.unassignedCount,
               guestCount: guestCount,
             ),
-            pw.SizedBox(height: 18),
+            pw.SizedBox(height: 10),
+            _buildRouteSheetGuide(date: date, generatedAt: generatedAt),
+            pw.SizedBox(height: 10),
             if (openOrders.isEmpty) _buildEmptyState(),
-            if (carryOverOrders.isNotEmpty) ...<pw.Widget>[
-              _buildSectionTitle(
-                'Pendentes de dias anteriores',
-                'Ordens ainda abertas antes da data selecionada.',
-              ),
-              ...carryOverOrders.map(_buildOrderCard),
-              pw.SizedBox(height: 14),
-            ],
-            if (dayOpenOrders.isNotEmpty) ...<pw.Widget>[
-              _buildSectionTitle(
-                'Ordens abertas do dia',
-                'Relacao consolidada das ordens abertas registradas ou agendadas para a data selecionada.',
-              ),
-              ...dayOpenOrders.map(_buildOrderCard),
+            if (openOrders.isNotEmpty) _buildRouteSheetTable(openOrders, date),
+            if (openOrders.isNotEmpty) ...<pw.Widget>[
+              pw.SizedBox(height: 8),
+              _buildLegend(),
             ],
           ];
         },
@@ -214,7 +187,7 @@ final class DefaultMaintenanceDailyReportPdfExporter
     required DateTime generatedAt,
   }) {
     return pw.Container(
-      padding: const pw.EdgeInsets.only(bottom: 14),
+      padding: const pw.EdgeInsets.only(bottom: 12),
       decoration: pw.BoxDecoration(
         border: pw.Border(
           bottom: pw.BorderSide(color: _borderColor, width: 0.8),
@@ -226,7 +199,7 @@ final class DefaultMaintenanceDailyReportPdfExporter
           pw.Text(
             _hotelName,
             style: pw.TextStyle(
-              fontSize: 11,
+              fontSize: 10.5,
               fontWeight: pw.FontWeight.bold,
               color: _inkColor,
             ),
@@ -235,57 +208,14 @@ final class DefaultMaintenanceDailyReportPdfExporter
           pw.Text(
             _reportTitle,
             style: pw.TextStyle(
-              fontSize: 17,
+              fontSize: 15,
               fontWeight: pw.FontWeight.bold,
               color: _inkColor,
             ),
           ),
           pw.SizedBox(height: 3),
           pw.Text(
-            'Dia ${_formatDatePt(date)} • Emitido em ${_formatDateTimePt(generatedAt)}',
-            style: pw.TextStyle(fontSize: 9.5, color: _mutedColor),
-          ),
-        ],
-      ),
-    );
-  }
-
-  pw.Widget _buildOverview({
-    required DateTime date,
-    required DateTime generatedAt,
-    required int dayOrdersCount,
-    required int openOrdersCount,
-    required int carryOverOpenCount,
-  }) {
-    return pw.Container(
-      width: double.infinity,
-      padding: const pw.EdgeInsets.all(14),
-      decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: _borderColor, width: 0.7),
-      ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: <pw.Widget>[
-          pw.Text(
-            'Pantallazo ejecutivo',
-            style: pw.TextStyle(
-              fontSize: 12,
-              fontWeight: pw.FontWeight.bold,
-              color: _inkColor,
-            ),
-          ),
-          pw.SizedBox(height: 6),
-          pw.Text(
-            'Este reporte consolida las ordens abertas de manutencao de ${_formatDatePt(date)}. Abertas do dia: $dayOrdersCount. Pendentes operacionais: $openOrdersCount. Arrastre anterior: $carryOverOpenCount.',
-            style: pw.TextStyle(
-              fontSize: 9.5,
-              color: _mutedColor,
-              lineSpacing: 1.4,
-            ),
-          ),
-          pw.SizedBox(height: 6),
-          pw.Text(
-            'Gerado automaticamente em ${_formatDateTimePt(generatedAt)}.',
+            'Dia ${_formatDatePt(date)} | Emitido em ${_formatDateTimePt(generatedAt)}',
             style: pw.TextStyle(fontSize: 9, color: _mutedColor),
           ),
         ],
@@ -293,8 +223,10 @@ final class DefaultMaintenanceDailyReportPdfExporter
     );
   }
 
-  pw.Widget _buildMetricsGrid({
+  pw.Widget _buildSummaryStrip({
+    required int dayOrdersCount,
     required int openOrdersCount,
+    required int carryOverOpenCount,
     required int scheduledCount,
     required int inProgressCount,
     required int urgentCount,
@@ -302,162 +234,183 @@ final class DefaultMaintenanceDailyReportPdfExporter
     required int guestCount,
   }) {
     final List<MapEntry<String, String>> metrics = <MapEntry<String, String>>[
-      MapEntry<String, String>('Ordens abertas', '$openOrdersCount'),
+      MapEntry<String, String>('Abertas', '$openOrdersCount'),
+      MapEntry<String, String>('Do dia', '$dayOrdersCount'),
+      MapEntry<String, String>('Arrastre', '$carryOverOpenCount'),
       MapEntry<String, String>('Agendadas', '$scheduledCount'),
-      MapEntry<String, String>('Em andamento', '$inProgressCount'),
+      MapEntry<String, String>('Andamento', '$inProgressCount'),
       MapEntry<String, String>('Urgentes', '$urgentCount'),
-      MapEntry<String, String>('Sem prestador', '$unassignedCount'),
-      MapEntry<String, String>('Com hospede', '$guestCount'),
+      MapEntry<String, String>('Sem prest.', '$unassignedCount'),
+      MapEntry<String, String>('Hospede', '$guestCount'),
     ];
 
-    return pw.Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: metrics
-          .map(
-            (MapEntry<String, String> metric) => pw.Container(
-              width: 165,
-              padding: const pw.EdgeInsets.all(10),
-              decoration: pw.BoxDecoration(
-                border: pw.Border.all(color: _borderColor, width: 0.7),
-              ),
-              child: pw.Column(
-                crossAxisAlignment: pw.CrossAxisAlignment.start,
-                children: <pw.Widget>[
-                  pw.Text(
-                    metric.key,
-                    style: pw.TextStyle(fontSize: 8.5, color: _mutedColor),
-                  ),
-                  pw.SizedBox(height: 4),
-                  pw.Text(
-                    metric.value,
-                    style: pw.TextStyle(
-                      fontSize: 15,
-                      fontWeight: pw.FontWeight.bold,
-                      color: _inkColor,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          )
-          .toList(),
-    );
-  }
-
-  pw.Widget _buildSectionTitle(String title, String subtitle) {
-    return pw.Column(
-      crossAxisAlignment: pw.CrossAxisAlignment.start,
-      children: <pw.Widget>[
-        pw.Text(
-          title,
-          style: pw.TextStyle(
-            fontSize: 14,
-            fontWeight: pw.FontWeight.bold,
-            color: _inkColor,
-          ),
-        ),
-        pw.SizedBox(height: 4),
-        pw.Text(
-          subtitle,
-          style: pw.TextStyle(fontSize: 9.5, color: _mutedColor),
-        ),
-        pw.SizedBox(height: 10),
-      ],
-    );
-  }
-
-  pw.Widget _buildOrderCard(MaintenanceOrder order) {
     return pw.Container(
       width: double.infinity,
-      margin: const pw.EdgeInsets.only(bottom: 10),
-      padding: const pw.EdgeInsets.all(12),
+      padding: const pw.EdgeInsets.all(10),
       decoration: pw.BoxDecoration(
         border: pw.Border.all(color: _borderColor, width: 0.7),
       ),
-      child: pw.Column(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
-        children: <pw.Widget>[
-          pw.Row(
-            crossAxisAlignment: pw.CrossAxisAlignment.start,
-            children: <pw.Widget>[
-              pw.Expanded(
+      child: pw.Wrap(
+        spacing: 6,
+        runSpacing: 6,
+        children: metrics
+            .map(
+              (MapEntry<String, String> metric) => pw.Container(
+                width: 62,
+                padding: const pw.EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 5,
+                ),
+                decoration: pw.BoxDecoration(
+                  border: pw.Border.all(color: _borderColor, width: 0.6),
+                ),
                 child: pw.Column(
                   crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: <pw.Widget>[
                     pw.Text(
-                      order.title,
+                      metric.key,
+                      style: pw.TextStyle(fontSize: 7.2, color: _mutedColor),
+                    ),
+                    pw.SizedBox(height: 2),
+                    pw.Text(
+                      metric.value,
                       style: pw.TextStyle(
                         fontSize: 11.5,
                         fontWeight: pw.FontWeight.bold,
                         color: _inkColor,
                       ),
                     ),
-                    pw.SizedBox(height: 3),
-                    pw.Text(
-                      '${order.locationDisplayLabel} • ${order.providerLabel}',
-                      style: pw.TextStyle(fontSize: 9.2, color: _mutedColor),
-                    ),
                   ],
                 ),
               ),
-              pw.Container(
-                padding: const pw.EdgeInsets.symmetric(
-                  horizontal: 8,
-                  vertical: 4,
-                ),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: _borderColor, width: 0.6),
-                ),
-                child: pw.Text(
-                  order.status.label,
-                  style: pw.TextStyle(
-                    fontSize: 8.5,
-                    fontWeight: pw.FontWeight.bold,
-                    color: _inkColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          pw.SizedBox(height: 8),
-          pw.Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: <pw.Widget>[
-              _buildInlineTag('Servico: ${order.serviceLabel}'),
-              _buildInlineTag('Prioridade: ${order.priority.label}'),
-              _buildInlineTag('Operacao: ${order.businessPriority.label}'),
-              _buildInlineTag('Agenda: ${_scheduleLabel(order)}'),
-              if (order.assignedUsername != null &&
-                  order.assignedUsername!.trim().isNotEmpty)
-                _buildInlineTag('Atribuido a ${order.assignedUsername!}'),
-              if (order.guestLabel != null)
-                _buildInlineTag('Hospede: ${order.guestLabel!}'),
-            ],
-          ),
-          if (order.description != null && order.description!.trim().isNotEmpty)
-            pw.Padding(
-              padding: const pw.EdgeInsets.only(top: 8),
-              child: pw.Text(
-                order.description!.trim(),
-                style: pw.TextStyle(fontSize: 9, color: _mutedColor),
-              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  pw.Widget _buildRouteSheetGuide({
+    required DateTime date,
+    required DateTime generatedAt,
+  }) {
+    return pw.Container(
+      width: double.infinity,
+      padding: const pw.EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: _borderColor, width: 0.7),
+      ),
+      child: pw.Row(
+        crossAxisAlignment: pw.CrossAxisAlignment.start,
+        mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
+        children: <pw.Widget>[
+          pw.Expanded(
+            child: pw.Text(
+              'Hoja de ruta operativa para execucao rapida. Cada linha resume uma ordem com foco em faixa, local, tarefa e responsavel.',
+              style: pw.TextStyle(fontSize: 8.4, color: _mutedColor),
             ),
+          ),
+          pw.SizedBox(width: 12),
+          pw.Text(
+            'Corte ${_formatDatePt(date)} | ${_formatTime(generatedAt)}',
+            style: pw.TextStyle(fontSize: 8.2, color: _mutedColor),
+          ),
         ],
       ),
     );
   }
 
-  pw.Widget _buildInlineTag(String label) {
-    return pw.Container(
-      padding: const pw.EdgeInsets.symmetric(horizontal: 7, vertical: 4),
-      decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: _borderColor, width: 0.6),
-      ),
+  pw.Widget _buildRouteSheetTable(
+    List<MaintenanceOrder> orders,
+    DateTime selectedDate,
+  ) {
+    return pw.Table(
+      border: pw.TableBorder.all(color: _borderColor, width: 0.55),
+      columnWidths: <int, pw.TableColumnWidth>{
+        0: const pw.FixedColumnWidth(56),
+        1: const pw.FixedColumnWidth(118),
+        2: const pw.FlexColumnWidth(2.1),
+        3: const pw.FlexColumnWidth(1.45),
+        4: const pw.FlexColumnWidth(1.4),
+      },
+      children: <pw.TableRow>[
+        _buildTableHeaderRow(),
+        ...orders.map(
+          (MaintenanceOrder order) => _buildTableDataRow(
+            order: order,
+            selectedDate: selectedDate,
+          ),
+        ),
+      ],
+    );
+  }
+
+  pw.TableRow _buildTableHeaderRow() {
+    return pw.TableRow(
+      children: <pw.Widget>[
+        _buildTableCell('Bloco', bold: true, fontSize: 8),
+        _buildTableCell('Local', bold: true, fontSize: 8),
+        _buildTableCell('Tarefa', bold: true, fontSize: 8),
+        _buildTableCell('Execucao', bold: true, fontSize: 8),
+        _buildTableCell('Contexto', bold: true, fontSize: 8),
+      ],
+    );
+  }
+
+  pw.TableRow _buildTableDataRow({
+    required MaintenanceOrder order,
+    required DateTime selectedDate,
+  }) {
+    return pw.TableRow(
+      verticalAlignment: pw.TableCellVerticalAlignment.middle,
+      children: <pw.Widget>[
+        _buildTableCell(
+          _compactTimeBlock(order, selectedDate),
+          fontSize: 7.6,
+        ),
+        _buildTableCell(
+          _truncate(order.locationDisplayLabel, 34),
+          fontSize: 7.8,
+        ),
+        _buildTableCell(
+          _compactTaskLabel(order),
+          fontSize: 7.8,
+        ),
+        _buildTableCell(
+          _compactExecutionLabel(order),
+          fontSize: 7.6,
+        ),
+        _buildTableCell(
+          _compactContextLabel(order, selectedDate),
+          fontSize: 7.4,
+          color: _mutedColor,
+        ),
+      ],
+    );
+  }
+
+  pw.Widget _buildLegend() {
+    return pw.Text(
+      'Bloco: DIA = aberta do dia, ARR = pendencia anterior, PEND = sem faixa definida. Contexto resume status, prioridade, duracao e apoio de hospede quando existir.',
+      style: pw.TextStyle(fontSize: 7.8, color: _mutedColor),
+    );
+  }
+
+  pw.Widget _buildTableCell(
+    String text, {
+    bool bold = false,
+    double fontSize = 8,
+    PdfColor? color,
+  }) {
+    return pw.Padding(
+      padding: const pw.EdgeInsets.all(4.5),
       child: pw.Text(
-        label,
-        style: pw.TextStyle(fontSize: 8.3, color: _mutedColor),
+        text,
+        style: pw.TextStyle(
+          fontSize: fontSize,
+          fontWeight: bold ? pw.FontWeight.bold : pw.FontWeight.normal,
+          color: color ?? _inkColor,
+          lineSpacing: 1.2,
+        ),
       ),
     );
   }
@@ -477,12 +430,59 @@ final class DefaultMaintenanceDailyReportPdfExporter
   }
 }
 
-String _scheduleLabel(MaintenanceOrder order) {
-  if (order.scheduledStartAt == null || order.scheduledEndAt == null) {
-    return 'Sem agenda definida';
+String _compactTimeBlock(MaintenanceOrder order, DateTime selectedDate) {
+  final bool isCarryOver = !_isSameDate(order.referenceDate, selectedDate);
+  final String origin = isCarryOver ? 'ARR' : 'DIA';
+  if (order.scheduledStartAt != null && order.scheduledEndAt != null) {
+    return '$origin\n${_formatTime(order.scheduledStartAt!)}-${_formatTime(order.scheduledEndAt!)}';
   }
-  return '${_formatDateTimePt(order.scheduledStartAt!)} a ${_formatTime(order.scheduledEndAt!)}';
+  return '$origin\nPEND';
 }
+
+String _compactTaskLabel(MaintenanceOrder order) {
+  final String base = _truncate(order.title.trim(), 48);
+  final String? description = order.description == null
+      ? null
+      : _truncate(order.description!.trim(), 52);
+  if (description == null || description.isEmpty) {
+    return base;
+  }
+  return '$base\n$description';
+}
+
+String _compactExecutionLabel(MaintenanceOrder order) {
+  final List<String> lines = <String>[
+    _truncate(order.providerLabel, 28),
+    _truncate(order.serviceLabel, 28),
+  ];
+  if (order.assignedUsername != null && order.assignedUsername!.trim().isNotEmpty) {
+    lines.add('Resp. ${_truncate(order.assignedUsername!.trim(), 22)}');
+  }
+  return lines.join('\n');
+}
+
+String _compactContextLabel(MaintenanceOrder order, DateTime selectedDate) {
+  final List<String> parts = <String>[
+    order.status.label,
+    order.priority.label,
+    if (order.estimatedExecutionMinutes != null)
+      '${order.estimatedExecutionMinutes} min',
+    if (!_isSameDate(order.referenceDate, selectedDate))
+      'Desde ${_formatDatePt(order.referenceDate)}',
+  ];
+
+  final String source = order.guestLabel != null
+      ? 'Hospede ${_truncate(order.guestLabel!, 24)}'
+      : order.requestedByRole != null && order.requestedByRole!.trim().isNotEmpty
+      ? 'Origem ${_truncate(order.requestedByRole!.trim(), 20)}'
+      : order.requestOrigin.label;
+  parts.add(source);
+
+  return _truncate(parts.join(' | '), 70);
+}
+
+bool _isSameDate(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
 
 String _formatDateIso(DateTime value) =>
     '${value.year.toString().padLeft(4, '0')}-${value.month.toString().padLeft(2, '0')}-${value.day.toString().padLeft(2, '0')}';
@@ -495,3 +495,14 @@ String _formatDateTimePt(DateTime value) =>
 
 String _formatTime(DateTime value) =>
     '${value.hour.toString().padLeft(2, '0')}:${value.minute.toString().padLeft(2, '0')}';
+
+String _truncate(String value, int maxLength) {
+  final String normalized = value.trim().replaceAll(RegExp(r'\s+'), ' ');
+  if (normalized.length <= maxLength) {
+    return normalized;
+  }
+  if (maxLength <= 1) {
+    return normalized.substring(0, maxLength);
+  }
+  return '${normalized.substring(0, maxLength - 1)}...';
+}

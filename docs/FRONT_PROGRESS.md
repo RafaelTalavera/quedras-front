@@ -73,6 +73,18 @@
   - panel `Dia selecionado`
 - Documento de detalle: `docs/MASSAGES_SUMMARY_REPORT_PLAN.md`.
 
+## Actualizacion Manutencao - PDF operativo
+- Fecha: 2026-05-25
+- El PDF diario de ordens abertas de `Manutencao` ya fue reconvertido a formato hoja de ruta.
+- La salida deja de priorizar bloques narrativos y pasa a una tabla compacta con:
+  - bloque horario o pendiente
+  - local operativo
+  - tarea resumida
+  - prestador / servicio / responsable
+  - contexto minimo para ejecucion
+- Objetivo operativo cubierto: entregar al equipo de manutencao un resumen mas legible y mas probable de entrar en una hoja A4.
+- Validacion ejecutada en esta fase: `flutter analyze lib/features/maintenance/application/maintenance_daily_report_pdf_exporter.dart`.
+
 ## Pendientes inmediatos frontend
 - Adaptar en web los flujos de exportacion PDF, archivos temporales y descargas para `Massagens`, `Quadras` y `Manutencao`.
 - Validar funcionalmente el despliegue web contra backend real con mismo origen o CORS habilitado.

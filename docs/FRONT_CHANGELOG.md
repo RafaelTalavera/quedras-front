@@ -715,3 +715,12 @@
   - `README.md`
 - Motivo del cambio: Alinear el dialogo de prestadores a un flujo sin preseleccion, con resumen previo, tarjetas compactas, filtro por nombre y leyenda visual explicita para activacion.
 - Impacto funcional: El operador ahora entra al dialogo en estado neutro, puede encontrar prestadores por coincidencia parcial de nombre y ve el estado `ON/OFF` del prestador de forma textual y consistente; el patron queda documentado para futuras implementaciones del proyecto.
+
+## 2026-05-25 | Post Hito 12 | PDF operativo de manutencao en formato hoja de ruta
+- Componente afectado: Frontend (`Manutencao` exportacion PDF)
+- Archivos tocados:
+  - `lib/features/maintenance/application/maintenance_daily_report_pdf_exporter.dart`
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Reconvertir el PDF diario de ordens abertas desde un resumen ejecutivo con tarjetas extensas hacia una hoja de ruta entregable al personal de manutencao.
+- Impacto funcional: El PDF ahora prioriza una sola tabla compacta por orden con bloque horario, local, tarea, ejecucion y contexto, reduciendo texto narrativo y mejorando la lectura en campo para jornadas operativas.
