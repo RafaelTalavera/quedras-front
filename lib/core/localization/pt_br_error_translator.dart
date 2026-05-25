@@ -31,6 +31,28 @@ final class PtBrErrorTranslator {
         return 'Token de acesso inv\u00e1lido.';
       case 'Authentication is required to access this resource.':
         return 'Autentica\u00e7\u00e3o necess\u00e1ria para acessar este recurso.';
+      case 'The current role is not allowed to access this resource.':
+        return 'Seu perfil atual nao possui permissao para acessar este recurso.';
+      case 'A user with that username already exists.':
+        return 'Ja existe um usuario com esse nome de acesso.';
+      case 'Current password is invalid.':
+        return 'A senha atual informada nao confere.';
+      case 'New password must be different from the current password.':
+        return 'A nova senha precisa ser diferente da senha atual.';
+      case 'At least one enabled supervisor must remain in the system.':
+        return 'O sistema precisa manter pelo menos um supervisor ativo.';
+      case 'You cannot disable your own account.':
+        return 'Nao e permitido bloquear a propria conta.';
+      case 'You cannot change your own role.':
+        return 'Nao e permitido alterar o proprio perfil por esta tela.';
+      case 'User not found.':
+        return 'Usuario nao encontrado.';
+      case 'password is required':
+        return 'Informe a senha.';
+      case 'password must be at least 12 characters long':
+        return 'A senha deve ter no minimo 12 caracteres.';
+      case 'password must be <= 72 UTF-8 bytes':
+        return 'A senha excede o tamanho maximo suportado.';
       case 'Completed reservations cannot be cancelled.':
         return 'Reservas conclu\u00eddas n\u00e3o podem ser canceladas.';
       case 'Cancelled reservations cannot be edited.':

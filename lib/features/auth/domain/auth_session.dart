@@ -15,6 +15,10 @@ final class AuthSession {
 
   String get authorizationHeader => '$tokenType $accessToken';
 
+  bool get isSupervisor => role.trim().toUpperCase() == 'SUPERVISOR';
+
+  bool get isOperator => role.trim().toUpperCase() == 'OPERATOR';
+
   factory AuthSession.fromJson(Map<String, dynamic> json) {
     final String accessToken = json['accessToken']?.toString().trim() ?? '';
     final String tokenType = json['tokenType']?.toString().trim() ?? 'Bearer';

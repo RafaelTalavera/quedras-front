@@ -44,4 +44,26 @@ final class AppRoutes {
         return settings;
     }
   }
+
+  static List<AppSection> sectionsForRole(String role) {
+    final String normalizedRole = role.trim().toUpperCase();
+    if (normalizedRole == 'SUPERVISOR') {
+      return const <AppSection>[AppSection.settings];
+    }
+    return const <AppSection>[
+      AppSection.tennisRental,
+      AppSection.massageBooking,
+      AppSection.toursTravel,
+      AppSection.maintenance,
+      AppSection.settings,
+    ];
+  }
+
+  static bool canAccessSection(String role, AppSection section) {
+    return sectionsForRole(role).contains(section);
+  }
+
+  static String defaultRouteForRole(String role) {
+    return routeBySection(sectionsForRole(role).first);
+  }
 }

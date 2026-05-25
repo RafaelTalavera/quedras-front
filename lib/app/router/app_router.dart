@@ -8,6 +8,7 @@ import '../../features/home/presentation/shell_page.dart';
 import '../../features/massages/application/massage_app_service.dart';
 import '../../features/maintenance/application/maintenance_app_service.dart';
 import '../../features/reservations/application/reservation_app_service.dart';
+import '../../features/settings/application/user_management_app_service.dart';
 import '../../features/tours/application/tours_app_service.dart';
 import '../../core/sync/schedule_sync_service.dart';
 import 'app_routes.dart';
@@ -22,6 +23,7 @@ final class AppRouter {
     required CourtAppService courtAppService,
     required ToursAppService toursAppService,
     required MaintenanceAppService maintenanceAppService,
+    required UserManagementAppService userManagementAppService,
     required ScheduleSyncService scheduleSyncService,
   }) {
     final String routeName = settings.name ?? AppRoutes.login;
@@ -35,10 +37,17 @@ final class AppRouter {
       );
     }
 
-    final String resolvedRoute = routeName == AppRoutes.login
-        ? AppRoutes.tennisRental
+    final String sessionRole = sessionController.session?.role ?? 'OPERATOR';
+    final String requestedRoute = routeName == AppRoutes.login
+        ? AppRoutes.defaultRouteForRole(sessionRole)
         : routeName;
-    final AppSection section = AppRoutes.sectionByRoute(resolvedRoute);
+    final AppSection requestedSection = AppRoutes.sectionByRoute(requestedRoute);
+    final AppSection section = AppRoutes.canAccessSection(
+      sessionRole,
+      requestedSection,
+    )
+        ? requestedSection
+        : AppRoutes.sectionsForRole(sessionRole).first;
 
     return MaterialPageRoute<void>(
       builder: (_) => ShellPage(
@@ -49,9 +58,10 @@ final class AppRouter {
         courtAppService: courtAppService,
         toursAppService: toursAppService,
         maintenanceAppService: maintenanceAppService,
+        userManagementAppService: userManagementAppService,
         scheduleSyncService: scheduleSyncService,
       ),
-      settings: settings,
+      settings: RouteSettings(name: AppRoutes.routeBySection(section)),
     );
   }
 }

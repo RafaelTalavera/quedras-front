@@ -14,6 +14,7 @@ import '../../massages/presentation/massage_booking_page.dart';
 import '../../maintenance/application/maintenance_app_service.dart';
 import 'package:costanorte/features/maintenance/presentation/maintenance_page.dart';
 import '../../reservations/application/reservation_app_service.dart';
+import '../../settings/application/user_management_app_service.dart';
 import '../../settings/presentation/settings_page.dart';
 import '../../tennis/presentation/tennis_rental_page.dart';
 import '../../tours/application/tours_app_service.dart';
@@ -32,6 +33,7 @@ class ShellPage extends StatefulWidget {
     required this.courtAppService,
     required this.toursAppService,
     required this.maintenanceAppService,
+    required this.userManagementAppService,
     required this.scheduleSyncService,
     super.key,
   });
@@ -43,6 +45,7 @@ class ShellPage extends StatefulWidget {
   final CourtAppService courtAppService;
   final ToursAppService toursAppService;
   final MaintenanceAppService maintenanceAppService;
+  final UserManagementAppService userManagementAppService;
   final ScheduleSyncService scheduleSyncService;
 
   @override
@@ -67,7 +70,7 @@ class _ShellPageState extends State<ShellPage> {
   @override
   void initState() {
     super.initState();
-    _selectedSection = widget.section;
+    _selectedSection = _resolveAllowedSection(widget.section);
     _massageBookingPageController = MassageBookingPageController();
     _tennisRentalPageController = TennisRentalPageController();
     _toursTravelPageController = ToursTravelPageController();
@@ -84,8 +87,9 @@ class _ShellPageState extends State<ShellPage> {
       widget.sessionController.addListener(_handleSessionChanged);
     }
     if (oldWidget.section != widget.section) {
-      _ensureSectionLoaded(widget.section);
-      _selectedSection = widget.section;
+      final AppSection nextSection = _resolveAllowedSection(widget.section);
+      _ensureSectionLoaded(nextSection);
+      _selectedSection = nextSection;
     }
   }
 
@@ -146,6 +150,7 @@ class _ShellPageState extends State<ShellPage> {
                   ? _CompactShell(
                       section: _selectedSection,
                       session: session,
+                      availableSections: _availableSections,
                       onSectionSelected: _goToSection,
                       massageSection: _selectedMassageSection,
                       onMassageSectionSelected: _goToMassageSection,
@@ -162,6 +167,7 @@ class _ShellPageState extends State<ShellPage> {
                   : _DesktopShell(
                       section: _selectedSection,
                       session: session,
+                      availableSections: _availableSections,
                       onSectionSelected: _goToSection,
                       massageSection: _selectedMassageSection,
                       onMassageSectionSelected: _goToMassageSection,
@@ -227,7 +233,11 @@ class _ShellPageState extends State<ShellPage> {
         );
       case AppSection.settings:
         return SingleChildScrollView(
-          child: SettingsPage(session: widget.sessionController.session),
+          child: SettingsPage(
+            session: widget.sessionController.session,
+            sessionController: widget.sessionController,
+            userManagementAppService: widget.userManagementAppService,
+          ),
         );
     }
   }
@@ -237,7 +247,7 @@ class _ShellPageState extends State<ShellPage> {
   }
 
   void _goToSection(AppSection section) {
-    if (_selectedSection == section) {
+    if (_selectedSection == section || !_availableSections.contains(section)) {
       return;
     }
 
@@ -375,12 +385,25 @@ class _ShellPageState extends State<ShellPage> {
       context,
     ).pushNamedAndRemoveUntil(AppRoutes.login, (_) => false);
   }
+
+  List<AppSection> get _availableSections {
+    final String role = widget.sessionController.session?.role ?? 'OPERATOR';
+    return AppRoutes.sectionsForRole(role);
+  }
+
+  AppSection _resolveAllowedSection(AppSection section) {
+    if (_availableSections.contains(section)) {
+      return section;
+    }
+    return _availableSections.first;
+  }
 }
 
 class _DesktopShell extends StatelessWidget {
   const _DesktopShell({
     required this.section,
     required this.session,
+    required this.availableSections,
     required this.onSectionSelected,
     required this.massageSection,
     required this.onMassageSectionSelected,
@@ -397,6 +420,7 @@ class _DesktopShell extends StatelessWidget {
 
   final AppSection section;
   final AuthSession? session;
+  final List<AppSection> availableSections;
   final ValueChanged<AppSection> onSectionSelected;
   final MassageBookingSection massageSection;
   final ValueChanged<MassageBookingSection> onMassageSectionSelected;
@@ -421,6 +445,7 @@ class _DesktopShell extends StatelessWidget {
             child: _NavigationPanel(
               section: section,
               session: session,
+              availableSections: availableSections,
               onSectionSelected: onSectionSelected,
               massageSection: massageSection,
               onMassageSectionSelected: onMassageSectionSelected,
@@ -451,6 +476,7 @@ class _CompactShell extends StatelessWidget {
   const _CompactShell({
     required this.section,
     required this.session,
+    required this.availableSections,
     required this.onSectionSelected,
     required this.massageSection,
     required this.onMassageSectionSelected,
@@ -467,6 +493,7 @@ class _CompactShell extends StatelessWidget {
 
   final AppSection section;
   final AuthSession? session;
+  final List<AppSection> availableSections;
   final ValueChanged<AppSection> onSectionSelected;
   final MassageBookingSection massageSection;
   final ValueChanged<MassageBookingSection> onMassageSectionSelected;
@@ -489,6 +516,7 @@ class _CompactShell extends StatelessWidget {
           _CompactTopBar(
             section: section,
             session: session,
+            availableSections: availableSections,
             onSectionSelected: onSectionSelected,
             massageSection: massageSection,
             onMassageSectionSelected: onMassageSectionSelected,
@@ -553,6 +581,7 @@ class _NavigationPanel extends StatelessWidget {
   const _NavigationPanel({
     required this.section,
     required this.session,
+    required this.availableSections,
     required this.onSectionSelected,
     required this.massageSection,
     required this.onMassageSectionSelected,
@@ -568,6 +597,7 @@ class _NavigationPanel extends StatelessWidget {
 
   final AppSection section;
   final AuthSession? session;
+  final List<AppSection> availableSections;
   final ValueChanged<AppSection> onSectionSelected;
   final MassageBookingSection massageSection;
   final ValueChanged<MassageBookingSection> onMassageSectionSelected;
@@ -666,6 +696,7 @@ class _NavigationPanel extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 18),
                 child: _DesktopSectionList(
                   section: section,
+                  availableSections: availableSections,
                   onSectionSelected: onSectionSelected,
                 ),
               ),
@@ -691,20 +722,22 @@ class _NavigationPanel extends StatelessWidget {
 class _DesktopSectionList extends StatelessWidget {
   const _DesktopSectionList({
     required this.section,
+    required this.availableSections,
     required this.onSectionSelected,
   });
 
   final AppSection section;
+  final List<AppSection> availableSections;
   final ValueChanged<AppSection> onSectionSelected;
 
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
       padding: const EdgeInsets.only(top: 6, bottom: 8),
-      itemCount: AppSection.values.length,
+      itemCount: availableSections.length,
       separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (BuildContext context, int index) {
-        final AppSection item = AppSection.values[index];
+        final AppSection item = availableSections[index];
         final bool selected = item == section;
         return _DesktopSectionButton(
           label: _labelForSection(item),
@@ -795,6 +828,7 @@ class _CompactTopBar extends StatelessWidget {
   const _CompactTopBar({
     required this.section,
     required this.session,
+    required this.availableSections,
     required this.onSectionSelected,
     required this.massageSection,
     required this.onMassageSectionSelected,
@@ -810,6 +844,7 @@ class _CompactTopBar extends StatelessWidget {
 
   final AppSection section;
   final AuthSession? session;
+  final List<AppSection> availableSections;
   final ValueChanged<AppSection> onSectionSelected;
   final MassageBookingSection massageSection;
   final ValueChanged<MassageBookingSection> onMassageSectionSelected;
@@ -845,7 +880,7 @@ class _CompactTopBar extends StatelessWidget {
           Wrap(
             spacing: 8,
             runSpacing: 8,
-            children: AppSection.values.map((AppSection item) {
+            children: availableSections.map((AppSection item) {
               final bool selected = item == section;
               return ChoiceChip(
                 label: Text(_labelForSection(item)),

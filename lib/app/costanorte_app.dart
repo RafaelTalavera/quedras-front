@@ -17,6 +17,8 @@ import '../features/maintenance/application/maintenance_app_service.dart';
 import '../features/maintenance/infrastructure/http_maintenance_app_service.dart';
 import '../features/reservations/application/reservation_app_service.dart';
 import '../features/reservations/infrastructure/http_reservation_app_service.dart';
+import '../features/settings/application/user_management_app_service.dart';
+import '../features/settings/infrastructure/http_user_management_app_service.dart';
 import '../features/tours/application/tours_app_service.dart';
 import '../features/tours/infrastructure/http_tours_app_service.dart';
 import 'router/app_router.dart';
@@ -33,6 +35,7 @@ class CostaNorteApp extends StatefulWidget {
     CourtAppService? courtAppService,
     ToursAppService? toursAppService,
     MaintenanceAppService? maintenanceAppService,
+    UserManagementAppService? userManagementAppService,
   }) : _apiClient = apiClient,
        _authAppService = authAppService,
        _sessionController = sessionController,
@@ -40,7 +43,8 @@ class CostaNorteApp extends StatefulWidget {
        _reservationAppService = reservationAppService,
        _courtAppService = courtAppService,
        _toursAppService = toursAppService,
-       _maintenanceAppService = maintenanceAppService;
+       _maintenanceAppService = maintenanceAppService,
+       _userManagementAppService = userManagementAppService;
 
   final ApiClient? _apiClient;
   final AuthAppService? _authAppService;
@@ -50,6 +54,7 @@ class CostaNorteApp extends StatefulWidget {
   final CourtAppService? _courtAppService;
   final ToursAppService? _toursAppService;
   final MaintenanceAppService? _maintenanceAppService;
+  final UserManagementAppService? _userManagementAppService;
 
   @override
   State<CostaNorteApp> createState() => _CostaNorteAppState();
@@ -65,6 +70,7 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
   late final CourtAppService _courtAppService;
   late final ToursAppService _toursAppService;
   late final MaintenanceAppService _maintenanceAppService;
+  late final UserManagementAppService _userManagementAppService;
   late final ScheduleSyncService _scheduleSyncService;
 
   @override
@@ -100,6 +106,9 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
     _maintenanceAppService =
         widget._maintenanceAppService ??
         HttpMaintenanceAppService(apiClient: _authorizedApiClient);
+    _userManagementAppService =
+        widget._userManagementAppService ??
+        HttpUserManagementAppService(apiClient: _authorizedApiClient);
     _sessionController.addListener(_handleSessionChanged);
     _handleSessionChanged();
   }
@@ -135,6 +144,7 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
         courtAppService: _courtAppService,
         toursAppService: _toursAppService,
         maintenanceAppService: _maintenanceAppService,
+        userManagementAppService: _userManagementAppService,
         scheduleSyncService: _scheduleSyncService,
       ),
     );
