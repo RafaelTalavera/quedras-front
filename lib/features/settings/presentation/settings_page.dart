@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/theme/costa_norte_brand.dart';
@@ -6,6 +7,19 @@ import '../../auth/application/session_controller.dart';
 import '../../auth/domain/auth_session.dart';
 import '../application/user_management_app_service.dart';
 import '../domain/user_management_models.dart';
+
+String? _validatePasswordLength(String? value) {
+  final String normalized = value?.trim() ?? '';
+  if (normalized.length < 6 || normalized.length > 15) {
+    return 'A senha deve ter entre 6 e 15 caracteres.';
+  }
+  return null;
+}
+
+List<TextInputFormatter> get _passwordFormatters =>
+    <TextInputFormatter>[
+      LengthLimitingTextInputFormatter(15),
+    ];
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -26,9 +40,10 @@ class SettingsPage extends StatefulWidget {
 class _SettingsPageState extends State<SettingsPage> {
   bool _loadingUsers = false;
   List<ManagedUser> _users = const <ManagedUser>[];
+  final TextEditingController _userSearchController = TextEditingController();
+  String _userSearchQuery = '';
 
   bool get _isSupervisor => widget.session?.isSupervisor ?? false;
-  String get _roleLabel => _isSupervisor ? 'Supervisor' : 'Operador';
 
   @override
   void initState() {
@@ -39,12 +54,14 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   @override
+  void dispose() {
+    _userSearchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
-    final int enabledUsers =
-        _users.where((ManagedUser user) => user.enabled).length;
-    final double width = MediaQuery.of(context).size.width;
-    final bool stackedLayout = width < 980;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -53,199 +70,91 @@ class _SettingsPageState extends State<SettingsPage> {
         const SizedBox(height: 8),
         Text(
           _isSupervisor
-              ? 'Painel administrativo para identidade, politica de acesso e gestao de usuarios.'
-              : 'Painel pessoal de identidade e seguranca da sessao ativa.',
+              ? 'Painel administrativo para seguranca da conta e gestao de usuarios.'
+              : 'Painel pessoal de seguranca da sessao ativa.',
           style: textTheme.bodyLarge,
         ),
-        const SizedBox(height: 24),
-        stackedLayout
-            ? Column(
-                children: <Widget>[
-                  _buildProfilePanel(context, enabledUsers: enabledUsers),
-                  const SizedBox(height: 18),
-                  _buildPolicyPanel(context, enabledUsers: enabledUsers),
-                ],
-              )
-            : Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Expanded(
-                    child: _buildProfilePanel(
-                      context,
-                      enabledUsers: enabledUsers,
-                    ),
-                  ),
-                  const SizedBox(width: 18),
-                  Expanded(
-                    child: _buildPolicyPanel(
-                      context,
-                      enabledUsers: enabledUsers,
-                    ),
-                  ),
-                ],
-              ),
         if (_isSupervisor) ...<Widget>[
-          const SizedBox(height: 24),
-          _buildUserSummaryStrip(context, enabledUsers: enabledUsers),
-        ],
-        const SizedBox(height: 24),
-        _buildSecurityPanel(context),
-        if (_isSupervisor) ...<Widget>[
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
+          _buildSupervisorTopSection(context),
+          const SizedBox(height: 20),
           _buildUserManagementPanel(context),
+        ] else ...<Widget>[
+          const SizedBox(height: 20),
+          _buildSecurityPanel(context),
         ],
       ],
     );
   }
 
-  Widget _buildProfilePanel(
-    BuildContext context, {
-    required int enabledUsers,
-  }) {
-    final String username = widget.session?.username ?? 'Sessao interna';
+  Widget _buildSupervisorTopSection(BuildContext context) {
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool stacked = constraints.maxWidth < 1080;
+        if (stacked) {
+          return Column(
+            children: <Widget>[
+              _buildSecurityPanel(context),
+              const SizedBox(height: 16),
+              _buildUserSearchPanel(context),
+            ],
+          );
+        }
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
+        return Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            _PanelHeader(
-              icon: Icons.badge_outlined,
-              title: 'Perfil',
-              subtitle:
-                  'Identidade autenticada e escopo atual de permissao neste dispositivo.',
-            ),
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 12,
-              runSpacing: 12,
-              children: <Widget>[
-                _MetricTile(
-                  icon: Icons.account_circle_outlined,
-                  label: 'Usuario',
-                  value: username,
-                  accent: CostaNorteBrand.foam,
-                ),
-                _MetricTile(
-                  icon: Icons.admin_panel_settings_outlined,
-                  label: 'Perfil',
-                  value: _roleLabel,
-                  accent: CostaNorteBrand.mist,
-                ),
-                _MetricTile(
-                  icon: Icons.verified_user_outlined,
-                  label: 'Estado',
-                  value: 'Sessao ativa',
-                  accent: CostaNorteBrand.mint,
-                ),
-                _MetricTile(
-                  icon: Icons.group_outlined,
-                  label: 'Usuarios ativos',
-                  value: _isSupervisor ? '$enabledUsers de ${_users.length}' : 'Nao disponivel',
-                  accent: CostaNorteBrand.sand,
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
-            _NarrativeRow(
-              icon: Icons.assignment_ind_outlined,
-              title: 'Alcance do acesso',
-              message: _isSupervisor
-                  ? 'Pode administrar usuarios, perfis, bloqueios e redefinicoes de senha.'
-                  : 'Pode operar os modulos de negocio, sem administrar credenciais de terceiros.',
-            ),
+            Expanded(flex: 5, child: _buildSecurityPanel(context)),
+            const SizedBox(width: 16),
+            Expanded(flex: 4, child: _buildUserSearchPanel(context)),
           ],
-        ),
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildPolicyPanel(
-    BuildContext context, {
-    required int enabledUsers,
-  }) {
+  Widget _buildUserSearchPanel(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            const _PanelHeader(
-              icon: Icons.policy_outlined,
-              title: 'Politica',
-              subtitle:
-                  'Regras efetivas de autenticacao, autorizacao e invalidez de sessao.',
+            Text(
+              'Buscar usuarios',
+              style: Theme.of(context).textTheme.titleLarge,
             ),
-            const SizedBox(height: 18),
-            const _PolicyRule(
-              icon: Icons.password_rounded,
-              title: 'Senha minima',
-              message: 'Credenciais exigem ao menos 12 caracteres.',
+            const SizedBox(height: 4),
+            Text(
+              'Filtre a lista abaixo pelo nome da conta.',
+              style: Theme.of(context).textTheme.bodyMedium,
             ),
             const SizedBox(height: 12),
-            const _PolicyRule(
-              icon: Icons.vpn_key_outlined,
-              title: 'Revogacao de token',
-              message:
-                  'Trocas de senha, alteracoes de perfil e bloqueios invalidam JWT emitidos antes da mudanca.',
-            ),
-            const SizedBox(height: 12),
-            _PolicyRule(
-              icon: Icons.gavel_outlined,
-              title: 'Controle por papel',
-              message: _isSupervisor
-                  ? 'Seu papel atual libera a administracao de usuarios e politicas operacionais.'
-                  : 'Seu papel atual nao libera administracao de usuarios nem redefinicao de contas de terceiros.',
-            ),
-            const SizedBox(height: 12),
-            _PolicyRule(
-              icon: Icons.shield_outlined,
-              title: 'Governanca minima',
-              message: _isSupervisor
-                  ? 'O sistema preserva ao menos um supervisor ativo para evitar perda total de administracao.'
-                  : 'A governanca de usuarios fica restrita ao supervisor habilitado no backend.',
+            TextField(
+              controller: _userSearchController,
+              onChanged: (String value) {
+                setState(() => _userSearchQuery = value.trim());
+              },
+              decoration: InputDecoration(
+                hintText: 'Buscar por nome de usuario',
+                prefixIcon: const Icon(Icons.search_rounded),
+                suffixIcon: _userSearchQuery.isEmpty
+                    ? null
+                    : IconButton(
+                        onPressed: () {
+                          _userSearchController.clear();
+                          setState(() => _userSearchQuery = '');
+                        },
+                        icon: const Icon(Icons.close_rounded),
+                        tooltip: 'Limpar busca',
+                      ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildUserSummaryStrip(
-    BuildContext context, {
-    required int enabledUsers,
-  }) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(22),
-        gradient: LinearGradient(
-          colors: <Color>[
-            CostaNorteBrand.royalBlueDeep,
-            CostaNorteBrand.royalBlue,
-          ],
-        ),
-      ),
-      child: Wrap(
-        spacing: 20,
-        runSpacing: 12,
-        crossAxisAlignment: WrapCrossAlignment.center,
-        children: <Widget>[
-          const _SummaryChip(
-            icon: Icons.manage_accounts_outlined,
-            label: 'Administracao habilitada',
-          ),
-          _SummaryChip(
-            icon: Icons.group_outlined,
-            label: '$enabledUsers usuarios ativos',
-          ),
-          _SummaryChip(
-            icon: Icons.lock_person_outlined,
-            label: '${_users.length - enabledUsers} bloqueados',
-          ),
-        ],
       ),
     );
   }
@@ -253,7 +162,7 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget _buildSecurityPanel(BuildContext context) {
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -263,14 +172,14 @@ class _SettingsPageState extends State<SettingsPage> {
               subtitle:
                   'Troca de senha da conta autenticada com encerramento da sessao atual ao concluir.',
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 6),
             const _PolicyRule(
               icon: Icons.logout_rounded,
               title: 'Encerramento imediato',
               message:
                   'Depois da alteracao, a sessao ativa perde validade e exige novo login.',
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 14),
             FilledButton.icon(
               onPressed: _showChangeOwnPasswordDialog,
               icon: const Icon(Icons.password_rounded),
@@ -283,9 +192,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildUserManagementPanel(BuildContext context) {
+    final List<ManagedUser> filteredUsers = _filteredUsers;
+
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(18),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -312,7 +223,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             if (_loadingUsers)
               const Center(
                 child: Padding(
@@ -322,9 +233,11 @@ class _SettingsPageState extends State<SettingsPage> {
               )
             else if (_users.isEmpty)
               const Text('Nenhum usuario disponivel no backend configurado.')
+            else if (filteredUsers.isEmpty)
+              Text('Nenhum usuario encontrado para "$_userSearchQuery".')
             else
               Column(
-                children: _users
+                children: filteredUsers
                     .map(
                       (ManagedUser user) => _UserAccessCard(
                         user: user,
@@ -339,6 +252,19 @@ class _SettingsPageState extends State<SettingsPage> {
         ),
       ),
     );
+  }
+
+  List<ManagedUser> get _filteredUsers {
+    final String query = _userSearchQuery.toLowerCase();
+    if (query.isEmpty) {
+      return _users;
+    }
+
+    return _users
+        .where(
+          (ManagedUser user) => user.username.toLowerCase().contains(query),
+        )
+        .toList(growable: false);
   }
 
   Future<void> _loadUsers() async {
@@ -482,9 +408,10 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _showChangeOwnPasswordDialog() async {
     final _ChangeOwnPasswordDraft? draft =
         await showDialog<_ChangeOwnPasswordDraft>(
-      context: context,
-      builder: (BuildContext dialogContext) => const _ChangeOwnPasswordDialog(),
-    );
+          context: context,
+          builder: (BuildContext dialogContext) =>
+              const _ChangeOwnPasswordDialog(),
+        );
     if (draft == null) {
       return;
     }
@@ -560,51 +487,6 @@ class _PanelHeader extends StatelessWidget {
   }
 }
 
-class _MetricTile extends StatelessWidget {
-  const _MetricTile({
-    required this.icon,
-    required this.label,
-    required this.value,
-    required this.accent,
-  });
-
-  final IconData icon;
-  final String label;
-  final String value;
-  final Color accent;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 220,
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: accent,
-        border: Border.all(color: CostaNorteBrand.line),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(icon, color: CostaNorteBrand.royalBlueDeep),
-          const SizedBox(height: 12),
-          Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(color: CostaNorteBrand.mutedInk),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.titleMedium,
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _PolicyRule extends StatelessWidget {
   const _PolicyRule({
     required this.icon,
@@ -641,80 +523,6 @@ class _PolicyRule extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _NarrativeRow extends StatelessWidget {
-  const _NarrativeRow({
-    required this.icon,
-    required this.title,
-    required this.message,
-  });
-
-  final IconData icon;
-  final String title;
-  final String message;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(18),
-        color: Colors.white,
-        border: Border.all(color: CostaNorteBrand.line),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: <Widget>[
-          Icon(icon, color: CostaNorteBrand.goldDeep),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[
-                Text(title, style: Theme.of(context).textTheme.titleMedium),
-                const SizedBox(height: 4),
-                Text(message, style: Theme.of(context).textTheme.bodyMedium),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SummaryChip extends StatelessWidget {
-  const _SummaryChip({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(999),
-        color: Colors.white.withValues(alpha: 0.12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.16)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(icon, size: 18, color: Colors.white),
-          const SizedBox(width: 8),
-          Text(
-            label,
-            style: Theme.of(
-              context,
-            ).textTheme.labelLarge?.copyWith(color: Colors.white),
-          ),
-        ],
-      ),
     );
   }
 }
@@ -822,9 +630,9 @@ class _StatusPill extends StatelessWidget {
       ),
       child: Text(
         label,
-        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: foreground,
-        ),
+        style: Theme.of(
+          context,
+        ).textTheme.labelMedium?.copyWith(color: foreground),
       ),
     );
   }
@@ -902,7 +710,8 @@ class _CreateUserDialogState extends State<_CreateUserDialog> {
               TextFormField(
                 controller: _usernameController,
                 decoration: const InputDecoration(labelText: 'Usuario'),
-                validator: (String? value) => (value == null || value.trim().isEmpty)
+                validator: (String? value) =>
+                    (value == null || value.trim().isEmpty)
                     ? 'Informe o usuario.'
                     : null,
               ),
@@ -911,9 +720,8 @@ class _CreateUserDialogState extends State<_CreateUserDialog> {
                 controller: _passwordController,
                 obscureText: true,
                 decoration: const InputDecoration(labelText: 'Senha inicial'),
-                validator: (String? value) => (value == null || value.length < 12)
-                    ? 'A senha deve ter ao menos 12 caracteres.'
-                    : null,
+                inputFormatters: _passwordFormatters,
+                validator: _validatePasswordLength,
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<ManagedUserRole>(
@@ -921,10 +729,11 @@ class _CreateUserDialogState extends State<_CreateUserDialog> {
                 decoration: const InputDecoration(labelText: 'Perfil'),
                 items: ManagedUserRole.values
                     .map(
-                      (ManagedUserRole role) => DropdownMenuItem<ManagedUserRole>(
-                        value: role,
-                        child: Text(role.label),
-                      ),
+                      (ManagedUserRole role) =>
+                          DropdownMenuItem<ManagedUserRole>(
+                            value: role,
+                            child: Text(role.label),
+                          ),
                     )
                     .toList(growable: false),
                 onChanged: (ManagedUserRole? value) {
@@ -950,10 +759,7 @@ class _CreateUserDialogState extends State<_CreateUserDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancelar'),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('Criar'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('Criar')),
       ],
     );
   }
@@ -1071,9 +877,8 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
             controller: _passwordController,
             obscureText: true,
             decoration: const InputDecoration(labelText: 'Nova senha'),
-            validator: (String? value) => (value == null || value.length < 12)
-                ? 'A senha deve ter ao menos 12 caracteres.'
-                : null,
+            inputFormatters: _passwordFormatters,
+            validator: _validatePasswordLength,
           ),
         ),
       ),
@@ -1082,10 +887,7 @@ class _ResetPasswordDialogState extends State<_ResetPasswordDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancelar'),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('Atualizar'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('Atualizar')),
       ],
     );
   }
@@ -1136,18 +938,21 @@ class _ChangeOwnPasswordDialogState extends State<_ChangeOwnPasswordDialog> {
                 controller: _currentPasswordController,
                 obscureText: true,
                 decoration: const InputDecoration(labelText: 'Senha atual'),
-                validator: (String? value) => (value == null || value.isEmpty)
-                    ? 'Informe a senha atual.'
-                    : null,
+                inputFormatters: _passwordFormatters,
+                validator: (String? value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Informe a senha atual.';
+                  }
+                  return _validatePasswordLength(value);
+                },
               ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _newPasswordController,
                 obscureText: true,
                 decoration: const InputDecoration(labelText: 'Nova senha'),
-                validator: (String? value) => (value == null || value.length < 12)
-                    ? 'A senha deve ter ao menos 12 caracteres.'
-                    : null,
+                inputFormatters: _passwordFormatters,
+                validator: _validatePasswordLength,
               ),
             ],
           ),
@@ -1158,10 +963,7 @@ class _ChangeOwnPasswordDialogState extends State<_ChangeOwnPasswordDialog> {
           onPressed: () => Navigator.of(context).pop(),
           child: const Text('Cancelar'),
         ),
-        FilledButton(
-          onPressed: _submit,
-          child: const Text('Atualizar'),
-        ),
+        FilledButton(onPressed: _submit, child: const Text('Atualizar')),
       ],
     );
   }
