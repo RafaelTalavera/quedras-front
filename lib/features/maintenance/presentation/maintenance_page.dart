@@ -2132,6 +2132,15 @@ class _MaintenancePageState extends State<MaintenancePage>
     if (selected == null) {
       return;
     }
+    if (selected.status == MaintenanceOrderStatus.inProgress) {
+      await AppAlerts.info(
+        context,
+        title: 'Edicao bloqueada',
+        message:
+            'Ordens em andamento nao podem ser editadas neste fluxo. Para seguir, conclua ou cancele a ordem atual.',
+      );
+      return;
+    }
     await _loadProviders();
     if (!mounted) {
       return;
@@ -2676,6 +2685,10 @@ class _MaintenanceOrderActionDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bool canEdit =
+        order.status != MaintenanceOrderStatus.inProgress &&
+        order.status != MaintenanceOrderStatus.completed &&
+        order.status != MaintenanceOrderStatus.cancelled;
     final bool canStart =
         order.status == MaintenanceOrderStatus.open ||
         order.status == MaintenanceOrderStatus.assigned ||
@@ -2702,8 +2715,10 @@ class _MaintenanceOrderActionDialog extends StatelessWidget {
             runSpacing: 10,
             children: <Widget>[
               OutlinedButton.icon(
-                onPressed: () =>
-                    Navigator.of(context).pop(_MaintenanceOrderAction.edit),
+                onPressed: canEdit
+                    ? () =>
+                          Navigator.of(context).pop(_MaintenanceOrderAction.edit)
+                    : null,
                 icon: const Icon(Icons.edit_rounded),
                 label: const Text('Editar'),
               ),
