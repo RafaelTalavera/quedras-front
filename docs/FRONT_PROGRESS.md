@@ -84,6 +84,7 @@
   - contexto minimo para ejecucion
 - Objetivo operativo cubierto: entregar al equipo de manutencao un resumen mas legible y mas probable de entrar en una hoja A4.
 - Validacion ejecutada en esta fase: `flutter analyze lib/features/maintenance/application/maintenance_daily_report_pdf_exporter.dart`.
+- Ajuste posterior del mismo frente: se elimino el recuadro de metricas superiores para que la hoja de ruta abra directamente sobre la tabla operativa.
 
 ## Pendientes inmediatos frontend
 - Adaptar en web los flujos de exportacion PDF, archivos temporales y descargas para `Massagens`, `Quadras` y `Manutencao`.

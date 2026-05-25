@@ -724,3 +724,12 @@
   - `docs/FRONT_CHANGELOG.md`
 - Motivo del cambio: Reconvertir el PDF diario de ordens abertas desde un resumen ejecutivo con tarjetas extensas hacia una hoja de ruta entregable al personal de manutencao.
 - Impacto funcional: El PDF ahora prioriza una sola tabla compacta por orden con bloque horario, local, tarea, ejecucion y contexto, reduciendo texto narrativo y mejorando la lectura en campo para jornadas operativas.
+
+## 2026-05-25 | Post Hito 12 | Simplificacion visual final de la hoja de ruta de manutencao
+- Componente afectado: Frontend (`Manutencao` exportacion PDF)
+- Archivos tocados:
+  - `lib/features/maintenance/application/maintenance_daily_report_pdf_exporter.dart`
+  - `docs/FRONT_PROGRESS.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Eliminar el recuadro superior de metricas (`Abertas`, `Do dia`, `Arrastre`, `Agendadas`, etc.) para dejar el PDF todavia mas directo como hoja de ejecucion.
+- Impacto funcional: La hoja de ruta queda mas limpia y prioriza inmediatamente la tabla operativa, sin un bloque previo de indicadores que no era necesario para el personal de campo.

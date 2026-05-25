@@ -83,10 +83,6 @@ final class DefaultMaintenanceDailyReportPdfExporter
 
     final List<MaintenanceOrder> openOrders = report.allOpenOrders;
     final DateTime generatedAt = DateTime.now();
-    final int guestCount = openOrders
-        .where((MaintenanceOrder order) => order.hasGuestContext)
-        .length;
-
     final pw.PageTheme pageTheme = pw.PageTheme(
       pageFormat: PdfPageFormat.a4,
       margin: const pw.EdgeInsets.fromLTRB(22, 24, 22, 20),
@@ -121,17 +117,6 @@ final class DefaultMaintenanceDailyReportPdfExporter
         ),
         build: (pw.Context context) {
           return <pw.Widget>[
-            _buildSummaryStrip(
-              dayOrdersCount: report.dayOpenCount,
-              openOrdersCount: report.totalOpenCount,
-              carryOverOpenCount: report.carryOverOpenCount,
-              scheduledCount: report.scheduledCount,
-              inProgressCount: report.inProgressCount,
-              urgentCount: report.urgentCount,
-              unassignedCount: report.unassignedCount,
-              guestCount: guestCount,
-            ),
-            pw.SizedBox(height: 10),
             _buildRouteSheetGuide(date: date, generatedAt: generatedAt),
             pw.SizedBox(height: 10),
             if (openOrders.isEmpty) _buildEmptyState(),
@@ -219,72 +204,6 @@ final class DefaultMaintenanceDailyReportPdfExporter
             style: pw.TextStyle(fontSize: 9, color: _mutedColor),
           ),
         ],
-      ),
-    );
-  }
-
-  pw.Widget _buildSummaryStrip({
-    required int dayOrdersCount,
-    required int openOrdersCount,
-    required int carryOverOpenCount,
-    required int scheduledCount,
-    required int inProgressCount,
-    required int urgentCount,
-    required int unassignedCount,
-    required int guestCount,
-  }) {
-    final List<MapEntry<String, String>> metrics = <MapEntry<String, String>>[
-      MapEntry<String, String>('Abertas', '$openOrdersCount'),
-      MapEntry<String, String>('Do dia', '$dayOrdersCount'),
-      MapEntry<String, String>('Arrastre', '$carryOverOpenCount'),
-      MapEntry<String, String>('Agendadas', '$scheduledCount'),
-      MapEntry<String, String>('Andamento', '$inProgressCount'),
-      MapEntry<String, String>('Urgentes', '$urgentCount'),
-      MapEntry<String, String>('Sem prest.', '$unassignedCount'),
-      MapEntry<String, String>('Hospede', '$guestCount'),
-    ];
-
-    return pw.Container(
-      width: double.infinity,
-      padding: const pw.EdgeInsets.all(10),
-      decoration: pw.BoxDecoration(
-        border: pw.Border.all(color: _borderColor, width: 0.7),
-      ),
-      child: pw.Wrap(
-        spacing: 6,
-        runSpacing: 6,
-        children: metrics
-            .map(
-              (MapEntry<String, String> metric) => pw.Container(
-                width: 62,
-                padding: const pw.EdgeInsets.symmetric(
-                  horizontal: 6,
-                  vertical: 5,
-                ),
-                decoration: pw.BoxDecoration(
-                  border: pw.Border.all(color: _borderColor, width: 0.6),
-                ),
-                child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
-                  children: <pw.Widget>[
-                    pw.Text(
-                      metric.key,
-                      style: pw.TextStyle(fontSize: 7.2, color: _mutedColor),
-                    ),
-                    pw.SizedBox(height: 2),
-                    pw.Text(
-                      metric.value,
-                      style: pw.TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: pw.FontWeight.bold,
-                        color: _inkColor,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            )
-            .toList(),
       ),
     );
   }
