@@ -49,6 +49,15 @@ const String _generalCommonAreasGroupTitle = 'Areas comuns gerais';
 
 enum MaintenanceSection { operationalSummary }
 
+enum _ExecutiveSummaryFilter {
+  allOpen,
+  carryOver,
+  urgent,
+  scheduled,
+  inProgress,
+  unassigned,
+}
+
 class MaintenancePageController {
   _MaintenancePageState? _state;
 
@@ -107,6 +116,8 @@ class _MaintenancePageState extends State<MaintenancePage>
   String? _errorMessage;
   int? _selectedOrderId;
   int? _selectedLocationId;
+  _ExecutiveSummaryFilter _executiveSummaryFilter =
+      _ExecutiveSummaryFilter.allOpen;
   MaintenanceSection _currentSection = MaintenanceSection.operationalSummary;
   final MaintenanceDailyReportPdfExporter _dailyReportPdfExporter =
       DefaultMaintenanceDailyReportPdfExporter();
@@ -445,7 +456,22 @@ class _MaintenancePageState extends State<MaintenancePage>
     final int unassignedCount = openOrders
         .where((MaintenanceOrder order) => order.providerId == null)
         .length;
-    final List<MaintenanceOrder> previewOrders = openOrders.take(5).toList();
+    final List<MaintenanceOrder> filteredOrders = _filterExecutiveOrders(
+      openOrders: openOrders,
+      carryOverOrders: carryOverOrders,
+      filter: _executiveSummaryFilter,
+    );
+    final List<MaintenanceOrder> previewOrders =
+        filteredOrders.take(5).toList();
+    final String filterTitle = _executiveSummaryFilterTitle(
+      _executiveSummaryFilter,
+    );
+    final String filterDescription = _executiveSummaryFilterDescription(
+      _executiveSummaryFilter,
+      filteredCount: filteredOrders.length,
+      selectedDate: _selectedDate,
+      carryOverCount: carryOverOrders.length,
+    );
 
     return Card(
       child: Padding(
@@ -517,38 +543,74 @@ class _MaintenancePageState extends State<MaintenancePage>
                   'Ordens abertas',
                   '${openOrders.length}',
                   Icons.assignment_late_rounded,
+                  selected:
+                      _executiveSummaryFilter == _ExecutiveSummaryFilter.allOpen,
+                  onTap: () => _setExecutiveSummaryFilter(
+                    _ExecutiveSummaryFilter.allOpen,
+                  ),
                 ),
                 _metricChip(
                   'Pendentes anteriores',
                   '${carryOverOrders.length}',
                   Icons.history_toggle_off_rounded,
+                  selected:
+                      _executiveSummaryFilter ==
+                      _ExecutiveSummaryFilter.carryOver,
+                  onTap: () => _setExecutiveSummaryFilter(
+                    _ExecutiveSummaryFilter.carryOver,
+                  ),
                 ),
                 _metricChip(
                   'Urgentes',
                   '$urgentCount',
                   Icons.priority_high_rounded,
+                  selected:
+                      _executiveSummaryFilter == _ExecutiveSummaryFilter.urgent,
+                  onTap: () => _setExecutiveSummaryFilter(
+                    _ExecutiveSummaryFilter.urgent,
+                  ),
                 ),
                 _metricChip(
                   'Agendadas',
                   '$scheduledCount',
                   Icons.event_available_rounded,
+                  selected:
+                      _executiveSummaryFilter ==
+                      _ExecutiveSummaryFilter.scheduled,
+                  onTap: () => _setExecutiveSummaryFilter(
+                    _ExecutiveSummaryFilter.scheduled,
+                  ),
                 ),
                 _metricChip(
                   'Em andamento',
                   '$inProgressCount',
                   Icons.handyman_rounded,
+                  selected:
+                      _executiveSummaryFilter ==
+                      _ExecutiveSummaryFilter.inProgress,
+                  onTap: () => _setExecutiveSummaryFilter(
+                    _ExecutiveSummaryFilter.inProgress,
+                  ),
                 ),
                 _metricChip(
                   'Sem prestador',
                   '$unassignedCount',
                   Icons.person_off_rounded,
+                  selected:
+                      _executiveSummaryFilter ==
+                      _ExecutiveSummaryFilter.unassigned,
+                  onTap: () => _setExecutiveSummaryFilter(
+                    _ExecutiveSummaryFilter.unassigned,
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 18),
-            if (openOrders.isEmpty)
+            if (filteredOrders.isEmpty)
               _emptyBox(
-                'Nao ha ordens abertas para o dia selecionado. O PDF pode ser gerado mesmo assim como comprovante do painel vazio.',
+                _executiveSummaryFilter == _ExecutiveSummaryFilter.allOpen
+                    ? 'Nao ha ordens abertas para o dia selecionado. O PDF pode ser gerado mesmo assim como comprovante do painel vazio.'
+                    : 'Nao ha ordens para o filtro "$filterTitle" no dia selecionado.',
               )
             else
               Container(
@@ -563,17 +625,17 @@ class _MaintenancePageState extends State<MaintenancePage>
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     Text(
-                      'Ordens abertas agora',
+                      filterTitle,
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      carryOverOrders.isEmpty
-                          ? 'Lista curta para leitura rapida. O PDF leva a relacao completa das ordens abertas do dia.'
-                          : 'Lista curta para leitura rapida. Pendencias anteriores aparecem junto al dia para acelerar o follow-up operacional.',
+                      filterDescription,
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
-                    if (carryOverOrders.isNotEmpty) ...<Widget>[
+                    if (_executiveSummaryFilter ==
+                            _ExecutiveSummaryFilter.allOpen &&
+                        carryOverOrders.isNotEmpty) ...<Widget>[
                       const SizedBox(height: 12),
                       Container(
                         width: double.infinity,
@@ -596,11 +658,11 @@ class _MaintenancePageState extends State<MaintenancePage>
                         child: _buildExecutiveOrderRow(order),
                       ),
                     ),
-                    if (openOrders.length > previewOrders.length)
+                    if (filteredOrders.length > previewOrders.length)
                       Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Text(
-                          'E mais ${openOrders.length - previewOrders.length} ordem(ns) aberta(s) no relatorio completo.',
+                          'E mais ${filteredOrders.length - previewOrders.length} ordem(ns) no relatorio completo.',
                           style: Theme.of(context).textTheme.bodySmall,
                         ),
                       ),
@@ -1784,28 +1846,214 @@ class _MaintenancePageState extends State<MaintenancePage>
     }
   }
 
-  Widget _metricChip(String label, String value, IconData icon) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: CostaNorteBrand.mist,
+  Widget _metricChip(
+    String label,
+    String value,
+    IconData icon, {
+    bool selected = false,
+    VoidCallback? onTap,
+  }) {
+    final Color borderColor = selected
+        ? CostaNorteBrand.royalBlueDeep
+        : CostaNorteBrand.line;
+    final Color backgroundColor = selected
+        ? CostaNorteBrand.royalBlue.withValues(alpha: 0.10)
+        : CostaNorteBrand.mist;
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: CostaNorteBrand.line),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: <Widget>[
-          Icon(icon, size: 18, color: CostaNorteBrand.royalBlueDeep),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: backgroundColor,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: borderColor),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
             children: <Widget>[
-              Text(label, style: Theme.of(context).textTheme.labelMedium),
-              Text(value, style: Theme.of(context).textTheme.titleMedium),
+              Icon(icon, size: 18, color: CostaNorteBrand.royalBlueDeep),
+              const SizedBox(width: 8),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(label, style: Theme.of(context).textTheme.labelMedium),
+                  Text(value, style: Theme.of(context).textTheme.titleMedium),
+                ],
+              ),
             ],
           ),
-        ],
+        ),
       ),
+    );
+  }
+
+  void _setExecutiveSummaryFilter(_ExecutiveSummaryFilter filter) {
+    if (_executiveSummaryFilter == filter) {
+      return;
+    }
+    setState(() {
+      _executiveSummaryFilter = filter;
+    });
+  }
+
+  List<MaintenanceOrder> _filterExecutiveOrders({
+    required List<MaintenanceOrder> openOrders,
+    required List<MaintenanceOrder> carryOverOrders,
+    required _ExecutiveSummaryFilter filter,
+  }) {
+    switch (filter) {
+      case _ExecutiveSummaryFilter.allOpen:
+        return openOrders;
+      case _ExecutiveSummaryFilter.carryOver:
+        return carryOverOrders;
+      case _ExecutiveSummaryFilter.urgent:
+        return openOrders
+            .where(
+              (MaintenanceOrder order) =>
+                  order.priority == MaintenancePriority.urgent ||
+                  order.businessPriority ==
+                      MaintenanceBusinessPriority.criticalOperation,
+            )
+            .toList();
+      case _ExecutiveSummaryFilter.scheduled:
+        return openOrders
+            .where(
+              (MaintenanceOrder order) =>
+                  order.status == MaintenanceOrderStatus.scheduled,
+            )
+            .toList();
+      case _ExecutiveSummaryFilter.inProgress:
+        return openOrders
+            .where(
+              (MaintenanceOrder order) =>
+                  order.status == MaintenanceOrderStatus.inProgress,
+            )
+            .toList();
+      case _ExecutiveSummaryFilter.unassigned:
+        return openOrders
+            .where((MaintenanceOrder order) => order.providerId == null)
+            .toList();
+    }
+  }
+
+  String _executiveSummaryFilterTitle(_ExecutiveSummaryFilter filter) {
+    switch (filter) {
+      case _ExecutiveSummaryFilter.allOpen:
+        return 'Ordens abertas agora';
+      case _ExecutiveSummaryFilter.carryOver:
+        return 'Pendentes anteriores';
+      case _ExecutiveSummaryFilter.urgent:
+        return 'Ordens urgentes';
+      case _ExecutiveSummaryFilter.scheduled:
+        return 'Ordens agendadas';
+      case _ExecutiveSummaryFilter.inProgress:
+        return 'Ordens em andamento';
+      case _ExecutiveSummaryFilter.unassigned:
+        return 'Ordens sem prestador';
+    }
+  }
+
+  String _executiveSummaryFilterDescription(
+    _ExecutiveSummaryFilter filter, {
+    required int filteredCount,
+    required DateTime selectedDate,
+    required int carryOverCount,
+  }) {
+    switch (filter) {
+      case _ExecutiveSummaryFilter.allOpen:
+        return carryOverCount == 0
+            ? 'Lista curta para leitura rapida. O PDF leva a relacao completa das ordens abertas de ${_fullDate(selectedDate)}.'
+            : 'Lista curta para leitura rapida. Pendencias anteriores aparecem junto ao dia para acelerar o follow-up operacional.';
+      case _ExecutiveSummaryFilter.carryOver:
+        return 'Mostrando $filteredCount ordem(ns) ainda aberta(s) de dias anteriores para concentrar o follow-up pendente.';
+      case _ExecutiveSummaryFilter.urgent:
+        return 'Mostrando $filteredCount ordem(ns) marcada(s) como urgente(s) ou critica(s), com PDF dedicado para impressao imediata.';
+      case _ExecutiveSummaryFilter.scheduled:
+        return 'Mostrando $filteredCount ordem(ns) com agenda definida para ${_fullDate(selectedDate)}.';
+      case _ExecutiveSummaryFilter.inProgress:
+        return 'Mostrando $filteredCount ordem(ns) em execucao no momento para acompanhamento rapido.';
+      case _ExecutiveSummaryFilter.unassigned:
+        return 'Mostrando $filteredCount ordem(ns) ainda sem prestador definido para apoiar triagem e distribuicao.';
+    }
+  }
+
+  MaintenanceDailyExecutiveReport _buildFilteredExecutiveReport() {
+    final MaintenanceDailyExecutiveReport baseReport =
+        _executiveReport ??
+        MaintenanceDailyExecutiveReport(
+          carryOverOpenCount: 0,
+          dayOpenCount: _openDayOrders.length,
+          totalOpenCount: _openDayOrders.length,
+          urgentCount: _openDayOrders
+              .where(
+                (MaintenanceOrder order) =>
+                    order.priority == MaintenancePriority.urgent ||
+                    order.businessPriority ==
+                        MaintenanceBusinessPriority.criticalOperation,
+              )
+              .length,
+          scheduledCount: _openDayOrders
+              .where(
+                (MaintenanceOrder order) =>
+                    order.status == MaintenanceOrderStatus.scheduled,
+              )
+              .length,
+          inProgressCount: _openDayOrders
+              .where(
+                (MaintenanceOrder order) =>
+                    order.status == MaintenanceOrderStatus.inProgress,
+              )
+              .length,
+          unassignedCount: _openDayOrders
+              .where((MaintenanceOrder order) => order.providerId == null)
+              .length,
+          carryOverOrders: const <MaintenanceOrder>[],
+          dayOpenOrders: _openDayOrders,
+        );
+    final List<MaintenanceOrder> filteredOrders = _filterExecutiveOrders(
+      openOrders: baseReport.allOpenOrders,
+      carryOverOrders: baseReport.carryOverOrders,
+      filter: _executiveSummaryFilter,
+    );
+    final List<MaintenanceOrder> filteredCarryOver = filteredOrders
+        .where((MaintenanceOrder order) => !_sameDay(order.referenceDate, _selectedDate))
+        .toList();
+    final List<MaintenanceOrder> filteredDayOrders = filteredOrders
+        .where((MaintenanceOrder order) => _sameDay(order.referenceDate, _selectedDate))
+        .toList();
+
+    return MaintenanceDailyExecutiveReport(
+      carryOverOpenCount: filteredCarryOver.length,
+      dayOpenCount: filteredDayOrders.length,
+      totalOpenCount: filteredOrders.length,
+      urgentCount: filteredOrders
+          .where(
+            (MaintenanceOrder order) =>
+                order.priority == MaintenancePriority.urgent ||
+                order.businessPriority ==
+                    MaintenanceBusinessPriority.criticalOperation,
+          )
+          .length,
+      scheduledCount: filteredOrders
+          .where(
+            (MaintenanceOrder order) =>
+                order.status == MaintenanceOrderStatus.scheduled,
+          )
+          .length,
+      inProgressCount: filteredOrders
+          .where(
+            (MaintenanceOrder order) =>
+                order.status == MaintenanceOrderStatus.inProgress,
+          )
+          .length,
+      unassignedCount: filteredOrders
+          .where((MaintenanceOrder order) => order.providerId == null)
+          .length,
+      carryOverOrders: filteredCarryOver,
+      dayOpenOrders: filteredDayOrders,
     );
   }
 
@@ -1941,40 +2189,14 @@ class _MaintenancePageState extends State<MaintenancePage>
       _exportingDailyReport = true;
     });
     try {
+      final MaintenanceDailyExecutiveReport report =
+          _buildFilteredExecutiveReport();
+      final String filterTitle = _executiveSummaryFilterTitle(
+        _executiveSummaryFilter,
+      );
       final FileSaveResult? result = await _dailyReportPdfExporter.savePdf(
         date: _selectedDate,
-        report:
-            _executiveReport ??
-            MaintenanceDailyExecutiveReport(
-              carryOverOpenCount: 0,
-              dayOpenCount: _openDayOrders.length,
-              totalOpenCount: _openDayOrders.length,
-              urgentCount: _openDayOrders
-                  .where(
-                    (MaintenanceOrder order) =>
-                        order.priority == MaintenancePriority.urgent ||
-                        order.businessPriority ==
-                            MaintenanceBusinessPriority.criticalOperation,
-                  )
-                  .length,
-              scheduledCount: _openDayOrders
-                  .where(
-                    (MaintenanceOrder order) =>
-                        order.status == MaintenanceOrderStatus.scheduled,
-                  )
-                  .length,
-              inProgressCount: _openDayOrders
-                  .where(
-                    (MaintenanceOrder order) =>
-                        order.status == MaintenanceOrderStatus.inProgress,
-                  )
-                  .length,
-              unassignedCount: _openDayOrders
-                  .where((MaintenanceOrder order) => order.providerId == null)
-                  .length,
-              carryOverOrders: const <MaintenanceOrder>[],
-              dayOpenOrders: _openDayOrders,
-            ),
+        report: report,
       );
       if (result == null || !mounted) {
         return;
@@ -1983,8 +2205,8 @@ class _MaintenancePageState extends State<MaintenancePage>
         context,
         title: 'PDF salvo',
         message: result.hasLocalPath
-            ? 'Resumo executivo salvo em:\n${result.path}'
-            : 'Download do PDF iniciado no navegador:\n${result.fileName}',
+            ? '$filterTitle salvo em:\n${result.path}'
+            : 'Download do PDF de "$filterTitle" iniciado no navegador:\n${result.fileName}',
       );
     } catch (error) {
       if (!mounted) {
@@ -2009,40 +2231,14 @@ class _MaintenancePageState extends State<MaintenancePage>
       _openingDailyReport = true;
     });
     try {
+      final MaintenanceDailyExecutiveReport report =
+          _buildFilteredExecutiveReport();
+      final String filterTitle = _executiveSummaryFilterTitle(
+        _executiveSummaryFilter,
+      );
       final File file = await _dailyReportPdfExporter.createTemporaryPdf(
         date: _selectedDate,
-        report:
-            _executiveReport ??
-            MaintenanceDailyExecutiveReport(
-              carryOverOpenCount: 0,
-              dayOpenCount: _openDayOrders.length,
-              totalOpenCount: _openDayOrders.length,
-              urgentCount: _openDayOrders
-                  .where(
-                    (MaintenanceOrder order) =>
-                        order.priority == MaintenancePriority.urgent ||
-                        order.businessPriority ==
-                            MaintenanceBusinessPriority.criticalOperation,
-                  )
-                  .length,
-              scheduledCount: _openDayOrders
-                  .where(
-                    (MaintenanceOrder order) =>
-                        order.status == MaintenanceOrderStatus.scheduled,
-                  )
-                  .length,
-              inProgressCount: _openDayOrders
-                  .where(
-                    (MaintenanceOrder order) =>
-                        order.status == MaintenanceOrderStatus.inProgress,
-                  )
-                  .length,
-              unassignedCount: _openDayOrders
-                  .where((MaintenanceOrder order) => order.providerId == null)
-                  .length,
-              carryOverOrders: const <MaintenanceOrder>[],
-              dayOpenOrders: _openDayOrders,
-            ),
+        report: report,
       );
       await _openFileWithSystem(file.path);
       if (!mounted) {
@@ -2052,7 +2248,7 @@ class _MaintenancePageState extends State<MaintenancePage>
         context,
         title: 'PDF pronto para impressao',
         message:
-            'O resumo foi aberto no visor PDF do sistema.\n\nArquivo temporario:\n${file.path}',
+            'O resumo "$filterTitle" foi aberto no visor PDF do sistema.\n\nArquivo temporario:\n${file.path}',
       );
     } catch (error) {
       if (!mounted) {
