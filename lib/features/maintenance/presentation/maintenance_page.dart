@@ -101,6 +101,7 @@ class _MaintenancePageState extends State<MaintenancePage>
   StreamSubscription<ScheduleSyncEvent>? _syncSubscription;
   List<MaintenanceLocation> _locations = const <MaintenanceLocation>[];
   List<MaintenanceProvider> _providers = const <MaintenanceProvider>[];
+  List<MaintenancePlan> _plans = const <MaintenancePlan>[];
   List<MaintenanceOrder> _orders = const <MaintenanceOrder>[];
   MaintenanceDailyExecutiveReport? _executiveReport;
   late DateTime _selectedDate;
@@ -111,6 +112,7 @@ class _MaintenancePageState extends State<MaintenancePage>
   bool _providersLoaded = false;
   bool _exportingDailyReport = false;
   bool _openingDailyReport = false;
+  int? _generatingPlanId;
   int? _sharingOrderId;
   int? _loadingHistoryOrderId;
   String? _errorMessage;
@@ -183,6 +185,11 @@ class _MaintenancePageState extends State<MaintenancePage>
                   label: const Text('Lancar ordem'),
                 ),
                 OutlinedButton.icon(
+                  onPressed: _saving ? null : _createPlan,
+                  icon: const Icon(Icons.event_repeat_rounded),
+                  label: const Text('Novo preventivo'),
+                ),
+                OutlinedButton.icon(
                   onPressed: _saving || _loadingProviders
                       ? null
                       : _manageCatalogs,
@@ -214,6 +221,8 @@ class _MaintenancePageState extends State<MaintenancePage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 _buildExecutiveSummaryCard(),
+                const SizedBox(height: 18),
+                _buildPreventivePlansCard(),
                 const SizedBox(height: 18),
                 _buildOperationalSummaryCard(),
               ],
@@ -290,12 +299,16 @@ class _MaintenancePageState extends State<MaintenancePage>
             dateFrom: _formatDateApi(_selectedDate),
             dateTo: _formatDateApi(_selectedDate),
           );
+      final Future<List<MaintenancePlan>> plansFuture = widget
+          .maintenanceAppService
+          .listPlans();
       final Future<MaintenanceDailyExecutiveReport> executiveReportFuture =
           widget.maintenanceAppService.getDailyExecutiveReport(
             date: _formatDateApi(_selectedDate),
           );
       final List<MaintenanceLocation> locations = await locationsFuture;
       final List<MaintenanceOrder> orders = await ordersFuture;
+      final List<MaintenancePlan> plans = await plansFuture;
       final MaintenanceDailyExecutiveReport executiveReport =
           await executiveReportFuture;
       if (!mounted) {
@@ -304,6 +317,7 @@ class _MaintenancePageState extends State<MaintenancePage>
       setState(() {
         _locations = List<MaintenanceLocation>.of(locations)
           ..sort(_compareLocationCatalogOrder);
+        _plans = List<MaintenancePlan>.of(plans);
         _orders = orders;
         _executiveReport = executiveReport;
         _loading = false;
@@ -960,6 +974,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                 spacing: 8,
                 runSpacing: 8,
                 children: <Widget>[
+                  _tag(order.orderKind.label),
                   _tag(_orderScheduleLabel(order)),
                   _tag(order.serviceLabel),
                   if (order.priority == MaintenancePriority.urgent)
@@ -1147,6 +1162,7 @@ class _MaintenancePageState extends State<MaintenancePage>
               spacing: 8,
               runSpacing: 8,
               children: <Widget>[
+                _tag(order.orderKind.label),
                 _tag(order.priority.label),
                 _tag(order.businessPriority.label),
                 _tag(order.serviceLabel),
@@ -1890,6 +1906,206 @@ class _MaintenancePageState extends State<MaintenancePage>
     );
   }
 
+  Widget _buildPreventivePlansCard() {
+    final List<MaintenancePlan> activePlans = _plans
+        .where((MaintenancePlan plan) => plan.active)
+        .toList();
+    final int dueTodayCount = activePlans
+        .where(
+          (MaintenancePlan plan) =>
+              plan.nextDueDate != null && _sameDay(plan.nextDueDate!, _selectedDate),
+        )
+        .length;
+    final int overdueCount = activePlans
+        .where(
+          (MaintenancePlan plan) =>
+              plan.nextDueDate != null && plan.nextDueDate!.isBefore(_selectedDate),
+        )
+        .length;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Planos preventivos',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        'Rotinas mensais e anuais com geracao manual de ordem quando a visita realmente acontece.',
+                        style: Theme.of(context).textTheme.bodyMedium,
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                FilledButton.icon(
+                  onPressed: _saving ? null : _createPlan,
+                  icon: const Icon(Icons.add_task_rounded),
+                  label: const Text('Criar plano'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            Wrap(
+              spacing: 10,
+              runSpacing: 10,
+              children: <Widget>[
+                _metricChip(
+                  'Ativos',
+                  '${activePlans.length}',
+                  Icons.task_alt_rounded,
+                ),
+                _metricChip(
+                  'Vencidos',
+                  '$overdueCount',
+                  Icons.warning_amber_rounded,
+                ),
+                _metricChip(
+                  'Para hoje',
+                  '$dueTodayCount',
+                  Icons.today_rounded,
+                ),
+              ],
+            ),
+            const SizedBox(height: 18),
+            if (_plans.isEmpty)
+              _emptyBox(
+                'Ainda nao ha planos preventivos cadastrados. Crie um plano anual de ar-condicionado ou mensal de elevadores para comecar.',
+              )
+            else
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFFCFCFB),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: CostaNorteBrand.line),
+                ),
+                child: Column(
+                  children: _plans
+                      .map(
+                        (MaintenancePlan plan) => Padding(
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: _buildPreventivePlanRow(plan),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPreventivePlanRow(MaintenancePlan plan) {
+    final bool overdue =
+        plan.nextDueDate != null && plan.nextDueDate!.isBefore(_selectedDate);
+    final bool dueToday =
+        plan.nextDueDate != null && _sameDay(plan.nextDueDate!, _selectedDate);
+    final String nextDueLabel = plan.nextDueDate == null
+        ? 'Sem vencimento'
+        : _shortDate(plan.nextDueDate!);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      plan.title,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${_normalizeMaintenanceLocationLabel(plan.locationLabel)} - ${plan.providerName ?? 'Sem prestador definido'}',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 12),
+              _tag(plan.active ? 'Ativo' : 'Inativo'),
+            ],
+          ),
+          if (plan.description != null && plan.description!.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: Text(
+                plan.description!,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: CostaNorteBrand.mutedInk,
+                ),
+              ),
+            ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: <Widget>[
+              _tag(plan.recurrenceLabel),
+              _tag('Proximo: $nextDueLabel'),
+              if (plan.serviceLabel != null) _tag(plan.serviceLabel!),
+              if (overdue) _tag('Vencido'),
+              if (dueToday) _tag('Para hoje'),
+              if (plan.lastGeneratedOn != null)
+                _tag('Ultima ordem: ${_shortDate(plan.lastGeneratedOn!)}'),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: <Widget>[
+              FilledButton.icon(
+                onPressed: _generatingPlanId == plan.id || !plan.active
+                    ? null
+                    : () => _generateOrderFromPlan(plan),
+                icon: Icon(
+                  _generatingPlanId == plan.id
+                      ? Icons.hourglass_top_rounded
+                      : Icons.playlist_add_check_circle_rounded,
+                ),
+                label: Text(
+                  _generatingPlanId == plan.id
+                      ? 'Gerando...'
+                      : 'Gerar ordem',
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: _saving ? null : () => _editPlan(plan),
+                icon: const Icon(Icons.edit_rounded),
+                label: const Text('Editar'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
   void _setExecutiveSummaryFilter(_ExecutiveSummaryFilter filter) {
     if (_executiveSummaryFilter == filter) {
       return;
@@ -2162,6 +2378,129 @@ class _MaintenancePageState extends State<MaintenancePage>
       return;
     }
     await _saveOrderDraft(draft, editingOrderId: selected.id);
+  }
+
+  Future<void> _createPlan() async {
+    await _loadProviders();
+    if (!mounted) {
+      return;
+    }
+    final _MaintenancePlanDraft? draft = await showDialog<_MaintenancePlanDraft>(
+      context: context,
+      builder: (BuildContext context) => _MaintenancePlanDialog(
+        locations: _locations.where((MaintenanceLocation item) => item.active).toList(),
+        providers: _providers.where((MaintenanceProvider item) => item.active).toList(),
+      ),
+    );
+    if (draft == null) {
+      return;
+    }
+    await _savePlanDraft(draft);
+  }
+
+  Future<void> _editPlan(MaintenancePlan plan) async {
+    await _loadProviders();
+    if (!mounted) {
+      return;
+    }
+    final _MaintenancePlanDraft? draft = await showDialog<_MaintenancePlanDraft>(
+      context: context,
+      builder: (BuildContext context) => _MaintenancePlanDialog(
+        locations: _locations.where((MaintenanceLocation item) => item.active).toList(),
+        providers: _providers.where((MaintenanceProvider item) => item.active).toList(),
+        initialPlan: plan,
+      ),
+    );
+    if (draft == null) {
+      return;
+    }
+    await _savePlanDraft(draft, editingPlanId: plan.id);
+  }
+
+  Future<void> _savePlanDraft(
+    _MaintenancePlanDraft draft, {
+    int? editingPlanId,
+  }) async {
+    setState(() {
+      _saving = true;
+    });
+    try {
+      if (editingPlanId == null) {
+        await widget.maintenanceAppService.createPlan(draft.toCreateModel());
+      } else {
+        await widget.maintenanceAppService.updatePlan(
+          editingPlanId,
+          draft.toUpdateModel(),
+        );
+      }
+      await _load();
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.success(
+        context,
+        title: editingPlanId == null ? 'Plano criado' : 'Plano atualizado',
+        message: 'O plano preventivo foi salvo com sucesso.',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.error(
+        context,
+        title: 'Falha ao salvar plano',
+        message: error.toString().replaceFirst('Bad state: ', ''),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _generateOrderFromPlan(MaintenancePlan plan) async {
+    final bool confirm = await AppAlerts.confirm(
+      context,
+      title: 'Gerar ordem preventiva',
+      message:
+          'Deseja gerar agora uma ordem preventiva para "${plan.title}"? O proximo vencimento sera avancado para o proximo ciclo.',
+      confirmLabel: 'Gerar ordem',
+    );
+    if (!confirm || !mounted) {
+      return;
+    }
+    setState(() {
+      _generatingPlanId = plan.id;
+    });
+    try {
+      await widget.maintenanceAppService.generateOrderFromPlan(plan.id);
+      await _load(showLoading: false);
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.success(
+        context,
+        title: 'Ordem gerada',
+        message: 'A ordem preventiva foi criada a partir do plano selecionado.',
+      );
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.error(
+        context,
+        title: 'Falha ao gerar ordem',
+        message: error.toString().replaceFirst('Bad state: ', ''),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _generatingPlanId = null;
+        });
+      }
+    }
   }
 
   Future<void> _shareOrderToWhatsApp({MaintenanceOrder? order}) async {
@@ -2641,6 +2980,7 @@ class _MaintenancePageState extends State<MaintenancePage>
         'Contato: ${provider != null && (provider.contact ?? '').isNotEmpty ? provider.contact : 'nao informado'}',
       )
       ..writeln('Servico: ${order.serviceLabel}')
+      ..writeln('Tipo: ${order.orderKind.label}')
       ..writeln('Prioridade tecnica: ${order.priority.label}')
       ..writeln('Prioridade operacional: ${order.businessPriority.label}')
       ..writeln('Origem: ${order.requestOrigin.label}')
@@ -3107,6 +3447,8 @@ class _MaintenanceOrderDraft {
   const _MaintenanceOrderDraft({
     required this.locationId,
     required this.providerId,
+    required this.planId,
+    required this.orderKind,
     required this.title,
     required this.description,
     required this.requestOrigin,
@@ -3120,6 +3462,8 @@ class _MaintenanceOrderDraft {
 
   final int locationId;
   final int? providerId;
+  final int? planId;
+  final MaintenanceOrderKind orderKind;
   final String title;
   final String? description;
   final MaintenanceRequestOrigin requestOrigin;
@@ -3134,6 +3478,8 @@ class _MaintenanceOrderDraft {
     return CreateMaintenanceOrderModel(
       locationId: locationId,
       providerId: providerId,
+      planId: planId,
+      orderKind: orderKind,
       title: title,
       description: description,
       requestOrigin: requestOrigin,
@@ -3154,6 +3500,8 @@ class _MaintenanceOrderDraft {
     return UpdateMaintenanceOrderModel(
       locationId: locationId,
       providerId: providerId,
+      planId: planId,
+      orderKind: orderKind,
       title: title,
       description: description,
       requestOrigin: requestOrigin,
@@ -3191,6 +3539,7 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   late int _locationId;
   int? _providerId;
+  late MaintenanceOrderKind _orderKind;
   late MaintenanceRequestOrigin _requestOrigin;
   late MaintenanceBusinessPriority _businessPriority;
   late bool _hasSchedule;
@@ -3209,6 +3558,7 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
     final MaintenanceOrder? order = widget.initialOrder;
     _locationId = order?.locationId ?? widget.locations.first.id;
     _providerId = order?.providerId;
+    _orderKind = order?.orderKind ?? MaintenanceOrderKind.corrective;
     _requestOrigin =
         order?.requestOrigin ?? MaintenanceRequestOrigin.internalRole;
     _businessPriority =
@@ -3248,6 +3598,16 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
 
   String get _selectedLocationTitle =>
       _formatLocationPickerTitle(_selectedLocation);
+
+  List<MaintenanceOrderKind> get _availableOrderKinds {
+    if (widget.initialOrder?.orderKind == MaintenanceOrderKind.preventive) {
+      return MaintenanceOrderKind.values;
+    }
+    return <MaintenanceOrderKind>[
+      MaintenanceOrderKind.corrective,
+      MaintenanceOrderKind.visit,
+    ];
+  }
 
   String _formatLocationPickerTitle(MaintenanceLocation location) {
     final String code = location.code.trim();
@@ -3350,6 +3710,27 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
                   suffixIcon: const Icon(Icons.search_rounded),
                 ),
                 onTap: _pickLocation,
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<MaintenanceOrderKind>(
+                value: _orderKind,
+                decoration: const InputDecoration(
+                  labelText: 'Tipo de ordem',
+                ),
+                items: _availableOrderKinds
+                    .map(
+                      (MaintenanceOrderKind item) =>
+                          DropdownMenuItem<MaintenanceOrderKind>(
+                            value: item,
+                            child: Text(item.label),
+                          ),
+                    )
+                    .toList(),
+                onChanged: (MaintenanceOrderKind? value) {
+                  if (value != null) {
+                    setState(() => _orderKind = value);
+                  }
+                },
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<MaintenanceRequestOrigin>(
@@ -3607,6 +3988,8 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
       _MaintenanceOrderDraft(
         locationId: _locationId,
         providerId: _providerId,
+        planId: widget.initialOrder?.planId,
+        orderKind: _orderKind,
         title: _titleController.text.trim(),
         description: _descriptionController.text.trim(),
         requestOrigin: _requestOrigin,
@@ -3630,6 +4013,285 @@ class _CompletionDraft {
 
   final DateTime? completedAt;
   final String resolutionNotes;
+}
+
+class _MaintenancePlanDraft {
+  const _MaintenancePlanDraft({
+    required this.locationId,
+    required this.providerId,
+    required this.title,
+    required this.description,
+    required this.recurrenceUnit,
+    required this.recurrenceInterval,
+    required this.nextDueDate,
+    required this.active,
+  });
+
+  final int locationId;
+  final int? providerId;
+  final String title;
+  final String? description;
+  final MaintenancePlanRecurrenceUnit recurrenceUnit;
+  final int recurrenceInterval;
+  final DateTime nextDueDate;
+  final bool active;
+
+  CreateMaintenancePlanModel toCreateModel() {
+    return CreateMaintenancePlanModel(
+      locationId: locationId,
+      providerId: providerId,
+      title: title,
+      description: description,
+      recurrenceUnit: recurrenceUnit,
+      recurrenceInterval: recurrenceInterval,
+      nextDueDate: _formatDateApi(nextDueDate),
+      active: active,
+    );
+  }
+
+  UpdateMaintenancePlanModel toUpdateModel() {
+    return UpdateMaintenancePlanModel(
+      locationId: locationId,
+      providerId: providerId,
+      title: title,
+      description: description,
+      recurrenceUnit: recurrenceUnit,
+      recurrenceInterval: recurrenceInterval,
+      nextDueDate: _formatDateApi(nextDueDate),
+      active: active,
+    );
+  }
+}
+
+class _MaintenancePlanDialog extends StatefulWidget {
+  const _MaintenancePlanDialog({
+    required this.locations,
+    required this.providers,
+    this.initialPlan,
+  });
+
+  final List<MaintenanceLocation> locations;
+  final List<MaintenanceProvider> providers;
+  final MaintenancePlan? initialPlan;
+
+  @override
+  State<_MaintenancePlanDialog> createState() => _MaintenancePlanDialogState();
+}
+
+class _MaintenancePlanDialogState extends State<_MaintenancePlanDialog> {
+  final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
+  late int _locationId;
+  int? _providerId;
+  late MaintenancePlanRecurrenceUnit _recurrenceUnit;
+  late final TextEditingController _titleController;
+  late final TextEditingController _descriptionController;
+  late final TextEditingController _intervalController;
+  late bool _active;
+  late DateTime _nextDueDate;
+
+  @override
+  void initState() {
+    super.initState();
+    final MaintenancePlan? plan = widget.initialPlan;
+    _locationId = plan?.locationId ?? widget.locations.first.id;
+    _providerId = plan?.providerId;
+    _recurrenceUnit =
+        plan?.recurrenceUnit ?? MaintenancePlanRecurrenceUnit.monthly;
+    _titleController = TextEditingController(text: plan?.title ?? '');
+    _descriptionController = TextEditingController(
+      text: plan?.description ?? '',
+    );
+    _intervalController = TextEditingController(
+      text: '${plan?.recurrenceInterval ?? 1}',
+    );
+    _active = plan?.active ?? true;
+    _nextDueDate = plan?.nextDueDate ?? _today();
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descriptionController.dispose();
+    _intervalController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AppDialogShell(
+      maxWidth: AppDialogDimensions.wideFormWidth,
+      child: SingleChildScrollView(
+        child: Form(
+          key: _formKey,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Text(
+                widget.initialPlan == null ? 'Novo plano' : 'Editar plano',
+                style: Theme.of(context).textTheme.headlineSmall,
+              ),
+              const SizedBox(height: 16),
+              DropdownButtonFormField<int>(
+                value: _locationId,
+                decoration: const InputDecoration(labelText: 'Local'),
+                items: widget.locations
+                    .map(
+                      (MaintenanceLocation item) => DropdownMenuItem<int>(
+                        value: item.id,
+                        child: Text(_normalizeMaintenanceLocationLabel(item.label)),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (int? value) {
+                  if (value != null) {
+                    setState(() => _locationId = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<int?>(
+                value: _providerId,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Prestador'),
+                items: <DropdownMenuItem<int?>>[
+                  const DropdownMenuItem<int?>(
+                    value: null,
+                    child: Text('Sem prestador definido'),
+                  ),
+                  ...widget.providers.map(
+                    (MaintenanceProvider item) => DropdownMenuItem<int?>(
+                      value: item.id,
+                      child: Text(
+                        '${item.name} - ${item.specialty.label}',
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                  ),
+                ],
+                onChanged: (int? value) => setState(() => _providerId = value),
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _titleController,
+                decoration: const InputDecoration(labelText: 'Titulo'),
+                validator: (String? value) {
+                  if (value == null || value.trim().isEmpty) {
+                    return 'Informe o titulo';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _descriptionController,
+                minLines: 2,
+                maxLines: 4,
+                decoration: const InputDecoration(
+                  labelText: 'Descricao',
+                  alignLabelWithHint: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              DropdownButtonFormField<MaintenancePlanRecurrenceUnit>(
+                value: _recurrenceUnit,
+                decoration: const InputDecoration(labelText: 'Recorrencia'),
+                items: MaintenancePlanRecurrenceUnit.values
+                    .map(
+                      (MaintenancePlanRecurrenceUnit item) =>
+                          DropdownMenuItem<MaintenancePlanRecurrenceUnit>(
+                            value: item,
+                            child: Text(item.label),
+                          ),
+                    )
+                    .toList(),
+                onChanged: (MaintenancePlanRecurrenceUnit? value) {
+                  if (value != null) {
+                    setState(() => _recurrenceUnit = value);
+                  }
+                },
+              ),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _intervalController,
+                keyboardType: TextInputType.number,
+                decoration: const InputDecoration(
+                  labelText: 'Intervalo',
+                  helperText: 'Ex.: 1 para mensal ou anual, 2 para bimestral',
+                ),
+                validator: (String? value) {
+                  final int? parsed = int.tryParse(value?.trim() ?? '');
+                  if (parsed == null || parsed < 1) {
+                    return 'Informe um intervalo valido';
+                  }
+                  return null;
+                },
+              ),
+              const SizedBox(height: 12),
+              OutlinedButton.icon(
+                onPressed: _pickNextDueDate,
+                icon: const Icon(Icons.event_rounded),
+                label: Text('Proximo vencimento: ${_shortDate(_nextDueDate)}'),
+              ),
+              const SizedBox(height: 8),
+              SwitchListTile(
+                contentPadding: EdgeInsets.zero,
+                value: _active,
+                onChanged: (bool value) => setState(() => _active = value),
+                title: const Text('Plano ativo'),
+              ),
+              const SizedBox(height: 18),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: <Widget>[
+                  TextButton(
+                    onPressed: () => Navigator.of(context).pop(),
+                    child: const Text('Cancelar'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton(
+                    onPressed: _submit,
+                    child: const Text('Salvar'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickNextDueDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _nextDueDate,
+      firstDate: DateTime(_nextDueDate.year - 1, 1, 1),
+      lastDate: DateTime(_nextDueDate.year + 3, 12, 31),
+    );
+    if (picked != null) {
+      setState(() => _nextDueDate = picked);
+    }
+  }
+
+  void _submit() {
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
+    final int recurrenceInterval = int.parse(_intervalController.text.trim());
+    Navigator.of(context).pop(
+      _MaintenancePlanDraft(
+        locationId: _locationId,
+        providerId: _providerId,
+        title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
+        recurrenceUnit: _recurrenceUnit,
+        recurrenceInterval: recurrenceInterval,
+        nextDueDate: _nextDueDate,
+        active: _active,
+      ),
+    );
+  }
 }
 
 class _LocationSearchDialog extends StatefulWidget {

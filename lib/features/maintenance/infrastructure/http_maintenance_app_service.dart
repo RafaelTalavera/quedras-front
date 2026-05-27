@@ -130,6 +130,86 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
   }
 
   @override
+  Future<List<MaintenancePlan>> listPlans() async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get('maintenance/plans', headers: _jsonHeaders),
+    );
+    final List<Object?> decoded = _expectSuccessList(
+      response,
+      invalidMessage: 'Formato invalido da lista de planos preventivos.',
+    );
+    return decoded
+        .map<MaintenancePlan>(
+          (Object? item) => MaintenancePlan.fromJson(_asMap(item)),
+        )
+        .toList();
+  }
+
+  @override
+  Future<MaintenancePlan> createPlan(CreateMaintenancePlanModel input) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.post(
+        'maintenance/plans',
+        headers: _jsonHeaders,
+        body: jsonEncode(input.toJson()),
+      ),
+    );
+    return MaintenancePlan.fromJson(
+      _expectSuccessObject(
+        response,
+        invalidMessage: 'Resposta invalida do plano preventivo.',
+      ),
+    );
+  }
+
+  @override
+  Future<MaintenancePlan> updatePlan(
+    int planId,
+    UpdateMaintenancePlanModel input,
+  ) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.put(
+        'maintenance/plans/$planId',
+        headers: _jsonHeaders,
+        body: jsonEncode(input.toJson()),
+      ),
+    );
+    return MaintenancePlan.fromJson(
+      _expectSuccessObject(
+        response,
+        invalidMessage: 'Resposta invalida do plano preventivo.',
+      ),
+    );
+  }
+
+  @override
+  Future<MaintenanceOrder> generateOrderFromPlan(
+    int planId, {
+    GenerateMaintenancePlanOrderModel? input,
+  }) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.post(
+        'maintenance/plans/$planId/generate-order',
+        headers: _jsonHeaders,
+        body: jsonEncode(
+          (input ??
+                  const GenerateMaintenancePlanOrderModel(
+                    scheduledStartAt: null,
+                    scheduledEndAt: null,
+                  ))
+              .toJson(),
+        ),
+      ),
+    );
+    return MaintenanceOrder.fromJson(
+      _expectSuccessObject(
+        response,
+        invalidMessage: 'Resposta invalida da ordem gerada.',
+      ),
+    );
+  }
+
+  @override
   Future<MaintenanceProvider> createProvider(
     CreateMaintenanceProviderModel input,
   ) async {

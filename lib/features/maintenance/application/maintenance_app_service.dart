@@ -19,6 +19,20 @@ abstract interface class MaintenanceAppService {
 
   Future<List<MaintenanceProvider>> listProviders();
 
+  Future<List<MaintenancePlan>> listPlans();
+
+  Future<MaintenancePlan> createPlan(CreateMaintenancePlanModel input);
+
+  Future<MaintenancePlan> updatePlan(
+    int planId,
+    UpdateMaintenancePlanModel input,
+  );
+
+  Future<MaintenanceOrder> generateOrderFromPlan(
+    int planId, {
+    GenerateMaintenancePlanOrderModel? input,
+  });
+
   Future<MaintenanceProvider> createProvider(
     CreateMaintenanceProviderModel input,
   );

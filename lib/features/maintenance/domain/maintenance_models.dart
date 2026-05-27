@@ -99,6 +99,46 @@ enum MaintenanceProviderSpecialty {
   }
 }
 
+enum MaintenanceOrderKind {
+  corrective('CORRECTIVE', 'Corretiva'),
+  preventive('PREVENTIVE', 'Preventiva'),
+  visit('VISIT', 'Visita');
+
+  const MaintenanceOrderKind(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+
+  static MaintenanceOrderKind tryParse(String? rawValue) {
+    for (final MaintenanceOrderKind value in MaintenanceOrderKind.values) {
+      if (value.apiValue == rawValue) {
+        return value;
+      }
+    }
+    return MaintenanceOrderKind.corrective;
+  }
+}
+
+enum MaintenancePlanRecurrenceUnit {
+  monthly('MONTHLY', 'Mensal'),
+  yearly('YEARLY', 'Anual');
+
+  const MaintenancePlanRecurrenceUnit(this.apiValue, this.label);
+
+  final String apiValue;
+  final String label;
+
+  static MaintenancePlanRecurrenceUnit tryParse(String? rawValue) {
+    for (final MaintenancePlanRecurrenceUnit value
+        in MaintenancePlanRecurrenceUnit.values) {
+      if (value.apiValue == rawValue) {
+        return value;
+      }
+    }
+    return MaintenancePlanRecurrenceUnit.monthly;
+  }
+}
+
 enum MaintenanceOrderStatus {
   open('OPEN', 'Aberta'),
   assigned('ASSIGNED', 'Atribuida'),
@@ -362,9 +402,11 @@ class MaintenanceOrder {
     required this.locationCodeSnapshot,
     required this.locationLabelSnapshot,
     required this.providerId,
+    required this.planId,
     required this.providerTypeSnapshot,
     required this.providerNameSnapshot,
     required this.serviceLabelSnapshot,
+    required this.orderKind,
     required this.title,
     required this.description,
     required this.priority,
@@ -402,9 +444,11 @@ class MaintenanceOrder {
   final String locationCodeSnapshot;
   final String locationLabelSnapshot;
   final int? providerId;
+  final int? planId;
   final MaintenanceProviderType? providerTypeSnapshot;
   final String? providerNameSnapshot;
   final String? serviceLabelSnapshot;
+  final MaintenanceOrderKind orderKind;
   final String title;
   final String? description;
   final MaintenancePriority priority;
@@ -446,6 +490,7 @@ class MaintenanceOrder {
       locationCodeSnapshot: _readString(json, 'locationCodeSnapshot') ?? '',
       locationLabelSnapshot: _readString(json, 'locationLabelSnapshot') ?? '',
       providerId: _readInt(json, 'providerId'),
+      planId: _readInt(json, 'planId'),
       providerTypeSnapshot: MaintenanceProviderType.tryParseNullable(
         _readString(json, 'providerTypeSnapshot'),
       ),
@@ -455,6 +500,7 @@ class MaintenanceOrder {
       serviceLabelSnapshot: _trimOrNull(
         _readString(json, 'serviceLabelSnapshot'),
       ),
+      orderKind: MaintenanceOrderKind.tryParse(_readString(json, 'orderKind')),
       title: _readString(json, 'title') ?? '',
       description: _trimOrNull(_readString(json, 'description')),
       priority: MaintenancePriority.tryParse(_readString(json, 'priority')),
@@ -545,6 +591,88 @@ class MaintenanceOrder {
       return '$name · $reference';
     }
     return name ?? reference;
+  }
+}
+
+class MaintenancePlan {
+  const MaintenancePlan({
+    required this.id,
+    required this.locationId,
+    required this.locationCode,
+    required this.locationLabel,
+    required this.providerId,
+    required this.providerType,
+    required this.providerSpecialty,
+    required this.providerName,
+    required this.serviceLabel,
+    required this.title,
+    required this.description,
+    required this.recurrenceUnit,
+    required this.recurrenceInterval,
+    required this.nextDueDate,
+    required this.lastGeneratedOn,
+    required this.active,
+    required this.createdAt,
+    required this.updatedAt,
+    required this.createdBy,
+    required this.updatedBy,
+  });
+
+  final int id;
+  final int locationId;
+  final String locationCode;
+  final String locationLabel;
+  final int? providerId;
+  final MaintenanceProviderType? providerType;
+  final MaintenanceProviderSpecialty? providerSpecialty;
+  final String? providerName;
+  final String? serviceLabel;
+  final String title;
+  final String? description;
+  final MaintenancePlanRecurrenceUnit recurrenceUnit;
+  final int recurrenceInterval;
+  final DateTime? nextDueDate;
+  final DateTime? lastGeneratedOn;
+  final bool active;
+  final DateTime? createdAt;
+  final DateTime? updatedAt;
+  final String? createdBy;
+  final String? updatedBy;
+
+  factory MaintenancePlan.fromJson(Map<String, dynamic> json) {
+    return MaintenancePlan(
+      id: _readInt(json, 'id') ?? 0,
+      locationId: _readInt(json, 'locationId') ?? 0,
+      locationCode: _readString(json, 'locationCode') ?? '',
+      locationLabel: _readString(json, 'locationLabel') ?? '',
+      providerId: _readInt(json, 'providerId'),
+      providerType: MaintenanceProviderType.tryParseNullable(
+        _readString(json, 'providerType'),
+      ),
+      providerSpecialty: _tryParseProviderSpecialty(
+        _readString(json, 'providerSpecialty'),
+      ),
+      providerName: _trimOrNull(_readString(json, 'providerName')),
+      serviceLabel: _trimOrNull(_readString(json, 'serviceLabel')),
+      title: _readString(json, 'title') ?? '',
+      description: _trimOrNull(_readString(json, 'description')),
+      recurrenceUnit: MaintenancePlanRecurrenceUnit.tryParse(
+        _readString(json, 'recurrenceUnit'),
+      ),
+      recurrenceInterval: _readInt(json, 'recurrenceInterval') ?? 1,
+      nextDueDate: _tryParseDate(_readString(json, 'nextDueDate')),
+      lastGeneratedOn: _tryParseDate(_readString(json, 'lastGeneratedOn')),
+      active: json['active'] as bool? ?? false,
+      createdAt: _tryParseDateTime(_readString(json, 'createdAt')),
+      updatedAt: _tryParseDateTime(_readString(json, 'updatedAt')),
+      createdBy: _trimOrNull(_readString(json, 'createdBy')),
+      updatedBy: _trimOrNull(_readString(json, 'updatedBy')),
+    );
+  }
+
+  String get recurrenceLabel {
+    final String interval = recurrenceInterval == 1 ? '' : '$recurrenceInterval ';
+    return '$interval${recurrenceUnit.label}'.trim();
   }
 }
 
@@ -961,6 +1089,8 @@ class CreateMaintenanceOrderModel {
   const CreateMaintenanceOrderModel({
     required this.locationId,
     required this.providerId,
+    required this.planId,
+    required this.orderKind,
     required this.title,
     required this.description,
     required this.requestOrigin,
@@ -974,6 +1104,8 @@ class CreateMaintenanceOrderModel {
 
   final int locationId;
   final int? providerId;
+  final int? planId;
+  final MaintenanceOrderKind orderKind;
   final String title;
   final String? description;
   final MaintenanceRequestOrigin requestOrigin;
@@ -988,6 +1120,8 @@ class CreateMaintenanceOrderModel {
     return <String, dynamic>{
       'locationId': locationId,
       'providerId': providerId,
+      'planId': planId,
+      'orderKind': orderKind.apiValue,
       'title': title.trim(),
       'description': _trimOrNull(description),
       'requestOrigin': requestOrigin.apiValue,
@@ -1005,6 +1139,8 @@ class UpdateMaintenanceOrderModel extends CreateMaintenanceOrderModel {
   const UpdateMaintenanceOrderModel({
     required super.locationId,
     required super.providerId,
+    required super.planId,
+    required super.orderKind,
     required super.title,
     required super.description,
     required super.requestOrigin,
@@ -1015,6 +1151,71 @@ class UpdateMaintenanceOrderModel extends CreateMaintenanceOrderModel {
     required super.scheduledStartAt,
     required super.scheduledEndAt,
   });
+}
+
+class CreateMaintenancePlanModel {
+  const CreateMaintenancePlanModel({
+    required this.locationId,
+    required this.providerId,
+    required this.title,
+    required this.description,
+    required this.recurrenceUnit,
+    required this.recurrenceInterval,
+    required this.nextDueDate,
+    required this.active,
+  });
+
+  final int locationId;
+  final int? providerId;
+  final String title;
+  final String? description;
+  final MaintenancePlanRecurrenceUnit recurrenceUnit;
+  final int recurrenceInterval;
+  final String nextDueDate;
+  final bool active;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'locationId': locationId,
+      'providerId': providerId,
+      'title': title.trim(),
+      'description': _trimOrNull(description),
+      'recurrenceUnit': recurrenceUnit.apiValue,
+      'recurrenceInterval': recurrenceInterval,
+      'nextDueDate': nextDueDate,
+      'active': active,
+    };
+  }
+}
+
+class UpdateMaintenancePlanModel extends CreateMaintenancePlanModel {
+  const UpdateMaintenancePlanModel({
+    required super.locationId,
+    required super.providerId,
+    required super.title,
+    required super.description,
+    required super.recurrenceUnit,
+    required super.recurrenceInterval,
+    required super.nextDueDate,
+    required super.active,
+  });
+}
+
+class GenerateMaintenancePlanOrderModel {
+  const GenerateMaintenancePlanOrderModel({
+    required this.scheduledStartAt,
+    required this.scheduledEndAt,
+  });
+
+  final String? scheduledStartAt;
+  final String? scheduledEndAt;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'scheduledStartAt': _trimOrNull(scheduledStartAt),
+      'scheduledEndAt': _trimOrNull(scheduledEndAt),
+    };
+  }
 }
 
 class StartMaintenanceOrderModel {
@@ -1112,6 +1313,26 @@ DateTime? _tryParseDateTime(String? rawValue) {
     return null;
   }
   return DateTime.tryParse(rawValue)?.toLocal();
+}
+
+DateTime? _tryParseDate(String? rawValue) {
+  if (rawValue == null || rawValue.trim().isEmpty) {
+    return null;
+  }
+  return DateTime.tryParse(rawValue);
+}
+
+MaintenanceProviderSpecialty? _tryParseProviderSpecialty(String? rawValue) {
+  if (rawValue == null) {
+    return null;
+  }
+  for (final MaintenanceProviderSpecialty value
+      in MaintenanceProviderSpecialty.values) {
+    if (value.apiValue == rawValue) {
+      return value;
+    }
+  }
+  return null;
 }
 
 Map<String, dynamic> _asMap(Object? value) {
