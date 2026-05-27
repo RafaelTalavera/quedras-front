@@ -26,7 +26,7 @@ void main() {
   );
 
   test(
-    'DefaultMassageProviderReportPdfExporter salva o PDF no caminho escolhido',
+    'DefaultMassageProviderReportPdfExporter cria un PDF temporal',
     () async {
       final Directory directory = await Directory.systemTemp.createTemp(
         'massage-report-save-',
@@ -37,26 +37,19 @@ void main() {
         }
       });
 
-      final String outputPath =
-          '${directory.path}${Platform.pathSeparator}relatorio_danuska.pdf';
       final DefaultMassageProviderReportPdfExporter exporter =
           DefaultMassageProviderReportPdfExporter(
             loadAssetBytes: _loadPdfAssetBytes,
-            pickSaveFilePath:
-                ({
-                  required String dialogTitle,
-                  required String fileName,
-                }) async => outputPath,
+            getTemporaryDirectoryCallback: () async => directory,
           );
 
-      final File? file = await exporter.savePdf(
+      final File file = await exporter.createTemporaryPdf(
         detail: _detailFixture(),
         startDate: DateTime(2026, 4, 1),
         endDate: DateTime(2026, 4, 30),
       );
 
-      expect(file, isNotNull);
-      expect(file!.path, outputPath);
+      expect(file.path, contains(directory.path));
       expect(await file.exists(), isTrue);
       final List<int> bytes = await file.readAsBytes();
       expect(bytes, isNotEmpty);

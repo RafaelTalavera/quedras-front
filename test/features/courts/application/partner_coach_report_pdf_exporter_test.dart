@@ -21,7 +21,7 @@ void main() {
   });
 
   test(
-    'DefaultPartnerCoachReportPdfExporter salva o PDF no caminho escolhido',
+    'DefaultPartnerCoachReportPdfExporter cria un PDF temporal',
     () async {
       final Directory directory = await Directory.systemTemp.createTemp(
         'partner-coach-report-save-',
@@ -32,26 +32,19 @@ void main() {
         }
       });
 
-      final String outputPath =
-          '${directory.path}${Platform.pathSeparator}relatorio_carlos.pdf';
       final DefaultPartnerCoachReportPdfExporter exporter =
           DefaultPartnerCoachReportPdfExporter(
             loadAssetBytes: _loadPdfAssetBytes,
-            pickSaveFilePath:
-                ({
-                  required String dialogTitle,
-                  required String fileName,
-                }) async => outputPath,
+            getTemporaryDirectoryCallback: () async => directory,
           );
 
-      final File? file = await exporter.savePdf(
+      final File file = await exporter.createTemporaryPdf(
         detail: _detailFixture(),
         startDate: DateTime(2026, 4, 1),
         endDate: DateTime(2026, 4, 30),
       );
 
-      expect(file, isNotNull);
-      expect(file!.path, outputPath);
+      expect(file.path, contains(directory.path));
       expect(await file.exists(), isTrue);
       final List<int> bytes = await file.readAsBytes();
       expect(bytes, isNotEmpty);
@@ -99,6 +92,9 @@ PartnerCoachReportDetail _detailFixture() {
         paymentNotes: 'Pago no balcao',
         status: CourtBookingStatus.scheduled,
         cancellationNotes: null,
+        recurrenceGroupId: null,
+        recurrenceStartDate: null,
+        recurrenceEndDate: null,
         materials: const <CourtBookingMaterial>[
           CourtBookingMaterial(
             materialCode: CourtMaterialCode.ball,
@@ -136,6 +132,9 @@ PartnerCoachReportDetail _detailFixture() {
         paymentNotes: null,
         status: CourtBookingStatus.scheduled,
         cancellationNotes: null,
+        recurrenceGroupId: null,
+        recurrenceStartDate: null,
+        recurrenceEndDate: null,
         materials: const <CourtBookingMaterial>[
           CourtBookingMaterial(
             materialCode: CourtMaterialCode.racket,

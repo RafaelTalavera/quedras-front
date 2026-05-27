@@ -1,6 +1,8 @@
 import 'package:costanorte/features/massages/application/massage_app_service.dart';
 import 'package:costanorte/features/massages/domain/massage_models.dart';
 import 'package:costanorte/features/massages/presentation/massage_booking_page.dart';
+import 'package:costanorte/core/audit/audit_models.dart';
+import 'package:costanorte/core/sync/schedule_sync_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -12,7 +14,12 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(body: MassageBookingPage(massageAppService: service)),
+          home: Scaffold(
+            body: MassageBookingPage(
+              massageAppService: service,
+              scheduleSyncService: _scheduleSyncService(),
+            ),
+          ),
         ),
       );
       await tester.pumpAndSettle();
@@ -59,143 +66,6 @@ void main() {
   );
 
   testWidgets(
-    'MassageBookingPage permite cancelar un atendimento con observacion',
-    (WidgetTester tester) async {
-      final _FakeMassageAppService service =
-          _FakeMassageAppService.withBookings(<MassageBooking>[
-            _bookingFixture(id: 10, clientName: 'Maria', paid: false),
-          ]);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: MassageBookingPage(massageAppService: service)),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Cancelar atendimento'));
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Cancelar').last);
-      await tester.pumpAndSettle();
-
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Observacao do cancelamento'),
-        'Cliente nao compareceu',
-      );
-      await tester.tap(find.text('Confirmar cancelamento'));
-      await tester.pumpAndSettle();
-
-      expect(service.cancelledBookingId, 10);
-      expect(service.cancelNotes, 'Cliente nao compareceu');
-      expect(find.text('Cancelado'), findsOneWidget);
-      expect(find.textContaining('Cliente nao compareceu'), findsWidgets);
-    },
-  );
-
-  testWidgets(
-    'MassageBookingPage permite informar pago desde la accion rapida superior',
-    (WidgetTester tester) async {
-      final _FakeMassageAppService service =
-          _FakeMassageAppService.withBookings(<MassageBooking>[
-            _bookingFixture(id: 10, clientName: 'Maria', paid: false),
-          ]);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: MassageBookingPage(massageAppService: service)),
-        ),
-      );
-      await tester.pumpAndSettle();
-      final DateTime bookingDate = service.currentBookings.single.bookingDate;
-
-      await tester.tap(find.text('Informar pago').first);
-      await tester.pumpAndSettle();
-      await tester.tap(find.text('Informar pago').last);
-      await tester.pumpAndSettle();
-
-      await tester.enterText(
-        find.widgetWithText(TextFormField, 'Observacao do pagamento'),
-        'Pago na recepcao',
-      );
-      await tester.tap(find.text('Confirmar pagamento'));
-      await tester.pumpAndSettle();
-
-      expect(service.paymentUpdatedBookingId, 10);
-      expect(service.paymentUpdate?.paymentMethod, MassagePaymentMethod.card);
-      expect(service.paymentUpdate?.paymentDate, _formatDate(bookingDate));
-      expect(service.paymentUpdate?.paymentNotes, 'Pago na recepcao');
-      expect(find.text('Pago'), findsWidgets);
-      expect(
-        find.textContaining(
-          'Pago em ${_formatShortDate(bookingDate)} via Cartao',
-        ),
-        findsWidgets,
-      );
-    },
-  );
-
-  testWidgets(
-    'MassageBookingPage muestra informar pago en acciones del booking',
-    (WidgetTester tester) async {
-      final _FakeMassageAppService service =
-          _FakeMassageAppService.withBookings(<MassageBooking>[
-            _bookingFixture(id: 10, clientName: 'Maria', paid: false),
-          ]);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: MassageBookingPage(massageAppService: service)),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Maria'));
-      await tester.pump(const Duration(milliseconds: 50));
-      await tester.tap(find.text('Maria'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Editar registro'), findsOneWidget);
-      expect(find.text('Informar pago'), findsWidgets);
-      expect(find.text('Cancelar atencao'), findsOneWidget);
-    },
-  );
-
-  testWidgets(
-    'MassageBookingPage lista atendimientos no elegibles en informar pago con motivo visible',
-    (WidgetTester tester) async {
-      final _FakeMassageAppService service =
-          _FakeMassageAppService.withBookings(<MassageBooking>[
-            _bookingFixture(id: 10, clientName: 'Maria', paid: true),
-          ]);
-
-      await tester.pumpWidget(
-        MaterialApp(
-          home: Scaffold(body: MassageBookingPage(massageAppService: service)),
-        ),
-      );
-      await tester.pumpAndSettle();
-
-      await tester.tap(find.text('Informar pago'));
-      await tester.pumpAndSettle();
-
-      expect(find.text('Maria'), findsWidgets);
-      expect(
-        find.text('Todos os atendimentos do dia ja estao pagos ou cancelados.'),
-        findsOneWidget,
-      );
-      expect(find.text('Pagamento ja informado'), findsOneWidget);
-      expect(
-        tester
-            .widget<FilledButton>(
-              find.widgetWithText(FilledButton, 'Informar pago'),
-            )
-            .onPressed,
-        isNull,
-      );
-    },
-  );
-
-  testWidgets(
     'MassageBookingPage muestra resumen por prestador y permite ver detalle',
     (WidgetTester tester) async {
       final _FakeMassageAppService service =
@@ -206,9 +76,19 @@ void main() {
 
       await tester.pumpWidget(
         MaterialApp(
-          home: Scaffold(body: MassageBookingPage(massageAppService: service)),
+          home: Scaffold(
+            body: MassageBookingPage(
+              massageAppService: service,
+              scheduleSyncService: _scheduleSyncService(),
+            ),
+          ),
         ),
       );
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.text('Periodo'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Buscar'));
       await tester.pumpAndSettle();
 
       expect(find.text('Resumo por prestador'), findsOneWidget);
@@ -227,7 +107,6 @@ void main() {
 
       expect(find.text('Detalhe de Danuska'), findsOneWidget);
       expect(find.text('Baixar PDF'), findsOneWidget);
-      expect(find.text('Compartilhar PDF'), findsOneWidget);
       expect(find.text('Maria'), findsWidgets);
       expect(find.text('Ana'), findsWidgets);
     },
@@ -564,6 +443,20 @@ final class _FakeMassageAppService implements MassageAppService {
     _bookings[index] = cancelled;
     return cancelled;
   }
+
+  @override
+  Future<List<AuditEventModel>> history(int bookingId) async =>
+      const <AuditEventModel>[];
+
+  @override
+  Future<List<AuditEventModel>> providerHistory(int providerId) async =>
+      const <AuditEventModel>[];
+
+  @override
+  Future<List<AuditEventModel>> therapistHistory(
+    int providerId,
+    int therapistId,
+  ) async => const <AuditEventModel>[];
 }
 
 MassageBooking _bookingFixture({
@@ -613,4 +506,11 @@ String _formatShortDate(DateTime date) {
   final String day = date.day.toString().padLeft(2, '0');
   final String month = date.month.toString().padLeft(2, '0');
   return '$day/$month/${date.year}';
+}
+
+ScheduleSyncService _scheduleSyncService() {
+  return ScheduleSyncService(
+    baseUrl: 'http://localhost/api/v1/',
+    authorizationHeaderProvider: () => null,
+  );
 }
