@@ -18,7 +18,7 @@ void main() {
 
       expect(delegate.calls.length, 1);
       expect(
-        delegate.calls.single.headers?[HttpHeaders.authorizationHeader],
+        delegate.calls.single.headers?['Authorization'],
         'Bearer signed-token',
       );
     },

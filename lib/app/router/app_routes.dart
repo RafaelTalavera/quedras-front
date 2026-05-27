@@ -7,6 +7,14 @@ enum AppSection {
 }
 
 final class AppRoutes {
+  static const List<AppSection> _fullSystemSections = <AppSection>[
+    AppSection.tennisRental,
+    AppSection.massageBooking,
+    AppSection.toursTravel,
+    AppSection.maintenance,
+    AppSection.settings,
+  ];
+
   static const String login = '/login';
   static const String tennisRental = '/quadras';
   static const String massageBooking = '/massagens';
@@ -47,16 +55,10 @@ final class AppRoutes {
 
   static List<AppSection> sectionsForRole(String role) {
     final String normalizedRole = role.trim().toUpperCase();
-    if (normalizedRole == 'SUPERVISOR') {
-      return const <AppSection>[AppSection.settings];
+    if (normalizedRole == 'SUPERVISOR' || normalizedRole == 'OPERATOR') {
+      return _fullSystemSections;
     }
-    return const <AppSection>[
-      AppSection.tennisRental,
-      AppSection.massageBooking,
-      AppSection.toursTravel,
-      AppSection.maintenance,
-      AppSection.settings,
-    ];
+    return _fullSystemSections;
   }
 
   static bool canAccessSection(String role, AppSection section) {

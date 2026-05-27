@@ -27,7 +27,7 @@ void main() {
     expect(find.text('Entrar'), findsOneWidget);
 
     await tester.enterText(find.byType(TextFormField).at(0), 'operador.demo');
-    await tester.enterText(find.byType(TextFormField).at(1), 'Costanorte2026!');
+    await tester.enterText(find.byType(TextFormField).at(1), '123456');
     await tester.tap(find.text('Acessar sistema'));
     await tester.pumpAndSettle();
 
@@ -72,7 +72,10 @@ class _FakeApiClient implements ApiClient {
   }
 
   @override
-  Future<ApiResponse> delete(String path, {Map<String, String>? headers}) async {
+  Future<ApiResponse> delete(
+    String path, {
+    Map<String, String>? headers,
+  }) async {
     return const ApiResponse(statusCode: 200, body: '{}');
   }
 

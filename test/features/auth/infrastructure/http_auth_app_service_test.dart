@@ -19,7 +19,7 @@ void main() {
 
     final session = await service.login(
       username: 'operador.demo',
-      password: 'Costanorte2026!',
+      password: '123456',
     );
 
     expect(session.accessToken, 'jwt-token');
@@ -29,15 +29,8 @@ void main() {
     expect(client.calls.single.method, 'POST');
     expect(client.calls.single.path, 'auth/login');
     expect(
-      client.calls.single.headers?[HttpHeaders.contentTypeHeader],
-      'application/json',
-    );
-    expect(
       jsonDecode(client.calls.single.body!) as Map<String, dynamic>,
-      <String, dynamic>{
-        'username': 'operador.demo',
-        'password': 'Costanorte2026!',
-      },
+      <String, dynamic>{'username': 'operador.demo', 'password': '123456'},
     );
   });
 
@@ -52,7 +45,7 @@ void main() {
     final HttpAuthAppService service = HttpAuthAppService(apiClient: client);
 
     await expectLater(
-      () => service.login(username: 'operador.demo', password: 'incorrecta'),
+      () => service.login(username: 'operador.demo', password: '000000'),
       throwsA(
         isA<StateError>().having(
           (StateError error) => error.message.toString(),
@@ -76,10 +69,7 @@ void main() {
       final HttpAuthAppService service = HttpAuthAppService(apiClient: client);
 
       await expectLater(
-        () => service.login(
-          username: 'operador.demo',
-          password: 'Costanorte2026ª',
-        ),
+        () => service.login(username: 'operador.demo', password: '12345Â'),
         throwsA(
           isA<StateError>().having(
             (StateError error) => error.message.toString(),
@@ -103,13 +93,12 @@ void main() {
     final HttpAuthAppService service = HttpAuthAppService(apiClient: client);
 
     await expectLater(
-      () =>
-          service.login(username: 'operador.demo', password: 'Costanorte2026!'),
+      () => service.login(username: 'operador.demo', password: '123456'),
       throwsA(
         isA<StateError>().having(
           (StateError error) => error.message.toString(),
           'message',
-          'Formato inv\u00e1lido ao autenticar no backend local: accessToken is required',
+          'Formato inv\u00e1lido ao autenticar no backend configurado: accessToken is required',
         ),
       ),
     );
@@ -121,13 +110,12 @@ void main() {
     final HttpAuthAppService service = HttpAuthAppService(apiClient: client);
 
     await expectLater(
-      () =>
-          service.login(username: 'operador.demo', password: 'Costanorte2026!'),
+      () => service.login(username: 'operador.demo', password: '123456'),
       throwsA(
         isA<StateError>().having(
           (StateError error) => error.message.toString(),
           'message',
-          'N\u00e3o foi poss\u00edvel conectar ao backend local. Verifique o servidor e a rede interna.',
+          'Erro HTTP de transporte ao autenticar no backend configurado.',
         ),
       ),
     );

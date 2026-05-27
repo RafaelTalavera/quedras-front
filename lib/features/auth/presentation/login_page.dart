@@ -1,10 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../app/router/app_routes.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/widgets/costa_norte_logo.dart';
 import '../application/auth_app_service.dart';
 import '../application/session_controller.dart';
+
+String? _validateLoginPassword(String? value) {
+  final String normalized = value?.trim() ?? '';
+  if (normalized.isEmpty) {
+    return 'Informe a senha.';
+  }
+  if (normalized.length < 6 || normalized.length > 15) {
+    return 'A senha deve ter entre 6 e 15 caracteres.';
+  }
+  return null;
+}
 
 class LoginPage extends StatefulWidget {
   const LoginPage({
@@ -250,6 +262,9 @@ class _LoginPageState extends State<LoginPage> {
             TextFormField(
               controller: _passwordController,
               obscureText: !_passwordVisible,
+              inputFormatters: <TextInputFormatter>[
+                LengthLimitingTextInputFormatter(15),
+              ],
               decoration: InputDecoration(
                 labelText: 'Senha',
                 prefixIcon: const Icon(Icons.key_outlined),
@@ -267,12 +282,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                 ),
               ),
-              validator: (String? value) {
-                if (value == null || value.isEmpty) {
-                  return 'Informe a senha.';
-                }
-                return null;
-              },
+              validator: _validateLoginPassword,
               onFieldSubmitted: (_) => _submit(),
             ),
             if (_errorMessage != null) ...<Widget>[

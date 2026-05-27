@@ -85,7 +85,6 @@ final class ScheduleSyncService {
       _baseUri.resolve('sync/events'),
     );
     request.headers['Accept'] = 'text/event-stream';
-    request.headers['Cache-Control'] = 'no-cache';
     request.headers['Authorization'] = authorization;
 
     try {

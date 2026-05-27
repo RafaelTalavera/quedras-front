@@ -88,13 +88,14 @@ final class AuthorizedApiClient implements ApiClient {
       return headers;
     }
 
-    if (headers != null && headers.containsKey(_authorizationHeader)) {
+    if (headers != null &&
+        headers.keys.any(
+          (String key) =>
+              key.toLowerCase() == _authorizationHeader.toLowerCase(),
+        )) {
       return headers;
     }
 
-    return <String, String>{
-      ...?headers,
-      _authorizationHeader: authorization,
-    };
+    return <String, String>{...?headers, _authorizationHeader: authorization};
   }
 }

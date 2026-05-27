@@ -49,10 +49,8 @@ final class PtBrErrorTranslator {
         return 'Usuario nao encontrado.';
       case 'password is required':
         return 'Informe a senha.';
-      case 'password must be at least 12 characters long':
-        return 'A senha deve ter no minimo 12 caracteres.';
-      case 'password must be <= 72 UTF-8 bytes':
-        return 'A senha excede o tamanho maximo suportado.';
+      case 'password must be between 6 and 15 characters':
+        return 'A senha deve ter entre 6 e 15 caracteres.';
       case 'Completed reservations cannot be cancelled.':
         return 'Reservas conclu\u00eddas n\u00e3o podem ser canceladas.';
       case 'Cancelled reservations cannot be edited.':

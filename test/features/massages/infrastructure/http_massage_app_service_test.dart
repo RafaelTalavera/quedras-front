@@ -26,8 +26,8 @@ void main() {
       apiClient: client,
     );
 
-    final List<MassageProviderSummary> summary =
-        await service.listProviderSummaryReport(
+    final List<MassageProviderSummary> summary = await service
+        .listProviderSummaryReport(
           dateFrom: '2026-03-01',
           dateTo: '2026-03-31',
         );
@@ -236,7 +236,7 @@ void main() {
         isA<StateError>().having(
           (StateError error) => error.message.toString(),
           'message',
-          'N\u00e3o foi poss\u00edvel conectar ao backend local. Verifique o servidor e a rede interna.',
+          'N\u00e3o foi poss\u00edvel conectar ao backend configurado. Verifique a URL e a conectividade.',
         ),
       ),
     );
