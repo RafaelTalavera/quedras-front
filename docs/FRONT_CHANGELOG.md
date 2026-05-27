@@ -733,3 +733,11 @@
   - `docs/FRONT_CHANGELOG.md`
 - Motivo del cambio: Eliminar el recuadro superior de metricas (`Abertas`, `Do dia`, `Arrastre`, `Agendadas`, etc.) para dejar el PDF todavia mas directo como hoja de ejecucion.
 - Impacto funcional: La hoja de ruta queda mas limpia y prioriza inmediatamente la tabla operativa, sin un bloque previo de indicadores que no era necesario para el personal de campo.
+
+## 2026-05-27 | Roles | Supervisor tratado como acceso operativo completo
+- Componente afectado: Frontend (`auth session` + documentacion)
+- Archivos tocados:
+  - `lib/features/auth/domain/auth_session.dart`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: Alinear la semantica del frontend con la regla del sistema de que `SUPERVISOR` no es un perfil restringido respecto de `OPERATOR`, sino un acceso acumulado.
+- Impacto funcional: La sesion autenticada pasa a considerar `SUPERVISOR` como acceso operativo valido (`supervisor + operador`), evitando bloqueos futuros por checks de rol exacto en navegacion o UI.
