@@ -130,6 +130,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   StreamSubscription<ScheduleSyncEvent>? _syncSubscription;
+  ModalRoute<dynamic>? _route;
   late final PartnerCoachReportPdfExporter _partnerCoachReportPdfExporter;
   late DateTime _selectedDate;
   late DateTime _reportStartDate;
@@ -176,6 +177,12 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       oldWidget.controller?._detach(this);
       widget.controller?._attach(this);
     }
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    _route = ModalRoute.of(context);
   }
 
   @override
@@ -347,14 +354,13 @@ class _TennisRentalPageState extends State<TennisRentalPage>
   }
 
   bool _canAutoRefresh() {
-    final ModalRoute<dynamic>? route = ModalRoute.of(context);
     return mounted &&
         !_loading &&
         !_refreshingData &&
         !_loadingAgenda &&
         !_loadingSummary &&
         !_saving &&
-        (route?.isCurrent ?? true);
+        (_route?.isCurrent ?? true);
   }
 
   Future<void> _refreshActiveData({bool showLoading = false}) async {
@@ -3098,7 +3104,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                           labelText: 'Inicio',
                           prefixIcon: Icon(Icons.schedule_rounded),
                         ),
-                        items: _courtTimeSlots
+                        items: _availableStartSlots
                             .map(
                               (String slot) => DropdownMenuItem<String>(
                                 value: slot,
@@ -3121,7 +3127,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _formatTimeOfDay(_endTime),
+                  value: _selectedEndSlotValue,
                   decoration: const InputDecoration(
                     labelText: 'Fin',
                     prefixIcon: Icon(Icons.east_rounded),
@@ -3134,18 +3140,22 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                         ),
                       )
                       .toList(),
-                  onChanged: (String? value) {
-                    if (value == null) {
-                      return;
-                    }
-                    setState(() {
-                      _endTime = _parseTimeOfDay(value);
-                    });
-                  },
+                  onChanged: _availableEndSlots.isEmpty
+                      ? null
+                      : (String? value) {
+                          if (value == null) {
+                            return;
+                          }
+                          setState(() {
+                            _endTime = _parseTimeOfDay(value);
+                          });
+                        },
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Por defecto la reserva dura 1 hora, pero puedes extender el horario final.',
+                  _availableEndSlots.isEmpty
+                      ? 'La ultima franja disponible no admite una hora final posterior. Selecciona un inicio anterior.'
+                      : 'Por defecto la reserva dura 1 hora, pero puedes extender el horario final.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),
@@ -3218,6 +3228,15 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
         ),
         FilledButton(
           onPressed: () {
+            if (_availableEndSlots.isEmpty) {
+              AppAlerts.error(
+                context,
+                title: 'Horario invalido',
+                message:
+                    'Seleccione una hora de inicio que tenga al menos una hora de fin disponible.',
+              );
+              return;
+            }
             if (_customerType == CourtCustomerType.partnerCoach &&
                 _nameController.text.trim().isEmpty) {
               AppAlerts.error(
@@ -3308,6 +3327,24 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
     return _courtTimeSlots.where((String slot) {
       return _timeOfDayToMinutes(_parseTimeOfDay(slot)) > startMinutes;
     }).toList();
+  }
+
+  List<String> get _availableStartSlots {
+    final String selectedStartLabel = _formatTimeOfDay(_startTime);
+    final List<String> slots = <String>[];
+    for (int index = 0; index < _courtTimeSlots.length; index += 1) {
+      final String slot = _courtTimeSlots[index];
+      final bool hasLaterSlot = index < _courtTimeSlots.length - 1;
+      if (hasLaterSlot || slot == selectedStartLabel) {
+        slots.add(slot);
+      }
+    }
+    return slots;
+  }
+
+  String? get _selectedEndSlotValue {
+    final String endLabel = _formatTimeOfDay(_endTime);
+    return _availableEndSlots.contains(endLabel) ? endLabel : null;
   }
 
   Widget _buildPartnerCoachField() {
@@ -3458,6 +3495,9 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
   void _syncEndTimeWithStart() {
     final TimeOfDay defaultEndTime = _addMinutes(_startTime, 60);
     final List<String> availableEndSlots = _availableEndSlots;
+    if (availableEndSlots.isEmpty) {
+      return;
+    }
     final String defaultEndLabel = _formatTimeOfDay(defaultEndTime);
     if (availableEndSlots.contains(defaultEndLabel)) {
       _endTime = defaultEndTime;

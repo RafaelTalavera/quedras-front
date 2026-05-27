@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:costanorte/features/courts/application/court_app_service.dart';
 import 'package:costanorte/features/courts/application/partner_coach_report_pdf_exporter.dart';
 import 'package:costanorte/features/courts/domain/court_models.dart';
+import 'package:costanorte/core/audit/audit_models.dart';
 import 'package:costanorte/core/files/file_save_result.dart';
 import 'package:costanorte/core/sync/schedule_sync_service.dart';
 import 'package:costanorte/features/tennis/presentation/tennis_rental_page.dart';
@@ -271,6 +272,22 @@ final class _FakeCourtAppService implements CourtAppService {
   ) {
     throw UnimplementedError();
   }
+
+  @override
+  Future<List<AuditEventModel>> history(int bookingId) async =>
+      const <AuditEventModel>[];
+
+  @override
+  Future<List<AuditEventModel>> materialHistory(int materialId) async =>
+      const <AuditEventModel>[];
+
+  @override
+  Future<List<AuditEventModel>> partnerCoachHistory(int partnerCoachId) async =>
+      const <AuditEventModel>[];
+
+  @override
+  Future<List<AuditEventModel>> rateHistory(int rateId) async =>
+      const <AuditEventModel>[];
 }
 
 final class _FakePartnerCoachReportPdfExporter
