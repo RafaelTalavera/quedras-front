@@ -169,10 +169,8 @@ class _MaintenancePageState extends State<MaintenancePage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           BrandSectionHero(
-            eyebrow: 'Operacao tecnica',
-            title: 'Manutencao do hotel',
-            description:
-                'Controle de ordens de manutencao por apartamentos, chalets e areas comuns, com agenda, historico e anexos.',
+            eyebrow: 'Manutencao',
+            title: '',
             icon: Icons.build_circle_rounded,
             photoAlignment: Alignment.centerRight,
             action: Wrap(
@@ -204,7 +202,7 @@ class _MaintenancePageState extends State<MaintenancePage>
               ],
             ),
           ),
-          const SizedBox(height: 18),
+          const SizedBox(height: 12),
           if (_errorMessage != null) ...<Widget>[
             Text(_errorMessage!, style: TextStyle(color: Colors.red.shade700)),
             const SizedBox(height: 18),
@@ -221,9 +219,9 @@ class _MaintenancePageState extends State<MaintenancePage>
               crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
                 _buildExecutiveSummaryCard(),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
                 _buildPreventivePlansCard(),
-                const SizedBox(height: 18),
+                const SizedBox(height: 14),
                 _buildOperationalSummaryCard(),
               ],
             ),
@@ -475,21 +473,15 @@ class _MaintenancePageState extends State<MaintenancePage>
       carryOverOrders: carryOverOrders,
       filter: _executiveSummaryFilter,
     );
-    final List<MaintenanceOrder> previewOrders =
-        filteredOrders.take(5).toList();
+    final List<MaintenanceOrder> previewOrders = filteredOrders
+        .take(5)
+        .toList();
     final String filterTitle = _executiveSummaryFilterTitle(
       _executiveSummaryFilter,
     );
-    final String filterDescription = _executiveSummaryFilterDescription(
-      _executiveSummaryFilter,
-      filteredCount: filteredOrders.length,
-      selectedDate: _selectedDate,
-      carryOverCount: carryOverOrders.length,
-    );
-
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(17),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -501,13 +493,8 @@ class _MaintenancePageState extends State<MaintenancePage>
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
                       Text(
-                        'Resumo executivo do dia',
+                        'Estado de ordenes',
                         style: Theme.of(context).textTheme.headlineSmall,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        'Pantallazo rapido das ordens abertas em ${_fullDate(_selectedDate)}, incluindo pendencias nao fechadas de dias anteriores.',
-                        style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ],
                   ),
@@ -548,78 +535,86 @@ class _MaintenancePageState extends State<MaintenancePage>
                 ),
               ],
             ),
-            const SizedBox(height: 18),
-            Wrap(
-              spacing: 10,
-              runSpacing: 10,
+            const SizedBox(height: 14),
+            Row(
               children: <Widget>[
-                _metricChip(
-                  'Ordens abertas',
-                  '${openOrders.length}',
-                  Icons.assignment_late_rounded,
-                  selected:
-                      _executiveSummaryFilter == _ExecutiveSummaryFilter.allOpen,
-                  onTap: () => _setExecutiveSummaryFilter(
-                    _ExecutiveSummaryFilter.allOpen,
+                Expanded(
+                  child: _metricChip(
+                    'Abiertas',
+                    '${openOrders.length}',
+                    Icons.assignment_late_rounded,
+                    selected:
+                        _executiveSummaryFilter ==
+                        _ExecutiveSummaryFilter.allOpen,
+                    onTap: () => _setExecutiveSummaryFilter(
+                      _ExecutiveSummaryFilter.allOpen,
+                    ),
+                    compact: true,
                   ),
                 ),
-                _metricChip(
-                  'Pendentes anteriores',
-                  '${carryOverOrders.length}',
-                  Icons.history_toggle_off_rounded,
-                  selected:
-                      _executiveSummaryFilter ==
-                      _ExecutiveSummaryFilter.carryOver,
-                  onTap: () => _setExecutiveSummaryFilter(
-                    _ExecutiveSummaryFilter.carryOver,
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _metricChip(
+                    'Urgentes',
+                    '$urgentCount',
+                    Icons.priority_high_rounded,
+                    selected:
+                        _executiveSummaryFilter ==
+                        _ExecutiveSummaryFilter.urgent,
+                    onTap: () => _setExecutiveSummaryFilter(
+                      _ExecutiveSummaryFilter.urgent,
+                    ),
+                    compact: true,
                   ),
                 ),
-                _metricChip(
-                  'Urgentes',
-                  '$urgentCount',
-                  Icons.priority_high_rounded,
-                  selected:
-                      _executiveSummaryFilter == _ExecutiveSummaryFilter.urgent,
-                  onTap: () => _setExecutiveSummaryFilter(
-                    _ExecutiveSummaryFilter.urgent,
-                  ),
-                ),
-                _metricChip(
-                  'Agendadas',
-                  '$scheduledCount',
-                  Icons.event_available_rounded,
-                  selected:
-                      _executiveSummaryFilter ==
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _metricChip(
+                    'Agendadas',
+                    '$scheduledCount',
+                    Icons.event_available_rounded,
+                    selected:
+                        _executiveSummaryFilter ==
+                        _ExecutiveSummaryFilter.scheduled,
+                    onTap: () => _setExecutiveSummaryFilter(
                       _ExecutiveSummaryFilter.scheduled,
-                  onTap: () => _setExecutiveSummaryFilter(
-                    _ExecutiveSummaryFilter.scheduled,
+                    ),
+                    compact: true,
                   ),
                 ),
-                _metricChip(
-                  'Em andamento',
-                  '$inProgressCount',
-                  Icons.handyman_rounded,
-                  selected:
-                      _executiveSummaryFilter ==
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _metricChip(
+                    'Em andamento',
+                    '$inProgressCount',
+                    Icons.handyman_rounded,
+                    selected:
+                        _executiveSummaryFilter ==
+                        _ExecutiveSummaryFilter.inProgress,
+                    onTap: () => _setExecutiveSummaryFilter(
                       _ExecutiveSummaryFilter.inProgress,
-                  onTap: () => _setExecutiveSummaryFilter(
-                    _ExecutiveSummaryFilter.inProgress,
+                    ),
+                    compact: true,
                   ),
                 ),
-                _metricChip(
-                  'Sem prestador',
-                  '$unassignedCount',
-                  Icons.person_off_rounded,
-                  selected:
-                      _executiveSummaryFilter ==
+                const SizedBox(width: 10),
+                Expanded(
+                  child: _metricChip(
+                    'Sem prestador',
+                    '$unassignedCount',
+                    Icons.person_off_rounded,
+                    selected:
+                        _executiveSummaryFilter ==
+                        _ExecutiveSummaryFilter.unassigned,
+                    onTap: () => _setExecutiveSummaryFilter(
                       _ExecutiveSummaryFilter.unassigned,
-                  onTap: () => _setExecutiveSummaryFilter(
-                    _ExecutiveSummaryFilter.unassigned,
+                    ),
+                    compact: true,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             if (filteredOrders.isEmpty)
               _emptyBox(
                 _executiveSummaryFilter == _ExecutiveSummaryFilter.allOpen
@@ -629,10 +624,10 @@ class _MaintenancePageState extends State<MaintenancePage>
             else
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(18),
+                padding: const EdgeInsets.all(15),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFCFCFB),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(17),
                   border: Border.all(color: CostaNorteBrand.line),
                 ),
                 child: Column(
@@ -642,33 +637,10 @@ class _MaintenancePageState extends State<MaintenancePage>
                       filterTitle,
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      filterDescription,
-                      style: Theme.of(context).textTheme.bodyMedium,
-                    ),
-                    if (_executiveSummaryFilter ==
-                            _ExecutiveSummaryFilter.allOpen &&
-                        carryOverOrders.isNotEmpty) ...<Widget>[
-                      const SizedBox(height: 12),
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFF8E8),
-                          borderRadius: BorderRadius.circular(14),
-                          border: Border.all(color: CostaNorteBrand.line),
-                        ),
-                        child: Text(
-                          'Hay ${carryOverOrders.length} ordem(ns) pendente(s) arrastrada(s) de dias anteriores e ainda sem fechamento.',
-                          style: Theme.of(context).textTheme.bodyMedium,
-                        ),
-                      ),
-                    ],
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 12),
                     ...previewOrders.map(
                       (MaintenanceOrder order) => Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.only(bottom: 8),
                         child: _buildExecutiveOrderRow(order),
                       ),
                     ),
@@ -736,7 +708,7 @@ class _MaintenancePageState extends State<MaintenancePage>
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(17),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -750,9 +722,9 @@ class _MaintenancePageState extends State<MaintenancePage>
                         'Resumo por local',
                         style: Theme.of(context).textTheme.headlineSmall,
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 5),
                       Text(
-                        'Painel permanente com apartamentos, chalets e areas comuns de ${_fullDate(_selectedDate)}.',
+                        'Painel permanente com apartamentos, chales e areas comuns de ${_fullDate(_selectedDate)}.',
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ],
@@ -766,7 +738,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             Wrap(
               spacing: 10,
               runSpacing: 10,
@@ -793,7 +765,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             Wrap(
               spacing: 8,
               runSpacing: 8,
@@ -816,13 +788,13 @@ class _MaintenancePageState extends State<MaintenancePage>
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             if (sections.every((item) => item.locations.isEmpty))
               _emptyBox('Nao ha locais cadastrados para montar a visualizacao.')
             else
               ...sections.map(
                 (_MaintenanceDepartmentSectionData section) => Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.only(bottom: 14),
                   child: _buildDepartmentSection(section),
                 ),
               ),
@@ -835,10 +807,10 @@ class _MaintenancePageState extends State<MaintenancePage>
   Widget _buildDepartmentSection(_MaintenanceDepartmentSectionData section) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
         color: const Color(0xFFFCFCFB),
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(17),
         border: Border.all(color: CostaNorteBrand.line),
       ),
       child: Column(
@@ -847,14 +819,14 @@ class _MaintenancePageState extends State<MaintenancePage>
           Row(
             children: <Widget>[
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: section.tint.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(16),
+                  borderRadius: BorderRadius.circular(14),
                 ),
                 child: Icon(section.icon, color: section.tint),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -863,7 +835,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                       section.title,
                       style: Theme.of(context).textTheme.titleLarge,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
                       section.description,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -880,14 +852,14 @@ class _MaintenancePageState extends State<MaintenancePage>
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 14),
           if (section.locations.isEmpty)
             _emptyBox('Nenhum local cadastrado neste setor.')
           else ...<Widget>[
             if (section.groups.length > 1)
               ...section.groups.map(
                 (_MaintenanceDepartmentGroupData group) => Padding(
-                  padding: const EdgeInsets.only(bottom: 16),
+                  padding: const EdgeInsets.only(bottom: 14),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
@@ -895,7 +867,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                         group.title,
                         style: Theme.of(context).textTheme.titleMedium,
                       ),
-                      const SizedBox(height: 10),
+                      const SizedBox(height: 8),
                       _buildSectionLocationLayout(
                         section,
                         group.locations,
@@ -1358,14 +1330,14 @@ class _MaintenancePageState extends State<MaintenancePage>
           ],
         ),
       _MaintenanceDepartmentSectionData(
-        title: 'Chalets',
+        title: 'Chales',
         description: 'Unidades externas com manutencao dedicada.',
         icon: Icons.cabin_rounded,
         tint: CostaNorteBrand.success,
         layout: _MaintenanceSectionLayout.adaptive,
         groups: <_MaintenanceDepartmentGroupData>[
           _MaintenanceDepartmentGroupData(
-            title: 'Conjunto de chalets',
+            title: 'Conjunto de chales',
             locations: chaletLocations,
           ),
         ],
@@ -1412,7 +1384,7 @@ class _MaintenancePageState extends State<MaintenancePage>
       return 'Andar ${sequence ~/ 100}';
     }
     if (_locationCategory(location) == _MaintenanceLocationCategory.chalet) {
-      return 'Chalets';
+      return 'Chales';
     }
     return 'Sem andar';
   }
@@ -1868,6 +1840,7 @@ class _MaintenancePageState extends State<MaintenancePage>
     IconData icon, {
     bool selected = false,
     VoidCallback? onTap,
+    bool compact = false,
   }) {
     final Color borderColor = selected
         ? CostaNorteBrand.royalBlueDeep
@@ -1879,25 +1852,54 @@ class _MaintenancePageState extends State<MaintenancePage>
       color: Colors.transparent,
       child: InkWell(
         onTap: onTap,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         child: Ink(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          padding: EdgeInsets.symmetric(
+            horizontal: compact ? 8 : 12,
+            vertical: compact ? 8 : 10,
+          ),
           decoration: BoxDecoration(
             color: backgroundColor,
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: borderColor),
           ),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: compact
+                ? MainAxisAlignment.center
+                : MainAxisAlignment.start,
             children: <Widget>[
-              Icon(icon, size: 18, color: CostaNorteBrand.royalBlueDeep),
-              const SizedBox(width: 8),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Text(label, style: Theme.of(context).textTheme.labelMedium),
-                  Text(value, style: Theme.of(context).textTheme.titleMedium),
-                ],
+              Icon(
+                icon,
+                size: compact ? 16 : 18,
+                color: CostaNorteBrand.royalBlueDeep,
+              ),
+              SizedBox(width: compact ? 6 : 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: compact
+                      ? CrossAxisAlignment.center
+                      : CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: compact ? TextAlign.center : TextAlign.start,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        fontSize: compact ? 10 : null,
+                      ),
+                    ),
+                    Text(
+                      value,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      textAlign: compact ? TextAlign.center : TextAlign.start,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontSize: compact ? 16 : null,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ],
           ),
@@ -1913,19 +1915,21 @@ class _MaintenancePageState extends State<MaintenancePage>
     final int dueTodayCount = activePlans
         .where(
           (MaintenancePlan plan) =>
-              plan.nextDueDate != null && _sameDay(plan.nextDueDate!, _selectedDate),
+              plan.nextDueDate != null &&
+              _sameDay(plan.nextDueDate!, _selectedDate),
         )
         .length;
     final int overdueCount = activePlans
         .where(
           (MaintenancePlan plan) =>
-              plan.nextDueDate != null && plan.nextDueDate!.isBefore(_selectedDate),
+              plan.nextDueDate != null &&
+              plan.nextDueDate!.isBefore(_selectedDate),
         )
         .length;
 
     return Card(
       child: Padding(
-        padding: const EdgeInsets.all(20),
+        padding: const EdgeInsets.all(17),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
@@ -1939,7 +1943,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                         'Planos preventivos',
                         style: Theme.of(context).textTheme.headlineSmall,
                       ),
-                      const SizedBox(height: 6),
+                      const SizedBox(height: 5),
                       Text(
                         'Rotinas mensais e anuais com geracao manual de ordem quando a visita realmente acontece.',
                         style: Theme.of(context).textTheme.bodyMedium,
@@ -1955,7 +1959,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                 ),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             Wrap(
               spacing: 10,
               runSpacing: 10,
@@ -1970,14 +1974,10 @@ class _MaintenancePageState extends State<MaintenancePage>
                   '$overdueCount',
                   Icons.warning_amber_rounded,
                 ),
-                _metricChip(
-                  'Para hoje',
-                  '$dueTodayCount',
-                  Icons.today_rounded,
-                ),
+                _metricChip('Para hoje', '$dueTodayCount', Icons.today_rounded),
               ],
             ),
-            const SizedBox(height: 18),
+            const SizedBox(height: 14),
             if (_plans.isEmpty)
               _emptyBox(
                 'Ainda nao ha planos preventivos cadastrados. Crie um plano anual de ar-condicionado ou mensal de elevadores para comecar.',
@@ -1985,17 +1985,17 @@ class _MaintenancePageState extends State<MaintenancePage>
             else
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(18),
+                padding: const EdgeInsets.all(15),
                 decoration: BoxDecoration(
                   color: const Color(0xFFFCFCFB),
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius: BorderRadius.circular(17),
                   border: Border.all(color: CostaNorteBrand.line),
                 ),
                 child: Column(
                   children: _plans
                       .map(
                         (MaintenancePlan plan) => Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.only(bottom: 10),
                           child: _buildPreventivePlanRow(plan),
                         ),
                       )
@@ -2018,10 +2018,10 @@ class _MaintenancePageState extends State<MaintenancePage>
         : _shortDate(plan.nextDueDate!);
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: CostaNorteBrand.line),
       ),
       child: Column(
@@ -2038,7 +2038,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                       plan.title,
                       style: Theme.of(context).textTheme.titleMedium,
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 3),
                     Text(
                       '${_normalizeMaintenanceLocationLabel(plan.locationLabel)} - ${plan.providerName ?? 'Sem prestador definido'}',
                       style: Theme.of(context).textTheme.bodyMedium,
@@ -2046,13 +2046,13 @@ class _MaintenancePageState extends State<MaintenancePage>
                   ],
                 ),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               _tag(plan.active ? 'Ativo' : 'Inativo'),
             ],
           ),
           if (plan.description != null && plan.description!.trim().isNotEmpty)
             Padding(
-              padding: const EdgeInsets.only(top: 10),
+              padding: const EdgeInsets.only(top: 8),
               child: Text(
                 plan.description!,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
@@ -2060,7 +2060,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                 ),
               ),
             ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -2074,7 +2074,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                 _tag('Ultima ordem: ${_shortDate(plan.lastGeneratedOn!)}'),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Wrap(
             spacing: 10,
             runSpacing: 10,
@@ -2089,9 +2089,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                       : Icons.playlist_add_check_circle_rounded,
                 ),
                 label: Text(
-                  _generatingPlanId == plan.id
-                      ? 'Gerando...'
-                      : 'Gerar ordem',
+                  _generatingPlanId == plan.id ? 'Gerando...' : 'Gerar ordem',
                 ),
               ),
               OutlinedButton.icon(
@@ -2235,10 +2233,16 @@ class _MaintenancePageState extends State<MaintenancePage>
       filter: _executiveSummaryFilter,
     );
     final List<MaintenanceOrder> filteredCarryOver = filteredOrders
-        .where((MaintenanceOrder order) => !_sameDay(order.referenceDate, _selectedDate))
+        .where(
+          (MaintenanceOrder order) =>
+              !_sameDay(order.referenceDate, _selectedDate),
+        )
         .toList();
     final List<MaintenanceOrder> filteredDayOrders = filteredOrders
-        .where((MaintenanceOrder order) => _sameDay(order.referenceDate, _selectedDate))
+        .where(
+          (MaintenanceOrder order) =>
+              _sameDay(order.referenceDate, _selectedDate),
+        )
         .toList();
 
     return MaintenanceDailyExecutiveReport(
@@ -2385,13 +2389,18 @@ class _MaintenancePageState extends State<MaintenancePage>
     if (!mounted) {
       return;
     }
-    final _MaintenancePlanDraft? draft = await showDialog<_MaintenancePlanDraft>(
-      context: context,
-      builder: (BuildContext context) => _MaintenancePlanDialog(
-        locations: _locations.where((MaintenanceLocation item) => item.active).toList(),
-        providers: _providers.where((MaintenanceProvider item) => item.active).toList(),
-      ),
-    );
+    final _MaintenancePlanDraft? draft =
+        await showDialog<_MaintenancePlanDraft>(
+          context: context,
+          builder: (BuildContext context) => _MaintenancePlanDialog(
+            locations: _locations
+                .where((MaintenanceLocation item) => item.active)
+                .toList(),
+            providers: _providers
+                .where((MaintenanceProvider item) => item.active)
+                .toList(),
+          ),
+        );
     if (draft == null) {
       return;
     }
@@ -2403,14 +2412,19 @@ class _MaintenancePageState extends State<MaintenancePage>
     if (!mounted) {
       return;
     }
-    final _MaintenancePlanDraft? draft = await showDialog<_MaintenancePlanDraft>(
-      context: context,
-      builder: (BuildContext context) => _MaintenancePlanDialog(
-        locations: _locations.where((MaintenanceLocation item) => item.active).toList(),
-        providers: _providers.where((MaintenanceProvider item) => item.active).toList(),
-        initialPlan: plan,
-      ),
-    );
+    final _MaintenancePlanDraft? draft =
+        await showDialog<_MaintenancePlanDraft>(
+          context: context,
+          builder: (BuildContext context) => _MaintenancePlanDialog(
+            locations: _locations
+                .where((MaintenanceLocation item) => item.active)
+                .toList(),
+            providers: _providers
+                .where((MaintenanceProvider item) => item.active)
+                .toList(),
+            initialPlan: plan,
+          ),
+        );
     if (draft == null) {
       return;
     }
@@ -2910,7 +2924,7 @@ class _MaintenancePageState extends State<MaintenancePage>
       }
       await showAuditTimelineDialog(
         context: context,
-        title: 'Historial de ${order.title}',
+        title: 'Historico de ${order.title}',
         events: history,
       );
     } catch (error) {
@@ -2919,7 +2933,7 @@ class _MaintenancePageState extends State<MaintenancePage>
       }
       await AppAlerts.error(
         context,
-        title: 'Historial de la orden',
+        title: 'Historico da ordem',
         message: error.toString().replaceFirst('Bad state: ', ''),
       );
     } finally {
@@ -3056,8 +3070,9 @@ class _MaintenanceOrderActionDialog extends StatelessWidget {
             children: <Widget>[
               OutlinedButton.icon(
                 onPressed: canEdit
-                    ? () =>
-                          Navigator.of(context).pop(_MaintenanceOrderAction.edit)
+                    ? () => Navigator.of(
+                        context,
+                      ).pop(_MaintenanceOrderAction.edit)
                     : null,
                 icon: const Icon(Icons.edit_rounded),
                 label: const Text('Editar'),
@@ -3108,15 +3123,12 @@ class _MaintenanceOrderActionDialog extends StatelessWidget {
                 label: const Text('Anexos'),
               ),
               OutlinedButton.icon(
-                onPressed: () => Navigator.of(
-                  context,
-                ).pop(_MaintenanceOrderAction.history),
+                onPressed: () =>
+                    Navigator.of(context).pop(_MaintenanceOrderAction.history),
                 icon: loadingHistory
                     ? const Icon(Icons.hourglass_top_rounded)
                     : const Icon(Icons.history_rounded),
-                label: Text(
-                  loadingHistory ? 'Cargando...' : 'Historial',
-                ),
+                label: Text(loadingHistory ? 'Carregando...' : 'Historico'),
               ),
             ],
           ),
@@ -3241,15 +3253,15 @@ class _MaintenanceLocationCard extends StatelessWidget {
       visualState,
     );
     final Widget iconBadge = Container(
-      padding: const EdgeInsets.all(5),
+      padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: palette.backgroundColor,
-        borderRadius: BorderRadius.circular(9),
+        borderRadius: BorderRadius.circular(8),
       ),
-      child: Icon(icon, color: palette.foregroundColor, size: 14),
+      child: Icon(icon, color: palette.foregroundColor, size: 13),
     );
     final Widget pendingBadge = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(999),
         color: dayOrders.isNotEmpty
@@ -3259,7 +3271,7 @@ class _MaintenanceLocationCard extends StatelessWidget {
       child: Text(
         dayOrders.isNotEmpty ? '${dayOrders.length}' : '0',
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: FontWeight.w700,
           color: dayOrders.isNotEmpty
               ? palette.foregroundColor
@@ -3268,13 +3280,13 @@ class _MaintenanceLocationCard extends StatelessWidget {
       ),
     );
     return InkWell(
-      borderRadius: BorderRadius.circular(12),
+      borderRadius: BorderRadius.circular(10),
       onTap: onTap,
       child: Container(
-        constraints: const BoxConstraints(minHeight: 42),
-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 6),
+        constraints: const BoxConstraints(minHeight: 36),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
         decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(10),
           color: selected
               ? const Color(0xFFFFF8E7)
               : dayOrders.isNotEmpty
@@ -3292,14 +3304,15 @@ class _MaintenanceLocationCard extends StatelessWidget {
           children: <Widget>[
             if (adaptToContent)
               Wrap(
-                spacing: 6,
-                runSpacing: 6,
+                spacing: 5,
+                runSpacing: 5,
                 crossAxisAlignment: WrapCrossAlignment.center,
                 children: <Widget>[
                   iconBadge,
                   Text(
                     title,
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontSize: 13,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
@@ -3310,19 +3323,20 @@ class _MaintenanceLocationCard extends StatelessWidget {
               Row(
                 children: <Widget>[
                   iconBadge,
-                  const SizedBox(width: 6),
+                  const SizedBox(width: 5),
                   Flexible(
                     fit: FlexFit.loose,
                     child: Text(
                       title,
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        fontSize: 13,
                         fontWeight: FontWeight.w600,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 10),
+                  const SizedBox(width: 8),
                   pendingBadge,
                 ],
               ),
@@ -3714,9 +3728,7 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
               const SizedBox(height: 12),
               DropdownButtonFormField<MaintenanceOrderKind>(
                 value: _orderKind,
-                decoration: const InputDecoration(
-                  labelText: 'Tipo de ordem',
-                ),
+                decoration: const InputDecoration(labelText: 'Tipo de ordem'),
                 items: _availableOrderKinds
                     .map(
                       (MaintenanceOrderKind item) =>
@@ -4139,7 +4151,9 @@ class _MaintenancePlanDialogState extends State<_MaintenancePlanDialog> {
                     .map(
                       (MaintenanceLocation item) => DropdownMenuItem<int>(
                         value: item.id,
-                        child: Text(_normalizeMaintenanceLocationLabel(item.label)),
+                        child: Text(
+                          _normalizeMaintenanceLocationLabel(item.label),
+                        ),
                       ),
                     )
                     .toList(),
@@ -4249,10 +4263,7 @@ class _MaintenancePlanDialogState extends State<_MaintenancePlanDialog> {
                     child: const Text('Cancelar'),
                   ),
                   const SizedBox(width: 8),
-                  FilledButton(
-                    onPressed: _submit,
-                    child: const Text('Salvar'),
-                  ),
+                  FilledButton(onPressed: _submit, child: const Text('Salvar')),
                 ],
               ),
             ],
@@ -5380,7 +5391,7 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
       }
       await showAuditTimelineDialog(
         context: context,
-        title: 'Historial de ${_catalogLocationTitle(location)}',
+        title: 'Historico de ${_catalogLocationTitle(location)}',
         events: events,
       );
     } catch (error) {
@@ -5671,7 +5682,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
       }
       await showAuditTimelineDialog(
         context: context,
-        title: 'Historial de ${provider.name}',
+        title: 'Historico de ${provider.name}',
         events: events,
       );
     } catch (error) {

@@ -23,6 +23,8 @@ class BrandSectionHero extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final TextTheme textTheme = Theme.of(context).textTheme;
+    final bool hasEyebrow = eyebrow.trim().isNotEmpty;
+    final bool hasTitle = title.trim().isNotEmpty;
     final bool hasDescription =
         description != null && description!.trim().isNotEmpty;
 
@@ -71,34 +73,38 @@ class BrandSectionHero extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(999),
-                      color: Colors.white.withValues(alpha: 0.18),
-                      border: Border.all(
+                  if (hasEyebrow)
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(999),
                         color: Colors.white.withValues(alpha: 0.18),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.18),
+                        ),
+                      ),
+                      child: Text(
+                        eyebrow,
+                        style: textTheme.labelLarge?.copyWith(
+                          color: Colors.white,
+                        ),
                       ),
                     ),
-                    child: Text(
-                      eyebrow,
-                      style: textTheme.labelLarge?.copyWith(
+                  if (hasEyebrow &&
+                      (hasTitle || hasDescription || action != null))
+                    SizedBox(height: hasTitle || hasDescription ? 18 : 10),
+                  if (hasTitle)
+                    Text(
+                      title,
+                      style: textTheme.headlineMedium?.copyWith(
                         color: Colors.white,
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 18),
-                  Text(
-                    title,
-                    style: textTheme.headlineMedium?.copyWith(
-                      color: Colors.white,
-                    ),
-                  ),
                   if (hasDescription) ...<Widget>[
-                    const SizedBox(height: 10),
+                    SizedBox(height: hasTitle ? 10 : 0),
                     ConstrainedBox(
                       constraints: const BoxConstraints(maxWidth: 760),
                       child: Text(
@@ -110,7 +116,13 @@ class BrandSectionHero extends StatelessWidget {
                     ),
                   ],
                   if (action != null) ...<Widget>[
-                    const SizedBox(height: 18),
+                    SizedBox(
+                      height: hasTitle || hasDescription
+                          ? 18
+                          : hasEyebrow
+                          ? 10
+                          : 0,
+                    ),
                     action!,
                   ],
                 ],

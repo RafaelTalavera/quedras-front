@@ -20,7 +20,7 @@ import '../../tennis/presentation/tennis_rental_page.dart';
 import '../../tours/application/tours_app_service.dart';
 import '../../tours/presentation/tours_travel_page.dart';
 
-const double _desktopSidebarWidth = 302;
+const double _desktopSidebarWidth = 257;
 const double _desktopSidebarCompactHeight = 880;
 const double _desktopSidebarTightHeight = 760;
 
