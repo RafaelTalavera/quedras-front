@@ -92,8 +92,8 @@ enum CourtBookingCancellationScope {
 }
 
 enum CourtMaterialCode {
-  racket('RACKET', 'Raqueta'),
-  ball('BALL', 'Pelota');
+  racket('RACKET', 'Raquete'),
+  ball('BALL', 'Bola');
 
   const CourtMaterialCode(this.apiValue, this.label);
 

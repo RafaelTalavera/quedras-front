@@ -2,6 +2,15 @@
 
 Cliente Flutter Desktop para operacion interna de servicios del hotel.
 
+## Configuracion soportada
+
+Este proyecto no define ni consume variables de base de datos como `COSTANORTE_DB_*`, `QUADRAS_DB_*`, `DB_URL`, `DB_USERNAME` o `DB_PASSWORD`.
+
+El frontend solo configura la URL HTTP del backend por:
+
+- `COSTANORTE_API_BASE_URL`
+- `QUEDRAS_API_BASE_URL` como compatibilidad temporal
+
 ## Alcance visible actual
 - Login de acceso interno.
 - `Agendamento de Massagens`
@@ -21,7 +30,7 @@ flutter run -d windows --dart-define=COSTANORTE_API_BASE_URL=http://127.0.0.1:80
 
 ## Ejecucion web
 Por defecto:
-- en deploy web, consume el backend en el mismo origen bajo `/api/v1`
+- en deploy web, consume el backend productivo `https://quadras-back-production-4973.up.railway.app/api/v1`
 - en desarrollo local con `flutter run -d chrome`, si detecta servidor Flutter en `localhost`, usa `http://127.0.0.1:8080/api/v1`
 
 ```powershell
@@ -53,7 +62,7 @@ flutter build windows --release --dart-define=COSTANORTE_API_BASE_URL=http://127
 
 ## Build Web
 ```powershell
-flutter build web --release
+flutter build web --release --dart-define=COSTANORTE_API_BASE_URL=https://quadras-back-production-4973.up.railway.app/api/v1
 ```
 
 Si el backend web no comparte origen con el frontend:
@@ -64,6 +73,28 @@ flutter build web --release --dart-define=COSTANORTE_API_BASE_URL=https://mi-bac
 
 Compatibilidad temporal:
 - El cliente tambien acepta `QUEDRAS_API_BASE_URL` mientras se completa la migracion de entornos.
+
+## Publicacion en Hostinger
+- Backend configurado para el frontend publicado: `https://quadras-back-production-4973.up.railway.app/api/v1`
+- Generar build web:
+
+```powershell
+flutter build web --release --dart-define=COSTANORTE_API_BASE_URL=https://quadras-back-production-4973.up.railway.app/api/v1
+```
+
+- Subir a Hostinger todo el contenido de `build/web/` dentro de `public_html/`.
+- El proyecto incluye `web/.htaccess` para que Flutter Web resuelva rutas SPA correctamente en Apache.
+- Si el frontend se publica dentro de una subcarpeta, rebuild con `--base-href /subcarpeta/`.
+
+Preflight de produccion web:
+```powershell
+.\scripts\frontend_preflight.ps1
+```
+
+Preflight para Windows local:
+```powershell
+.\scripts\frontend_preflight.ps1 -Target windows -ApiBaseUrl http://127.0.0.1:8080/api/v1
+```
 
 ## Documentacion de soporte
 - `docs/INSTALACION_FRONTEND_HOTEL.md`

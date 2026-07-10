@@ -81,7 +81,8 @@ enum MaintenanceProviderType {
 enum MaintenanceProviderSpecialty {
   generalMaintenance('GENERAL_MAINTENANCE', 'Manutencao geral'),
   elevators('ELEVATORS', 'Elevadores'),
-  airConditioning('AIR_CONDITIONING', 'Ar-condicionado');
+  airConditioning('AIR_CONDITIONING', 'Ar-condicionado'),
+  internet('INTERNET', 'Internet');
 
   const MaintenanceProviderSpecialty(this.apiValue, this.label);
 
@@ -200,27 +201,6 @@ enum MaintenanceRequestOrigin {
       }
     }
     return MaintenanceRequestOrigin.internalRole;
-  }
-}
-
-enum MaintenanceBusinessPriority {
-  internalStandard('INTERNAL_STANDARD', 'Operacao interna'),
-  guestPriority('GUEST_PRIORITY', 'Prioridade hospede'),
-  criticalOperation('CRITICAL_OPERATION', 'Operacao critica');
-
-  const MaintenanceBusinessPriority(this.apiValue, this.label);
-
-  final String apiValue;
-  final String label;
-
-  static MaintenanceBusinessPriority tryParse(String? rawValue) {
-    for (final MaintenanceBusinessPriority value
-        in MaintenanceBusinessPriority.values) {
-      if (value.apiValue == rawValue) {
-        return value;
-      }
-    }
-    return MaintenanceBusinessPriority.internalStandard;
   }
 }
 
@@ -413,10 +393,8 @@ class MaintenanceOrder {
     required this.requestOrigin,
     required this.requestedForGuest,
     required this.guestName,
-    required this.guestReference,
     required this.requestedByUsername,
     required this.requestedByRole,
-    required this.businessPriority,
     required this.estimatedExecutionMinutes,
     required this.assignedUsername,
     required this.assignedAt,
@@ -455,10 +433,8 @@ class MaintenanceOrder {
   final MaintenanceRequestOrigin requestOrigin;
   final bool requestedForGuest;
   final String? guestName;
-  final String? guestReference;
   final String? requestedByUsername;
   final String? requestedByRole;
-  final MaintenanceBusinessPriority businessPriority;
   final int? estimatedExecutionMinutes;
   final String? assignedUsername;
   final DateTime? assignedAt;
@@ -509,14 +485,10 @@ class MaintenanceOrder {
       ),
       requestedForGuest: json['requestedForGuest'] as bool? ?? false,
       guestName: _trimOrNull(_readString(json, 'guestName')),
-      guestReference: _trimOrNull(_readString(json, 'guestReference')),
       requestedByUsername: _trimOrNull(
         _readString(json, 'requestedByUsername'),
       ),
       requestedByRole: _trimOrNull(_readString(json, 'requestedByRole')),
-      businessPriority: MaintenanceBusinessPriority.tryParse(
-        _readString(json, 'businessPriority'),
-      ),
       estimatedExecutionMinutes: _readInt(json, 'estimatedExecutionMinutes'),
       assignedUsername: _trimOrNull(_readString(json, 'assignedUsername')),
       assignedAt: _tryParseDateTime(_readString(json, 'assignedAt')),
@@ -581,17 +553,7 @@ class MaintenanceOrder {
       requestedForGuest ||
       requestOrigin == MaintenanceRequestOrigin.guestRequest;
 
-  String? get guestLabel {
-    final String? name = _trimOrNull(guestName);
-    final String? reference = _trimOrNull(guestReference);
-    if (name == null && reference == null) {
-      return null;
-    }
-    if (name != null && reference != null) {
-      return '$name · $reference';
-    }
-    return name ?? reference;
-  }
+  String? get guestLabel => _trimOrNull(guestName);
 }
 
 class MaintenancePlan {
@@ -671,7 +633,9 @@ class MaintenancePlan {
   }
 
   String get recurrenceLabel {
-    final String interval = recurrenceInterval == 1 ? '' : '$recurrenceInterval ';
+    final String interval = recurrenceInterval == 1
+        ? ''
+        : '$recurrenceInterval ';
     return '$interval${recurrenceUnit.label}'.trim();
   }
 }
@@ -772,7 +736,6 @@ class MaintenanceSummaryReport {
     required this.roomsCount,
     required this.commonAreasCount,
     required this.urgentCount,
-    required this.guestPriorityCount,
     required this.averageResolutionHours,
     required this.providerBreakdown,
     required this.providerTypeBreakdown,
@@ -792,7 +755,6 @@ class MaintenanceSummaryReport {
   final int roomsCount;
   final int commonAreasCount;
   final int urgentCount;
-  final int guestPriorityCount;
   final double averageResolutionHours;
   final List<MaintenanceSummaryBreakdown> providerBreakdown;
   final List<MaintenanceSummaryBreakdown> providerTypeBreakdown;
@@ -813,7 +775,6 @@ class MaintenanceSummaryReport {
       roomsCount: _readInt(json, 'roomsCount') ?? 0,
       commonAreasCount: _readInt(json, 'commonAreasCount') ?? 0,
       urgentCount: _readInt(json, 'urgentCount') ?? 0,
-      guestPriorityCount: _readInt(json, 'guestPriorityCount') ?? 0,
       averageResolutionHours:
           (json['averageResolutionHours'] as num?)?.toDouble() ?? 0,
       providerBreakdown: _readBreakdownList(json['providerBreakdown']),
@@ -882,7 +843,6 @@ class MaintenanceSummaryDetailItem {
     required this.serviceLabel,
     required this.title,
     required this.priority,
-    required this.businessPriority,
     required this.requestOrigin,
     required this.requestedForGuest,
     required this.assignedUsername,
@@ -904,7 +864,6 @@ class MaintenanceSummaryDetailItem {
   final String? serviceLabel;
   final String title;
   final MaintenancePriority priority;
-  final MaintenanceBusinessPriority businessPriority;
   final MaintenanceRequestOrigin requestOrigin;
   final bool requestedForGuest;
   final String? assignedUsername;
@@ -931,9 +890,6 @@ class MaintenanceSummaryDetailItem {
       serviceLabel: _trimOrNull(_readString(json, 'serviceLabel')),
       title: _readString(json, 'title') ?? '',
       priority: MaintenancePriority.tryParse(_readString(json, 'priority')),
-      businessPriority: MaintenanceBusinessPriority.tryParse(
-        _readString(json, 'businessPriority'),
-      ),
       requestOrigin: MaintenanceRequestOrigin.tryParse(
         _readString(json, 'requestOrigin'),
       ),
@@ -1096,8 +1052,6 @@ class CreateMaintenanceOrderModel {
     required this.requestOrigin,
     required this.requestedForGuest,
     required this.guestName,
-    required this.guestReference,
-    required this.businessPriority,
     required this.scheduledStartAt,
     required this.scheduledEndAt,
   });
@@ -1111,8 +1065,6 @@ class CreateMaintenanceOrderModel {
   final MaintenanceRequestOrigin requestOrigin;
   final bool requestedForGuest;
   final String? guestName;
-  final String? guestReference;
-  final MaintenanceBusinessPriority businessPriority;
   final String? scheduledStartAt;
   final String? scheduledEndAt;
 
@@ -1127,8 +1079,6 @@ class CreateMaintenanceOrderModel {
       'requestOrigin': requestOrigin.apiValue,
       'requestedForGuest': requestedForGuest,
       'guestName': _trimOrNull(guestName),
-      'guestReference': _trimOrNull(guestReference),
-      'businessPriority': businessPriority.apiValue,
       'scheduledStartAt': _trimOrNull(scheduledStartAt),
       'scheduledEndAt': _trimOrNull(scheduledEndAt),
     };
@@ -1146,8 +1096,6 @@ class UpdateMaintenanceOrderModel extends CreateMaintenanceOrderModel {
     required super.requestOrigin,
     required super.requestedForGuest,
     required super.guestName,
-    required super.guestReference,
-    required super.businessPriority,
     required super.scheduledStartAt,
     required super.scheduledEndAt,
   });

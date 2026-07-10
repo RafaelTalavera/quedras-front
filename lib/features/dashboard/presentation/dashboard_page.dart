@@ -16,9 +16,9 @@ class DashboardPage extends StatefulWidget {
 
 class _DashboardPageState extends State<DashboardPage> {
   bool _loading = false;
-  String _statusLabel = 'Pendiente de validacion';
+  String _statusLabel = 'Pendente de validacao';
   String _statusDetail =
-      'Use el boton para verificar el estado del backend configurado.';
+      'Use o botao para verificar o estado do backend configurado.';
 
   @override
   Widget build(BuildContext context) {
@@ -28,7 +28,7 @@ class _DashboardPageState extends State<DashboardPage> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: <Widget>[
         Text(
-          'Panel operativo del hotel',
+          'Painel operacional do hotel',
           style: textTheme.headlineMedium?.copyWith(
             fontWeight: FontWeight.w700,
             color: const Color(0xFF0B2942),
@@ -36,7 +36,7 @@ class _DashboardPageState extends State<DashboardPage> {
         ),
         const SizedBox(height: 8),
         Text(
-          'Cliente autenticado con JWT para agenda y reservas protegidas por rol.',
+          'Cliente autenticado com JWT para agenda e reservas protegidas por perfil.',
           style: textTheme.bodyLarge?.copyWith(color: const Color(0xFF4E6071)),
         ),
         const SizedBox(height: 20),
@@ -48,26 +48,27 @@ class _DashboardPageState extends State<DashboardPage> {
               title: 'Servidor API',
               value: _statusLabel,
               caption: _statusDetail,
-              accentColor: _statusLabel == 'Disponible'
+              accentColor: _statusLabel == 'Disponivel'
                   ? const Color(0xFF2B8A3E)
                   : const Color(0xFFBB3E03),
             ),
             _InfoCard(
               title: 'Base URL',
               value: BackendConfig.apiBaseUrl,
-              caption: 'Configurable via --dart-define=COSTANORTE_API_BASE_URL',
+              caption: 'Configuravel via --dart-define=COSTANORTE_API_BASE_URL',
               accentColor: Color(0xFF13505B),
             ),
             const _InfoCard(
-              title: 'Modulo actual',
-              value: 'Hito 12 - Seguridad JWT',
-              caption: 'Login, sesion y autorizacion con rol OPERATOR.',
+              title: 'Modulo atual',
+              value: 'Marco 12 - Seguranca JWT',
+              caption: 'Login, sessao e autorizacao com papel OPERATOR.',
               accentColor: Color(0xFF4A4E69),
             ),
             const _InfoCard(
-              title: 'Seguridad activa',
+              title: 'Seguranca ativa',
               value: 'Bearer + rol',
-              caption: 'Las reservas viajan autenticadas contra el backend configurado.',
+              caption:
+                  'As reservas trafegam autenticadas contra o backend configurado.',
               accentColor: Color(0xFF167D85),
             ),
           ],
@@ -100,9 +101,9 @@ class _DashboardPageState extends State<DashboardPage> {
 
       if (!response.isSuccess) {
         setState(() {
-          _statusLabel = 'No disponible';
+          _statusLabel = 'Indisponivel';
           _statusDetail =
-              'HTTP ${response.statusCode}: backend no respondio OK.';
+              'HTTP ${response.statusCode}: o backend nao respondeu OK.';
           _loading = false;
         });
         return;
@@ -115,8 +116,8 @@ class _DashboardPageState extends State<DashboardPage> {
           payload?['environment']?.toString() ?? 'indefinido';
 
       setState(() {
-        _statusLabel = 'Disponible';
-        _statusDetail = '$service | $status | entorno: $environment';
+        _statusLabel = 'Disponivel';
+        _statusDetail = '$service | $status | ambiente: $environment';
         _loading = false;
       });
     } catch (error) {
@@ -124,8 +125,8 @@ class _DashboardPageState extends State<DashboardPage> {
         return;
       }
       setState(() {
-        _statusLabel = 'No disponible';
-        _statusDetail = 'Sin respuesta del backend: $error';
+        _statusLabel = 'Indisponivel';
+        _statusDetail = 'Sem resposta do backend: $error';
         _loading = false;
       });
     }

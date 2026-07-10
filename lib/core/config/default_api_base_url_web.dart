@@ -1,11 +1,13 @@
+const String _productionApiBaseUrl =
+    'https://quadras-back-production-4973.up.railway.app/api/v1';
+
 String get defaultApiBaseUrl {
   if (_looksLikeLocalFlutterDevServer(Uri.base)) {
     return 'http://127.0.0.1:8080/api/v1';
   }
 
-  final Uri apiUri = Uri.base.resolve('/api/v1');
-  final String url = apiUri.toString();
-  return url.endsWith('/') ? url.substring(0, url.length - 1) : url;
+  // En despliegues web publicados, el frontend consume Railway por defecto.
+  return _productionApiBaseUrl;
 }
 
 bool _looksLikeLocalFlutterDevServer(Uri uri) {

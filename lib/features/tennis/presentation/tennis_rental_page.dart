@@ -227,7 +227,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
             eyebrow: 'Operacao ativa',
             title: 'Quadras de tenis',
             description:
-                'Reserva operativa de quadras com controle de horas, pagamento, materiais y reglas por tipo de usuario.',
+                'Reserva operacional de quadras com controle de horas, pagamento, materiais e regras por tipo de usuario.',
             icon: Icons.sports_tennis_rounded,
             photoAlignment: Alignment.centerRight,
             action: Wrap(
@@ -256,7 +256,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                 OutlinedButton.icon(
                   onPressed: _saving ? null : _openSettingsDialog,
                   icon: const Icon(Icons.tune_rounded),
-                  label: const Text('Tarifas y materiales'),
+                  label: const Text('Tarifas e materiais'),
                 ),
               ],
             ),
@@ -1680,7 +1680,8 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                               booking: booking,
                               sharing: _sharingBookingId == booking.id,
                               onHistory: () => _openBookingHistory(booking),
-                              loadingHistory: _loadingHistoryBookingId == booking.id,
+                              loadingHistory:
+                                  _loadingHistoryBookingId == booking.id,
                               onShare: () => _shareBookingReceipt(booking),
                             ),
                           ),
@@ -2138,7 +2139,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       }
       await showAuditTimelineDialog(
         context: context,
-        title: 'Historial de ${booking.customerName}',
+        title: 'Historico de ${booking.customerName}',
         events: history,
       );
     } catch (error) {
@@ -2147,7 +2148,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       }
       await AppAlerts.error(
         context,
-        title: 'Historial de la reserva',
+        title: 'Historico da reserva',
         message: error.toString().replaceFirst('Bad state: ', ''),
       );
     } finally {
@@ -2603,7 +2604,9 @@ class _CourtBookingTile extends StatelessWidget {
                             ? Icons.hourglass_top_rounded
                             : Icons.send_rounded,
                       ),
-                      label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+                      label: Text(
+                        sharing ? 'Compartilhando...' : 'Compartilhar',
+                      ),
                     ),
                   if (onHistory != null)
                     OutlinedButton.icon(
@@ -2614,7 +2617,7 @@ class _CourtBookingTile extends StatelessWidget {
                             : Icons.history_rounded,
                       ),
                       label: Text(
-                        loadingHistory ? 'Cargando...' : 'Historial',
+                        loadingHistory ? 'Carregando...' : 'Historico',
                       ),
                     ),
                   if (onCancel != null)
@@ -2693,13 +2696,15 @@ class _CourtBookingActionDialog extends StatelessWidget {
                 icon: Icon(
                   sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
                 ),
-                label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+                label: Text(
+                  sharing ? 'Compartilhando...' : 'Compartilhar',
+                ),
               ),
               OutlinedButton.icon(
                 onPressed: () =>
                     Navigator.of(context).pop(_CourtBookingAction.history),
                 icon: const Icon(Icons.history_rounded),
-                label: const Text('Historial'),
+                label: const Text('Historico'),
               ),
               OutlinedButton.icon(
                 onPressed: canEdit
@@ -3034,13 +3039,13 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                 else
                   TextFormField(
                     controller: _nameController,
-                    decoration: const InputDecoration(labelText: 'Nombre'),
+                    decoration: const InputDecoration(labelText: 'Nome'),
                     onChanged: (String value) {
                       _manualCustomerName = value;
                     },
                     validator: (String? value) =>
                         value == null || value.trim().isEmpty
-                        ? 'Informe el nombre'
+                        ? 'Informe o nome'
                         : null,
                   ),
                 const SizedBox(height: 12),
@@ -3233,7 +3238,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                 context,
                 title: 'Horario invalido',
                 message:
-                    'Seleccione una hora de inicio que tenga al menos una hora de fin disponible.',
+                    'Selecione um horario de inicio que tenha pelo menos um horario de termino disponivel.',
               );
               return;
             }
@@ -3350,7 +3355,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
   Widget _buildPartnerCoachField() {
     if (_loadingPartnerCoaches) {
       return const InputDecorator(
-        decoration: InputDecoration(labelText: 'Nombre'),
+        decoration: InputDecoration(labelText: 'Nome'),
         child: SizedBox(
           height: 24,
           child: Align(
@@ -3370,7 +3375,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
         children: <Widget>[
           TextFormField(
             enabled: false,
-            decoration: const InputDecoration(labelText: 'Nombre'),
+            decoration: const InputDecoration(labelText: 'Nome'),
             initialValue: '',
           ),
           const SizedBox(height: 8),
@@ -3393,7 +3398,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
     }
     return DropdownButtonFormField<String>(
       value: _selectedPartnerCoachName,
-      decoration: const InputDecoration(labelText: 'Nombre'),
+      decoration: const InputDecoration(labelText: 'Nome'),
       items: _partnerCoaches
           .map(
             (CourtPartnerCoach coach) => DropdownMenuItem<String>(
@@ -3403,7 +3408,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
           )
           .toList(),
       validator: (String? value) => value == null || value.trim().isEmpty
-          ? 'Seleccione un profesor parceiro'
+          ? 'Selecione um professor parceiro'
           : null,
       onChanged: (String? value) {
         if (value == null) {
@@ -3668,7 +3673,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
               ),
             );
           },
-          child: const Text('Guardar'),
+          child: const Text('Salvar'),
         ),
       ],
     );
@@ -3791,7 +3796,8 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
                           children: <Widget>[
                             IconButton(
                               onPressed:
-                                  _historyLoadingKey == 'material:${material.id}'
+                                  _historyLoadingKey ==
+                                      'material:${material.id}'
                                   ? null
                                   : () => _openMaterialHistory(material),
                               icon: Icon(
@@ -3835,7 +3841,7 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
                         });
                       },
                       decoration: const InputDecoration(
-                        labelText: 'Buscar profesor',
+                        labelText: 'Buscar professor',
                         prefixIcon: Icon(Icons.search_rounded),
                       ),
                     ),
@@ -3926,7 +3932,7 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
   Future<void> _openRateHistory(CourtRateSetting rate) async {
     await _openSettingsHistory(
       loadingKey: 'rate:${rate.id}',
-      title: 'Historial de tarifa',
+      title: 'Historico de tarifa',
       loader: () => widget.service.rateHistory(rate.id),
     );
   }
@@ -3934,7 +3940,7 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
   Future<void> _openMaterialHistory(CourtMaterialSetting material) async {
     await _openSettingsHistory(
       loadingKey: 'material:${material.id}',
-      title: 'Historial de material',
+      title: 'Historico de material',
       loader: () => widget.service.materialHistory(material.id),
     );
   }
@@ -3942,7 +3948,7 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
   Future<void> _openPartnerCoachHistory(CourtPartnerCoach coach) async {
     await _openSettingsHistory(
       loadingKey: 'coach:${coach.id}',
-      title: 'Historial de ${coach.name}',
+      title: 'Historico de ${coach.name}',
       loader: () => widget.service.partnerCoachHistory(coach.id),
     );
   }
@@ -4078,7 +4084,7 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
                 children: <Widget>[
                   TextField(
                     controller: labelController,
-                    decoration: const InputDecoration(labelText: 'Nombre'),
+                    decoration: const InputDecoration(labelText: 'Nome'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
@@ -4281,11 +4287,11 @@ class _PartnerCoachEditorDialogState extends State<_PartnerCoachEditorDialog> {
               TextFormField(
                 controller: _nameController,
                 decoration: const InputDecoration(
-                  labelText: 'Nombre del profesor',
+                  labelText: 'Nome do professor',
                 ),
                 validator: (String? value) {
                   if (value == null || value.trim().isEmpty) {
-                    return 'Informe el nombre';
+                    return 'Informe o nome';
                   }
                   return null;
                 },
@@ -4300,7 +4306,7 @@ class _PartnerCoachEditorDialogState extends State<_PartnerCoachEditorDialog> {
                       _active = value;
                     });
                   },
-                  title: const Text('Activo'),
+                  title: const Text('Ativo'),
                 ),
               ],
             ],
@@ -4324,7 +4330,7 @@ class _PartnerCoachEditorDialogState extends State<_PartnerCoachEditorDialog> {
               ),
             );
           },
-          child: const Text('Guardar'),
+          child: const Text('Salvar'),
         ),
       ],
     );
@@ -4553,7 +4559,7 @@ String _statusLabel(CourtBooking booking) {
   if (booking.status == CourtBookingStatus.cancelled) {
     return 'Cancelada';
   }
-  return booking.paid ? 'Pago' : 'Pendiente';
+  return booking.paid ? 'Pago' : 'Pendente';
 }
 
 String _statusDescription(CourtBooking booking) {

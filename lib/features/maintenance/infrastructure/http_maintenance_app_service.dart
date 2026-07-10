@@ -84,7 +84,7 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
     );
     final List<Object?> decoded = _expectSuccessList(
       response,
-      invalidMessage: 'Formato invalido del historial de locales.',
+      invalidMessage: 'Formato invalido do historico de locais.',
     );
     return decoded
         .whereType<Map>()
@@ -258,7 +258,7 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
     );
     final List<Object?> decoded = _expectSuccessList(
       response,
-      invalidMessage: 'Formato invalido del historial de responsables.',
+      invalidMessage: 'Formato invalido do historico de responsaveis.',
     );
     return decoded
         .whereType<Map>()
@@ -514,7 +514,7 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
     );
     final List<Object?> decoded = _expectSuccessList(
       response,
-      invalidMessage: 'Formato invalido del historial de ordenes de mantenimiento.',
+      invalidMessage: 'Formato invalido do historico de ordens de manutencao.',
     );
     return decoded
         .whereType<Map>()

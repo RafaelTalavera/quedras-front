@@ -113,7 +113,9 @@ final class HttpCourtAppService implements CourtAppService {
     }
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! List) {
-      throw StateError('Formato invalido del historial de profesores asociados.');
+      throw StateError(
+        'Formato invalido do historico de professores associados.',
+      );
     }
     return decoded
         .whereType<Map>()
@@ -151,7 +153,7 @@ final class HttpCourtAppService implements CourtAppService {
     }
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! List) {
-      throw StateError('Formato invalido del historial de tarifas.');
+      throw StateError('Formato invalido do historico de tarifas.');
     }
     return decoded
         .whereType<Map>()
@@ -211,7 +213,7 @@ final class HttpCourtAppService implements CourtAppService {
     }
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! List) {
-      throw StateError('Formato invalido del historial de materiales.');
+      throw StateError('Formato invalido do historico de materiais.');
     }
     return decoded
         .whereType<Map>()
@@ -347,7 +349,7 @@ final class HttpCourtAppService implements CourtAppService {
     }
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! List) {
-      throw StateError('Formato invalido del historial de reservas de quadras.');
+      throw StateError('Formato invalido do historico de reservas de quadras.');
     }
     return decoded
         .whereType<Map>()
@@ -385,7 +387,9 @@ final class HttpCourtAppService implements CourtAppService {
     } on TimeoutException {
       throw StateError('Tempo esgotado ao conectar ao backend configurado.');
     } on FormatException catch (error) {
-      throw StateError('Resposta invalida do backend configurado: ${error.message}');
+      throw StateError(
+        'Resposta invalida do backend configurado: ${error.message}',
+      );
     } on Exception {
       throw StateError(
         'Nao foi possivel conectar ao backend configurado. Verifique a URL e a conectividade.',

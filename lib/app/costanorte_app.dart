@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 
 import '../core/config/backend_config.dart';
 import '../core/network/api_client.dart';
@@ -134,6 +135,9 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
       title: 'CostaNorte',
       debugShowCheckedModeBanner: false,
       theme: CostaNorteBrand.buildTheme(),
+      locale: const Locale('pt', 'BR'),
+      supportedLocales: const <Locale>[Locale('pt', 'BR')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
       initialRoute: AppRoutes.login,
       onGenerateRoute: (settings) => AppRouter.generateRoute(
         settings: settings,

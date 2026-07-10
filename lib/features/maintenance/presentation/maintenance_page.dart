@@ -22,6 +22,13 @@ import '../domain/maintenance_models.dart';
 
 enum MaintenanceSection { operationalSummary }
 
+enum _MaintenanceQuickLauncher {
+  elevators,
+  airConditioning,
+  internet,
+  internal,
+}
+
 enum _ExecutiveSummaryFilter {
   allOpen,
   carryOver,
@@ -94,6 +101,14 @@ class _MaintenancePageState extends State<MaintenancePage>
   final MaintenanceDailyReportPdfExporter _dailyReportPdfExporter =
       DefaultMaintenanceDailyReportPdfExporter();
 
+  static const List<_MaintenanceQuickLauncher> _quickLaunchers =
+      <_MaintenanceQuickLauncher>[
+        _MaintenanceQuickLauncher.elevators,
+        _MaintenanceQuickLauncher.airConditioning,
+        _MaintenanceQuickLauncher.internet,
+        _MaintenanceQuickLauncher.internal,
+      ];
+
   @override
   void initState() {
     super.initState();
@@ -148,9 +163,16 @@ class _MaintenancePageState extends State<MaintenancePage>
               runSpacing: 12,
               children: <Widget>[
                 FilledButton.icon(
-                  onPressed: _saving ? null : _createOrder,
+                  onPressed: _saving ? null : () => _createOrder(),
                   icon: const Icon(Icons.add_circle_outline_rounded),
-                  label: const Text('Lancar ordem'),
+                  label: const Text('Nova ordem'),
+                ),
+                ..._quickLaunchers.map(
+                  (_MaintenanceQuickLauncher launcher) => OutlinedButton.icon(
+                    onPressed: _saving ? null : () => _createOrder(launcher),
+                    icon: Icon(_launcherIcon(launcher)),
+                    label: Text(_launcherLabel(launcher)),
+                  ),
                 ),
                 OutlinedButton.icon(
                   onPressed: _saving ? null : _openPreventivePlans,
@@ -400,9 +422,7 @@ class _MaintenancePageState extends State<MaintenancePage>
     final int urgentCount = openOrders
         .where(
           (MaintenanceOrder order) =>
-              order.priority == MaintenancePriority.urgent ||
-              order.businessPriority ==
-                  MaintenanceBusinessPriority.criticalOperation,
+              order.priority == MaintenancePriority.urgent,
         )
         .length;
     final int scheduledCount = openOrders
@@ -830,9 +850,7 @@ class _MaintenancePageState extends State<MaintenancePage>
         return openOrders
             .where(
               (MaintenanceOrder order) =>
-                  order.priority == MaintenancePriority.urgent ||
-                  order.businessPriority ==
-                      MaintenanceBusinessPriority.criticalOperation,
+                  order.priority == MaintenancePriority.urgent,
             )
             .toList();
       case _ExecutiveSummaryFilter.scheduled:
@@ -883,9 +901,7 @@ class _MaintenancePageState extends State<MaintenancePage>
           urgentCount: _openDayOrders
               .where(
                 (MaintenanceOrder order) =>
-                    order.priority == MaintenancePriority.urgent ||
-                    order.businessPriority ==
-                        MaintenanceBusinessPriority.criticalOperation,
+                    order.priority == MaintenancePriority.urgent,
               )
               .length,
           scheduledCount: _openDayOrders
@@ -931,9 +947,7 @@ class _MaintenancePageState extends State<MaintenancePage>
       urgentCount: filteredOrders
           .where(
             (MaintenanceOrder order) =>
-                order.priority == MaintenancePriority.urgent ||
-                order.businessPriority ==
-                    MaintenanceBusinessPriority.criticalOperation,
+                order.priority == MaintenancePriority.urgent,
           )
           .length,
       scheduledCount: filteredOrders
@@ -1003,11 +1017,22 @@ class _MaintenancePageState extends State<MaintenancePage>
     );
   }
 
-  Future<void> _createOrder() async {
+  Future<void> _createOrder([_MaintenanceQuickLauncher? launcher]) async {
     await _loadProviders();
     if (!mounted) {
       return;
     }
+    final List<MaintenanceProvider> activeProviders = _providers
+        .where((MaintenanceProvider item) => item.active)
+        .toList();
+    final List<MaintenanceProvider> dialogProviders = _prioritizeProviders(
+      activeProviders,
+      launcher,
+    );
+    final int? initialProviderId = _initialProviderIdForLauncher(
+      dialogProviders,
+      launcher,
+    );
     final _MaintenanceOrderDraft? draft =
         await showDialog<_MaintenanceOrderDraft>(
           context: context,
@@ -1015,15 +1040,83 @@ class _MaintenancePageState extends State<MaintenancePage>
             locations: _locations
                 .where((MaintenanceLocation item) => item.active)
                 .toList(),
-            providers: _providers
-                .where((MaintenanceProvider item) => item.active)
-                .toList(),
+            providers: dialogProviders,
+            initialProviderId: initialProviderId,
+            launcherLabel: launcher == null ? null : _launcherLabel(launcher),
           ),
         );
     if (draft == null) {
       return;
     }
     await _saveOrderDraft(draft);
+  }
+
+  List<MaintenanceProvider> _prioritizeProviders(
+    List<MaintenanceProvider> providers,
+    _MaintenanceQuickLauncher? launcher,
+  ) {
+    if (launcher == null) {
+      return providers;
+    }
+    final List<MaintenanceProvider> matching = <MaintenanceProvider>[];
+    final List<MaintenanceProvider> remaining = <MaintenanceProvider>[];
+    for (final MaintenanceProvider provider in providers) {
+      if (_matchesLauncher(provider, launcher)) {
+        matching.add(provider);
+      } else {
+        remaining.add(provider);
+      }
+    }
+    return <MaintenanceProvider>[...matching, ...remaining];
+  }
+
+  int? _initialProviderIdForLauncher(
+    List<MaintenanceProvider> providers,
+    _MaintenanceQuickLauncher? launcher,
+  ) {
+    if (launcher == null) {
+      return null;
+    }
+    for (final MaintenanceProvider provider in providers) {
+      if (_matchesLauncher(provider, launcher)) {
+        return provider.id;
+      }
+    }
+    return null;
+  }
+
+  bool _matchesLauncher(
+    MaintenanceProvider provider,
+    _MaintenanceQuickLauncher launcher,
+  ) {
+    return switch (launcher) {
+      _MaintenanceQuickLauncher.elevators =>
+        provider.specialty == MaintenanceProviderSpecialty.elevators,
+      _MaintenanceQuickLauncher.airConditioning =>
+        provider.specialty == MaintenanceProviderSpecialty.airConditioning,
+      _MaintenanceQuickLauncher.internet =>
+        provider.specialty == MaintenanceProviderSpecialty.internet,
+      _MaintenanceQuickLauncher.internal =>
+        provider.providerType == MaintenanceProviderType.internal,
+    };
+  }
+
+  String _launcherLabel(_MaintenanceQuickLauncher launcher) {
+    return switch (launcher) {
+      _MaintenanceQuickLauncher.elevators => 'Elevadores',
+      _MaintenanceQuickLauncher.airConditioning => 'Ar-condicionado',
+      _MaintenanceQuickLauncher.internet => 'Internet',
+      _MaintenanceQuickLauncher.internal => 'Interno',
+    };
+  }
+
+  IconData _launcherIcon(_MaintenanceQuickLauncher launcher) {
+    return switch (launcher) {
+      _MaintenanceQuickLauncher.elevators => Icons.elevator_rounded,
+      _MaintenanceQuickLauncher.airConditioning => Icons.ac_unit_rounded,
+      _MaintenanceQuickLauncher.internet => Icons.router_rounded,
+      _MaintenanceQuickLauncher.internal => Icons.handyman_rounded,
+    };
   }
 
   Future<void> _editOrder({MaintenanceOrder? order}) async {
@@ -1526,7 +1619,6 @@ class _MaintenancePageState extends State<MaintenancePage>
       ..writeln('Servico: ${order.serviceLabel}')
       ..writeln('Tipo: ${order.orderKind.label}')
       ..writeln('Prioridade tecnica: ${order.priority.label}')
-      ..writeln('Prioridade operacional: ${order.businessPriority.label}')
       ..writeln('Origem: ${order.requestOrigin.label}')
       ..writeln('Status: ${order.status.label}')
       ..writeln('Agenda: ${_orderScheduleLabel(order)}');
@@ -1706,8 +1798,6 @@ class _MaintenanceOrderDraft {
     required this.requestOrigin,
     required this.requestedForGuest,
     required this.guestName,
-    required this.guestReference,
-    required this.businessPriority,
     required this.scheduledStartAt,
     required this.scheduledEndAt,
   });
@@ -1721,8 +1811,6 @@ class _MaintenanceOrderDraft {
   final MaintenanceRequestOrigin requestOrigin;
   final bool requestedForGuest;
   final String? guestName;
-  final String? guestReference;
-  final MaintenanceBusinessPriority businessPriority;
   final DateTime? scheduledStartAt;
   final DateTime? scheduledEndAt;
 
@@ -1737,8 +1825,6 @@ class _MaintenanceOrderDraft {
       requestOrigin: requestOrigin,
       requestedForGuest: requestedForGuest,
       guestName: guestName,
-      guestReference: guestReference,
-      businessPriority: businessPriority,
       scheduledStartAt: scheduledStartAt == null
           ? null
           : _formatLocalDateTimeApi(scheduledStartAt!),
@@ -1759,8 +1845,6 @@ class _MaintenanceOrderDraft {
       requestOrigin: requestOrigin,
       requestedForGuest: requestedForGuest,
       guestName: guestName,
-      guestReference: guestReference,
-      businessPriority: businessPriority,
       scheduledStartAt: scheduledStartAt == null
           ? null
           : _formatLocalDateTimeApi(scheduledStartAt!),
@@ -1776,11 +1860,15 @@ class _MaintenanceOrderDialog extends StatefulWidget {
     required this.locations,
     required this.providers,
     this.initialOrder,
+    this.initialProviderId,
+    this.launcherLabel,
   });
 
   final List<MaintenanceLocation> locations;
   final List<MaintenanceProvider> providers;
   final MaintenanceOrder? initialOrder;
+  final int? initialProviderId;
+  final String? launcherLabel;
 
   @override
   State<_MaintenanceOrderDialog> createState() =>
@@ -1793,7 +1881,6 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
   int? _providerId;
   late MaintenanceOrderKind _orderKind;
   late MaintenanceRequestOrigin _requestOrigin;
-  late MaintenanceBusinessPriority _businessPriority;
   late bool _hasSchedule;
   late DateTime _date;
   late TimeOfDay _startTime;
@@ -1801,7 +1888,6 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
   late final TextEditingController _titleController;
   late final TextEditingController _descriptionController;
   late final TextEditingController _guestNameController;
-  late final TextEditingController _guestReferenceController;
   late final TextEditingController _locationController;
 
   @override
@@ -1809,12 +1895,12 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
     super.initState();
     final MaintenanceOrder? order = widget.initialOrder;
     _locationId = order?.locationId ?? widget.locations.first.id;
-    _providerId = order?.providerId;
-    _orderKind = order?.orderKind ?? MaintenanceOrderKind.corrective;
+    _providerId = order?.providerId ?? widget.initialProviderId;
+    _orderKind = widget.launcherLabel != null && order == null
+        ? MaintenanceOrderKind.corrective
+        : order?.orderKind ?? MaintenanceOrderKind.corrective;
     _requestOrigin =
         order?.requestOrigin ?? MaintenanceRequestOrigin.internalRole;
-    _businessPriority =
-        order?.businessPriority ?? MaintenanceBusinessPriority.internalStandard;
     _hasSchedule = order?.scheduledStartAt != null;
     final DateTime baseDate = order?.scheduledStartAt ?? DateTime.now();
     _date = DateTime(baseDate.year, baseDate.month, baseDate.day);
@@ -1827,9 +1913,6 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
       text: order?.description ?? '',
     );
     _guestNameController = TextEditingController(text: order?.guestName ?? '');
-    _guestReferenceController = TextEditingController(
-      text: order?.guestReference ?? '',
-    );
     _locationController = TextEditingController(text: _selectedLocationTitle);
   }
 
@@ -1838,7 +1921,6 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
     _titleController.dispose();
     _descriptionController.dispose();
     _guestNameController.dispose();
-    _guestReferenceController.dispose();
     _locationController.dispose();
     super.dispose();
   }
@@ -1850,6 +1932,14 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
 
   String get _selectedLocationTitle =>
       _formatLocationPickerTitle(_selectedLocation);
+
+  bool get _shouldHideProviderField =>
+      widget.initialOrder == null &&
+      widget.launcherLabel != null &&
+      widget.initialProviderId != null;
+
+  bool get _shouldHideOrderKindField =>
+      widget.initialOrder == null && widget.launcherLabel != null;
 
   List<MaintenanceOrderKind> get _availableOrderKinds {
     if (widget.initialOrder?.orderKind == MaintenanceOrderKind.preventive) {
@@ -1949,7 +2039,11 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
             mainAxisSize: MainAxisSize.min,
             children: <Widget>[
               Text(
-                widget.initialOrder == null ? 'Nova ordem' : 'Editar ordem',
+                widget.initialOrder == null
+                    ? widget.launcherLabel == null
+                          ? 'Nova ordem'
+                          : 'Nova ordem · ${widget.launcherLabel}'
+                    : 'Editar ordem',
                 style: Theme.of(context).textTheme.headlineSmall,
               ),
               const SizedBox(height: 16),
@@ -1964,25 +2058,27 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
                 onTap: _pickLocation,
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<MaintenanceOrderKind>(
-                value: _orderKind,
-                decoration: const InputDecoration(labelText: 'Tipo de ordem'),
-                items: _availableOrderKinds
-                    .map(
-                      (MaintenanceOrderKind item) =>
-                          DropdownMenuItem<MaintenanceOrderKind>(
-                            value: item,
-                            child: Text(item.label),
-                          ),
-                    )
-                    .toList(),
-                onChanged: (MaintenanceOrderKind? value) {
-                  if (value != null) {
-                    setState(() => _orderKind = value);
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
+              if (!_shouldHideOrderKindField) ...<Widget>[
+                DropdownButtonFormField<MaintenanceOrderKind>(
+                  value: _orderKind,
+                  decoration: const InputDecoration(labelText: 'Tipo de ordem'),
+                  items: _availableOrderKinds
+                      .map(
+                        (MaintenanceOrderKind item) =>
+                            DropdownMenuItem<MaintenanceOrderKind>(
+                              value: item,
+                              child: Text(item.label),
+                            ),
+                      )
+                      .toList(),
+                  onChanged: (MaintenanceOrderKind? value) {
+                    if (value != null) {
+                      setState(() => _orderKind = value);
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+              ],
               DropdownButtonFormField<MaintenanceRequestOrigin>(
                 value: _requestOrigin,
                 decoration: const InputDecoration(
@@ -2003,62 +2099,38 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
                   }
                   setState(() {
                     _requestOrigin = value;
-                    if (value == MaintenanceRequestOrigin.guestRequest) {
-                      _businessPriority =
-                          MaintenanceBusinessPriority.guestPriority;
-                    } else if (_businessPriority ==
-                        MaintenanceBusinessPriority.guestPriority) {
-                      _businessPriority =
-                          MaintenanceBusinessPriority.internalStandard;
-                    }
                   });
                 },
               ),
               const SizedBox(height: 12),
-              DropdownButtonFormField<MaintenanceBusinessPriority>(
-                value: _businessPriority,
-                decoration: const InputDecoration(
-                  labelText: 'Prioridade operacional',
-                ),
-                items: MaintenanceBusinessPriority.values
-                    .map(
-                      (MaintenanceBusinessPriority item) =>
-                          DropdownMenuItem<MaintenanceBusinessPriority>(
-                            value: item,
-                            child: Text(item.label),
-                          ),
-                    )
-                    .toList(),
-                onChanged: (MaintenanceBusinessPriority? value) {
-                  if (value != null) setState(() => _businessPriority = value);
-                },
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<int?>(
-                value: _providerId,
-                isExpanded: true,
-                style: const TextStyle(overflow: TextOverflow.ellipsis),
-                decoration: const InputDecoration(labelText: 'Prestador'),
-                items: <DropdownMenuItem<int?>>[
-                  const DropdownMenuItem<int?>(
-                    value: null,
-                    child: Text(
-                      'Sem responsavel definido',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                  ...widget.providers.map(
-                    (MaintenanceProvider item) => DropdownMenuItem<int?>(
-                      value: item.id,
+              if (!_shouldHideProviderField) ...<Widget>[
+                DropdownButtonFormField<int?>(
+                  value: _providerId,
+                  isExpanded: true,
+                  style: const TextStyle(overflow: TextOverflow.ellipsis),
+                  decoration: const InputDecoration(labelText: 'Prestador'),
+                  items: <DropdownMenuItem<int?>>[
+                    const DropdownMenuItem<int?>(
+                      value: null,
                       child: Text(
-                        '${item.name} · ${item.specialty.label} · ${item.serviceLabel}',
+                        'Sem responsavel definido',
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
-                  ),
-                ],
-                onChanged: (int? value) => setState(() => _providerId = value),
-              ),
-              const SizedBox(height: 12),
+                    ...widget.providers.map(
+                      (MaintenanceProvider item) => DropdownMenuItem<int?>(
+                        value: item.id,
+                        child: Text(
+                          '${item.name} · ${item.specialty.label} · ${item.serviceLabel}',
+                        ),
+                      ),
+                    ),
+                  ],
+                  onChanged: (int? value) =>
+                      setState(() => _providerId = value),
+                ),
+                const SizedBox(height: 12),
+              ],
               TextFormField(
                 controller: _titleController,
                 decoration: const InputDecoration(labelText: 'Titulo'),
@@ -2086,13 +2158,6 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
                   controller: _guestNameController,
                   decoration: const InputDecoration(
                     labelText: 'Nome do hospede',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _guestReferenceController,
-                  decoration: const InputDecoration(
-                    labelText: 'Referencia do hospede',
                   ),
                 ),
                 const SizedBox(height: 12),
@@ -2193,16 +2258,12 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
     final String? guestName = _guestNameController.text.trim().isEmpty
         ? null
         : _guestNameController.text.trim();
-    final String? guestReference = _guestReferenceController.text.trim().isEmpty
-        ? null
-        : _guestReferenceController.text.trim();
     if (_requestOrigin == MaintenanceRequestOrigin.guestRequest &&
-        guestName == null &&
-        guestReference == null) {
+        guestName == null) {
       AppAlerts.warning(
         context,
         title: 'Dados do hospede',
-        message: 'Informe o nome ou uma referencia do hospede.',
+        message: 'Informe o nome do hospede.',
       );
       return;
     }
@@ -2246,8 +2307,6 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
         requestedForGuest:
             _requestOrigin == MaintenanceRequestOrigin.guestRequest,
         guestName: guestName,
-        guestReference: guestReference,
-        businessPriority: _businessPriority,
         scheduledStartAt: startAt,
         scheduledEndAt: endAt,
       ),

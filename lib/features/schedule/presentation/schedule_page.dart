@@ -307,7 +307,7 @@ class _SchedulePageState extends State<SchedulePage> {
       }
       await showAuditTimelineDialog(
         context: context,
-        title: 'Historial de ${reservation.guestName}',
+        title: 'Historico de ${reservation.guestName}',
         events: history,
       );
     } catch (error) {
@@ -315,7 +315,8 @@ class _SchedulePageState extends State<SchedulePage> {
         return;
       }
       setState(() {
-        _error = 'No fue posible cargar el historial: ${_resolveErrorMessage(error)}';
+        _error =
+            'Nao foi possivel carregar o historico: ${_resolveErrorMessage(error)}';
       });
     } finally {
       if (mounted) {
@@ -837,7 +838,7 @@ class _ReservationTile extends StatelessWidget {
                   OutlinedButton.icon(
                     onPressed: loadingHistory ? null : onHistory,
                     icon: const Icon(Icons.history_rounded),
-                    label: Text(loadingHistory ? 'Cargando...' : 'Historial'),
+                    label: Text(loadingHistory ? 'Carregando...' : 'Historico'),
                   ),
                   OutlinedButton.icon(
                     onPressed: processing ? null : onEdit,

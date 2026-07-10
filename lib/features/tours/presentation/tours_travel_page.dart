@@ -1559,7 +1559,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     final ToursBooking? selected =
         booking ??
         await _pickBooking(
-          'Compartir',
+          'Compartilhar',
           emptyMessage: 'Nao ha agendamentos para compartilhar neste dia.',
         );
     if (selected == null || !mounted) {
@@ -1672,7 +1672,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       }
       await showAuditTimelineDialog(
         context: context,
-        title: 'Historial de ${booking.clientName}',
+        title: 'Historico de ${booking.clientName}',
         events: history,
       );
     } catch (error) {
@@ -1681,7 +1681,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       }
       await AppAlerts.error(
         context,
-        title: 'Historial del agendamiento',
+        title: 'Historico do agendamento',
         message: _describeError(error),
       );
     } finally {
@@ -2031,9 +2031,9 @@ class _ToursTravelPageState extends State<ToursTravelPage>
             const SizedBox(height: 2),
             Text(
               'Hospede / unidade: ${b.guestReference}',
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: CostaNorteBrand.mutedInk,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyMedium?.copyWith(color: CostaNorteBrand.mutedInk),
             ),
             if (b.providerOfferingName != null) ...<Widget>[
               const SizedBox(height: 4),
@@ -2104,7 +2104,9 @@ class _ToursTravelPageState extends State<ToursTravelPage>
                             ? Icons.hourglass_top_rounded
                             : Icons.send_rounded,
                       ),
-                      label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+                      label: Text(
+                        sharing ? 'Compartilhando...' : 'Compartilhar',
+                      ),
                     ),
                   if (onHistory != null)
                     OutlinedButton.icon(
@@ -2115,7 +2117,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
                             : Icons.history_rounded,
                       ),
                       label: Text(
-                        loadingHistory ? 'Cargando...' : 'Historial',
+                        loadingHistory ? 'Carregando...' : 'Historico',
                       ),
                     ),
                   if (onCancel != null)
@@ -2206,13 +2208,15 @@ class _ToursBookingActionDialog extends StatelessWidget {
                 icon: Icon(
                   sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
                 ),
-                label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+                label: Text(
+                  sharing ? 'Compartilhando...' : 'Compartilhar',
+                ),
               ),
               OutlinedButton.icon(
                 onPressed: () =>
                     Navigator.of(context).pop(_ToursBookingAction.history),
                 icon: const Icon(Icons.history_rounded),
-                label: const Text('Historial'),
+                label: const Text('Historico'),
               ),
               OutlinedButton.icon(
                 onPressed: canEdit
@@ -3142,16 +3146,14 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                         ? null
                         : () => _openProviderHistory(_selectedProvider!),
                     icon: Icon(
-                      _historyLoadingKey ==
-                              'provider:${_selectedProvider!.id}'
+                      _historyLoadingKey == 'provider:${_selectedProvider!.id}'
                           ? Icons.hourglass_top_rounded
                           : Icons.history_rounded,
                     ),
                     label: Text(
-                      _historyLoadingKey ==
-                              'provider:${_selectedProvider!.id}'
-                          ? 'Cargando...'
-                          : 'Historial del proveedor',
+                      _historyLoadingKey == 'provider:${_selectedProvider!.id}'
+                          ? 'Carregando...'
+                          : 'Historico do fornecedor',
                     ),
                   ),
                 ),
@@ -3214,8 +3216,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                                   child: Text(
                                     _historyLoadingKey ==
                                             'offering:${_selectedProvider!.id}:$index'
-                                        ? 'Cargando...'
-                                        : 'Historial',
+                                        ? 'Carregando...'
+                                        : 'Historico',
                                   ),
                                 ),
                               TextButton(
@@ -3480,7 +3482,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       }
       await showAuditTimelineDialog(
         context: context,
-        title: 'Historial de ${provider.name}',
+        title: 'Historico de ${provider.name}',
         events: events,
       );
     } catch (error) {
@@ -3514,7 +3516,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       }
       await showAuditTimelineDialog(
         context: context,
-        title: 'Historial de ${offering.name}',
+        title: 'Historico de ${offering.name}',
         events: events,
       );
     } catch (error) {

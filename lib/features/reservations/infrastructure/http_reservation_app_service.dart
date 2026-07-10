@@ -108,7 +108,7 @@ final class HttpReservationAppService implements ReservationAppService {
 
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! List) {
-      throw StateError('Formato invalido del historial retornado por el backend.');
+      throw StateError('Formato invalido do historico retornado pelo backend.');
     }
     return decoded
         .map<AuditEventModel>(
@@ -125,7 +125,9 @@ final class HttpReservationAppService implements ReservationAppService {
     } on TimeoutException {
       throw StateError('Tempo esgotado ao conectar ao backend configurado.');
     } on FormatException catch (error) {
-      throw StateError('Resposta inv\u00e1lida do backend configurado: ${error.message}');
+      throw StateError(
+        'Resposta inv\u00e1lida do backend configurado: ${error.message}',
+      );
     } on Exception {
       throw StateError(
         'N\u00e3o foi poss\u00edvel conectar ao backend configurado. Verifique a URL e a conectividade.',

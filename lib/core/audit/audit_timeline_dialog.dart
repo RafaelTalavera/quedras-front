@@ -20,13 +20,10 @@ Future<void> showAuditTimelineDialog({
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
-            Text(
-              title,
-              style: Theme.of(dialogContext).textTheme.headlineSmall,
-            ),
+            Text(title, style: Theme.of(dialogContext).textTheme.headlineSmall),
             const SizedBox(height: 8),
             Text(
-              'Cambios registrados con fecha, usuario y detalle.',
+              'Alteracoes registradas com data, usuario e detalhes.',
               style: Theme.of(dialogContext).textTheme.bodyMedium,
             ),
             const SizedBox(height: 18),
@@ -35,7 +32,7 @@ Future<void> showAuditTimelineDialog({
                   ? const Center(
                       child: Padding(
                         padding: EdgeInsets.all(20),
-                        child: Text('Aun no hay eventos de auditoria.'),
+                        child: Text('Ainda nao ha eventos de auditoria.'),
                       ),
                     )
                   : ListView.separated(
@@ -53,7 +50,7 @@ Future<void> showAuditTimelineDialog({
               alignment: Alignment.centerRight,
               child: OutlinedButton(
                 onPressed: () => Navigator.of(dialogContext).pop(),
-                child: const Text('Cerrar'),
+                child: const Text('Fechar'),
               ),
             ),
           ],
@@ -85,7 +82,10 @@ class _AuditEventCard extends StatelessWidget {
             runSpacing: 8,
             children: <Widget>[
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: CostaNorteBrand.foam,
                   borderRadius: BorderRadius.circular(999),
@@ -137,11 +137,11 @@ class _AuditEventCard extends StatelessWidget {
   static String _actionLabel(String actionName) {
     switch (actionName.trim().toUpperCase()) {
       case 'CREATED':
-        return 'Creacion';
+        return 'Criacao';
       case 'UPDATED':
-        return 'Actualizacion';
+        return 'Atualizacao';
       case 'CANCELLED':
-        return 'Cancelacion';
+        return 'Cancelamento';
       default:
         return actionName;
     }
@@ -150,17 +150,17 @@ class _AuditEventCard extends StatelessWidget {
   static String _fieldLabel(String field) {
     switch (field) {
       case 'guestName':
-        return 'Responsable';
+        return 'Responsavel';
       case 'reservationDate':
-        return 'Fecha';
+        return 'Data';
       case 'startTime':
         return 'Inicio';
       case 'endTime':
-        return 'Fin';
+        return 'Fim';
       case 'status':
         return 'Estado';
       case 'notes':
-        return 'Observaciones';
+        return 'Observacoes';
       default:
         return field;
     }

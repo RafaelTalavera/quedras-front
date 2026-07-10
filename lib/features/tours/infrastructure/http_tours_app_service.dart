@@ -145,7 +145,7 @@ final class HttpToursAppService implements ToursAppService {
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! List) {
       throw const ApiException(
-        'Formato invalido del historial de proveedores.',
+        'Formato invalido do historico de fornecedores.',
         kind: ApiErrorKind.invalidResponse,
       );
     }
@@ -162,7 +162,8 @@ final class HttpToursAppService implements ToursAppService {
     int providerId,
     int offeringId,
   ) async {
-    final String path = 'tours/providers/$providerId/offerings/$offeringId/audit';
+    final String path =
+        'tours/providers/$providerId/offerings/$offeringId/audit';
     final ApiResponse response = await _runRequest(
       method: 'GET',
       path: path,
@@ -171,7 +172,7 @@ final class HttpToursAppService implements ToursAppService {
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! List) {
       throw const ApiException(
-        'Formato invalido del historial de ofertas.',
+        'Formato invalido do historico de ofertas.',
         kind: ApiErrorKind.invalidResponse,
       );
     }
@@ -310,7 +311,7 @@ final class HttpToursAppService implements ToursAppService {
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! List) {
       throw const ApiException(
-        'Formato invalido del historial de agendamentos.',
+        'Formato invalido do historico de agendamentos.',
         kind: ApiErrorKind.invalidResponse,
       );
     }

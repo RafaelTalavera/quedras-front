@@ -16,10 +16,9 @@ String? _validatePasswordLength(String? value) {
   return null;
 }
 
-List<TextInputFormatter> get _passwordFormatters =>
-    <TextInputFormatter>[
-      LengthLimitingTextInputFormatter(15),
-    ];
+List<TextInputFormatter> get _passwordFormatters => <TextInputFormatter>[
+  LengthLimitingTextInputFormatter(15),
+];
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({
@@ -319,7 +318,7 @@ class _SettingsPageState extends State<SettingsPage> {
       }
       await AppAlerts.success(
         context,
-        title: 'Usuario creado',
+        title: 'Usuario criado',
         message: 'O acesso ${draft.username} foi cadastrado com sucesso.',
       );
     } catch (error) {

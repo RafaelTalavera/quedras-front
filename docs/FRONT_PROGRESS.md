@@ -2,9 +2,9 @@
 
 ## Estado general frontend
 - Proyecto: COSTANORTE Frontend
-- Estado: En progreso (snapshot operativo post Hito 12, con soporte inicial de despliegue web habilitado)
-- Ultimo hito trabajado: Infra web y resolucion de backend por origen publicado o URL configurada
-- Ultima actualizacion: 2026-05-13
+- Estado: En progreso (snapshot operativo post Hito 12, con despliegue web alineado al backend productivo)
+- Ultimo hito trabajado: Alineacion de frontend web con backend productivo de Railway
+- Ultima actualizacion: 2026-07-10
 - Fuente de verdad global: `C:/Users/Public/Documents/Proyectos/quadras/docs/TABLERO_PROGRESO.md`
 - Proximo paso frontend: completar comportamiento web en flujos de archivos/PDF y validar despliegue real contra backend publicado.
 
@@ -15,16 +15,17 @@
 - `Massagens` ya opera con relacion `prestador -> masajista`, resumen por prestador y acciones operativas integradas en la pantalla principal.
 - `Tours e Viagens` ya consume el resumen estandar de periodo desde backend y abre detalle por fila en ventana modal.
 - La autenticacion JWT sigue en memoria y protege modulos internos del sistema.
-- El frontend ya compila para web y resuelve el backend publicado por mismo origen (`/api/v1`) o por `COSTANORTE_API_BASE_URL`.
+- El frontend ya compila para web y resuelve el backend productivo de Railway por defecto, o por `COSTANORTE_API_BASE_URL` cuando se necesita otro host/path.
 - El frente inmediato de mejora es endurecer validaciones y UX operacional, y adaptar para web los flujos que aun dependen de archivos locales o temporales.
 
 ## Actualizacion Infra Web
-- Fecha: 2026-05-13
+- Fecha: 2026-06-02
 - El proyecto ya incluye bootstrap oficial de Flutter Web.
 - El arranque usa una fabrica de `ApiClient` por plataforma.
-- En navegador, la base URL por defecto es relativa al origen publicado: `/api/v1`.
-- Si el backend publicado vive fuera del mismo origen, el despliegue debe informar `COSTANORTE_API_BASE_URL`.
-- Validaciones ejecutadas en esta fase: `flutter analyze`, `flutter build web --debug`.
+- En navegador, la base URL por defecto en ambientes no locales apunta a `https://quadras-back-production-4973.up.railway.app/api/v1`.
+- En desarrollo local con `flutter run -d chrome`, se mantiene el fallback a `http://127.0.0.1:8080/api/v1`.
+- Si el backend publicado cambia de host o path, el despliegue puede sobreescribirlo por `COSTANORTE_API_BASE_URL`.
+- Validaciones ejecutadas en esta fase: pendientes de rerun sobre el ajuste actual.
 
 ## Hitos frontend
 | Hito | Nombre | Estado frontend | Tests | Documentacion | Commit | Observaciones |
@@ -85,6 +86,26 @@
 - Objetivo operativo cubierto: entregar al equipo de manutencao un resumen mas legible y mas probable de entrar en una hoja A4.
 - Validacion ejecutada en esta fase: `flutter analyze lib/features/maintenance/application/maintenance_daily_report_pdf_exporter.dart`.
 - Ajuste posterior del mismo frente: se elimino el recuadro de metricas superiores para que la hoja de ruta abra directamente sobre la tabla operativa.
+
+## Actualizacion Manutencao - Lancamento guiado por prestador
+- Fecha: 2026-07-10
+- El modulo de `Manutencao` ahora prioriza el flujo operativo real de lanzamiento por prestador.
+- El banner superior deja disponible un acceso rapido para:
+  - `Elevadores`
+  - `Ar-condicionado`
+  - `Internet`
+  - `Interno`
+- Cada acceso rapido abre `Nova ordem` con el prestador preseleccionado.
+- Cuando la ordem nace desde esos accesos:
+  - el campo `Prestador` deja de mostrarse
+  - el campo `Tipo de ordem` deja de mostrarse
+  - el tipo queda forzado a `Corretiva`
+- En solicitudes originadas para huesped:
+  - se elimina `Referencia do hospede`
+  - el formulario conserva solo `Nome do hospede`
+- La UI y los textos visibles del flujo quedaron alineados a portugues.
+- Validaciones ejecutadas en esta fase:
+  - `dart analyze lib/features/maintenance/domain/maintenance_models.dart lib/features/maintenance/presentation/maintenance_page.dart test/features/maintenance/infrastructure/http_maintenance_app_service_test.dart`
 
 ## Pendientes inmediatos frontend
 - Adaptar en web los flujos de exportacion PDF, archivos temporales y descargas para `Massagens`, `Quadras` y `Manutencao`.

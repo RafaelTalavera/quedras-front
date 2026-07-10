@@ -82,11 +82,11 @@ final class PtBrErrorTranslator {
       case 'Massage provider already has a booking for the selected date and time.':
         return 'Esse prestador j\u00e1 possui um atendimento para a data e hor\u00e1rio selecionados.';
       case 'Inactive massage therapists cannot receive bookings.':
-        return 'Masajistas inativos n\u00e3o podem receber agendamentos.';
+        return 'Massagistas inativos nao podem receber agendamentos.';
       case 'Massage therapist already has a booking for the selected date and time.':
-        return 'Esse masajista j\u00e1 possui um atendimento para a data e hor\u00e1rio selecionados.';
+        return 'Esse massagista ja possui um atendimento para a data e horario selecionados.';
       case 'Massage therapist name already exists for provider.':
-        return 'J\u00e1 existe um masajista com esse nome para o prestador selecionado.';
+        return 'Ja existe um massagista com esse nome para o prestador selecionado.';
       case 'Cancelled massage bookings cannot be edited.':
         return 'Atendimentos cancelados n\u00e3o podem ser editados.';
       case 'Cancelled massage bookings cannot be cancelled again.':

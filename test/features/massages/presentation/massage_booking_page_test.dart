@@ -502,12 +502,6 @@ String _formatDate(DateTime date) {
   return '$year-$month-$day';
 }
 
-String _formatShortDate(DateTime date) {
-  final String day = date.day.toString().padLeft(2, '0');
-  final String month = date.month.toString().padLeft(2, '0');
-  return '$day/$month/${date.year}';
-}
-
 ScheduleSyncService _scheduleSyncService() {
   return ScheduleSyncService(
     baseUrl: 'http://localhost/api/v1/',

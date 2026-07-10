@@ -151,7 +151,7 @@ final class DefaultMassageProviderReportPdfExporter
             _buildSummaryGrid(detail.summary),
             pw.SizedBox(height: 18),
             pw.Text(
-              'Detalhe das atencoes',
+              'Detalhe dos atendimentos',
               style: pw.TextStyle(
                 fontSize: 14,
                 fontWeight: pw.FontWeight.bold,
@@ -164,7 +164,10 @@ final class DefaultMassageProviderReportPdfExporter
               style: pw.TextStyle(fontSize: 9.5, color: _mutedColor),
             ),
             pw.SizedBox(height: 10),
-            if (items.isEmpty) _buildEmptyState() else ...items.map(_buildItemCard),
+            if (items.isEmpty)
+              _buildEmptyState()
+            else
+              ...items.map(_buildItemCard),
           ];
         },
       ),
@@ -378,9 +381,7 @@ final class DefaultMassageProviderReportPdfExporter
     return pw.Container(
       padding: const pw.EdgeInsets.only(left: 8, top: 2, bottom: 2),
       decoration: pw.BoxDecoration(
-        border: pw.Border(
-          left: pw.BorderSide(color: _borderColor, width: 1),
-        ),
+        border: pw.Border(left: pw.BorderSide(color: _borderColor, width: 1)),
       ),
       child: pw.Column(
         crossAxisAlignment: pw.CrossAxisAlignment.start,
@@ -410,7 +411,7 @@ final class DefaultMassageProviderReportPdfExporter
 
   pw.Widget _buildSummaryGrid(MassageProviderSummary summary) {
     final List<MapEntry<String, String>> items = <MapEntry<String, String>>[
-      MapEntry<String, String>('Atencoes', '${summary.attendedCount}'),
+      MapEntry<String, String>('Atendimentos', '${summary.attendedCount}'),
       MapEntry<String, String>('Canceladas', '${summary.cancelledCount}'),
       MapEntry<String, String>('Pagas', '${summary.paidCount}'),
       MapEntry<String, String>('Pendentes', '${summary.pendingCount}'),
@@ -424,7 +425,7 @@ final class DefaultMassageProviderReportPdfExporter
         _formatCurrency(summary.grossAmount),
       ),
       MapEntry<String, String>(
-        'Ultima atencao',
+        'Ultimo atendimento',
         summary.lastBookingAt == null
             ? '-'
             : _formatDate(summary.lastBookingAt!),
@@ -549,7 +550,9 @@ final class DefaultMassageProviderReportPdfExporter
                 item.paymentNotes!.trim(),
               ),
             ],
-            if ((item.cancellationNotes ?? '').trim().isNotEmpty) ...<pw.Widget>[
+            if ((item.cancellationNotes ?? '')
+                .trim()
+                .isNotEmpty) ...<pw.Widget>[
               pw.SizedBox(height: 3),
               _buildDetailLine(
                 'Motivo do cancelamento',

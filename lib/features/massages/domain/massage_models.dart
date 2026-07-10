@@ -202,7 +202,7 @@ class MassageProviderReportItem {
       guestReference: _readString(json, 'guestReference') ?? '',
       treatment: _readString(json, 'treatment') ?? '',
       therapistId: _readInt(json, 'therapistId') ?? 0,
-      therapistName: _readString(json, 'therapistName') ?? 'Masajista',
+      therapistName: _readString(json, 'therapistName') ?? 'Massagista',
       amount: (json['amount'] as num?)?.toDouble() ?? 0,
       paid: json['paid'] as bool? ?? false,
       paymentMethod: MassagePaymentMethod.tryParse(
@@ -386,7 +386,7 @@ class MassageBooking {
           _readString(json, 'therapistName') ??
           _readString(json, 'masseuseName') ??
           _readString(therapist, 'name') ??
-          'Masajista',
+          'Massagista',
       therapistActive:
           (json['therapistActive'] as bool?) ??
           (json['masseuseActive'] as bool?) ??

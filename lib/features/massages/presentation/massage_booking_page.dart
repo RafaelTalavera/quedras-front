@@ -52,7 +52,7 @@ const List<String> _treatmentTypes = <String>[
   'Experiencia dupla',
 ];
 
-const List<String> _attendanceTypes = <String>['Huesped', 'Externo', 'Vip'];
+const List<String> _attendanceTypes = <String>['Hospede', 'Externo', 'VIP'];
 
 enum MassageBookingSection { selectedDay, monthlyAgenda, monthlySummary }
 
@@ -1792,7 +1792,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       }
       await showAuditTimelineDialog(
         context: context,
-        title: 'Historial de ${booking.clientName}',
+        title: 'Historico de ${booking.clientName}',
         events: history,
       );
     } catch (error) {
@@ -1801,7 +1801,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       }
       await AppAlerts.error(
         context,
-        title: 'Historial del masaje',
+        title: 'Historico do atendimento',
         message: error.toString().replaceFirst('Bad state: ', ''),
       );
     } finally {
@@ -1825,7 +1825,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         return _BookingSelectionDialog(
           title: 'Atendimentos do dia',
           description:
-              'Escolha um atendimento para editar, informar pagamento, compartilhar ou cancelar a atencao.',
+              'Escolha um atendimento para editar, informar pagamento, compartilhar ou cancelar o atendimento.',
           bookings: bookings,
           emptyMessage: 'Nao ha atendimentos para o dia selecionado.',
           onSelectLabel: 'Abrir acoes',
@@ -2384,7 +2384,8 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                           therapist: booking.therapistName,
                           processing: false,
                           sharing: false,
-                          loadingHistory: _loadingHistoryBookingId == booking.id,
+                          loadingHistory:
+                              _loadingHistoryBookingId == booking.id,
                           onHistory: () => _openBookingHistory(booking),
                         ),
                       ),
@@ -2495,14 +2496,14 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     }
     final MassageProvider? provider = _providerById(booking.providerId);
     if (provider == null) {
-      return 'Masajista';
+      return 'Massagista';
     }
     for (final MassageTherapist therapist in provider.therapists) {
       if (therapist.id == booking.therapistId) {
         return therapist.name;
       }
     }
-    return 'Masajista';
+    return 'Massagista';
   }
 
   MassageProvider? _providerById(int providerId) {
@@ -2570,7 +2571,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       ..writeln('Tratamento: ${booking.treatment}')
       ..writeln('Hospede ou externo: ${booking.guestReference}')
       ..writeln('Prestador: ${booking.providerName}')
-      ..writeln('Masajista: ${booking.therapistName}')
+      ..writeln('Massagista: ${booking.therapistName}')
       ..writeln('Valor: ${_formatCurrencyLabel(booking.amount)}')
       ..writeln('Estado: ${_statusDescription(booking)}');
     if ((booking.paymentNotes ?? '').trim().isNotEmpty) {
@@ -2865,7 +2866,9 @@ class _BookingTile extends StatelessWidget {
                           ? Icons.hourglass_top_rounded
                           : Icons.send_rounded,
                     ),
-                    label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+                    label: Text(
+                      sharing ? 'Compartilhando...' : 'Compartilhar',
+                    ),
                   ),
                 if (onHistory != null)
                   OutlinedButton.icon(
@@ -2875,9 +2878,7 @@ class _BookingTile extends StatelessWidget {
                           ? Icons.hourglass_top_rounded
                           : Icons.history_rounded,
                     ),
-                    label: Text(
-                      loadingHistory ? 'Cargando...' : 'Historial',
-                    ),
+                    label: Text(loadingHistory ? 'Carregando...' : 'Historico'),
                   ),
                 if (onCancel != null)
                   OutlinedButton.icon(
@@ -3174,7 +3175,7 @@ class _BookingDialogState extends State<_BookingDialog> {
                       isExpanded: true,
                       value: _selectedTherapistId,
                       decoration: const InputDecoration(
-                        labelText: 'Masajista',
+                        labelText: 'Massagista',
                         prefixIcon: Icon(Icons.person_pin_circle_outlined),
                       ),
                       items: selectableTherapists
@@ -3617,20 +3618,22 @@ class _BookingActionDialog extends StatelessWidget {
                 icon: Icon(
                   sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
                 ),
-                label: Text(sharing ? 'Compartindo...' : 'Compartir'),
+                label: Text(
+                  sharing ? 'Compartilhando...' : 'Compartilhar',
+                ),
               ),
               OutlinedButton.icon(
                 onPressed: () =>
                     Navigator.of(context).pop(_BookingAction.history),
                 icon: const Icon(Icons.history_rounded),
-                label: const Text('Historial'),
+                label: const Text('Historico'),
               ),
               FilledButton.icon(
                 onPressed: booking.status == MassageBookingStatus.cancelled
                     ? null
                     : () => Navigator.of(context).pop(_BookingAction.cancel),
                 icon: const Icon(Icons.cancel_rounded),
-                label: const Text('Cancelar atencao'),
+                label: const Text('Cancelar atendimento'),
               ),
             ],
           ),
@@ -4103,7 +4106,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                 OutlinedButton.icon(
                   onPressed: _saving ? null : _prepareNewProvider,
                   icon: const Icon(Icons.add_circle_outline_rounded),
-                  label: const Text('Agregar novo prestador'),
+                  label: const Text('Adicionar novo prestador'),
                 ),
                 const SizedBox(width: 12),
                 Expanded(
@@ -4243,8 +4246,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                                             icon: Icon(
                                               _historyLoadingKey ==
                                                       'provider:${provider.id}'
-                                                  ? Icons
-                                                        .hourglass_top_rounded
+                                                  ? Icons.hourglass_top_rounded
                                                   : Icons.history_rounded,
                                             ),
                                           ),
@@ -4444,7 +4446,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
             ),
             const SizedBox(height: 8),
             Text(
-              'Use as tarjetas da esquerda para editar um prestador existente ou crie um novo com o botao superior.',
+              'Use os cards da esquerda para editar um prestador existente ou crie um novo com o botao superior.',
               style: Theme.of(context).textTheme.bodyMedium,
             ),
           ],
@@ -4493,7 +4495,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
           children: <Widget>[
             Expanded(
               child: Text(
-                _creatingProvider ? 'Masajistas' : 'Masajistas do prestador',
+                _creatingProvider ? 'Massagistas' : 'Massagistas do prestador',
                 style: Theme.of(context).textTheme.titleLarge,
               ),
             ),
@@ -4598,7 +4600,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
           FilledButton.icon(
             onPressed: _saving ? null : _addTherapist,
             icon: const Icon(Icons.person_add_alt_1_rounded),
-            label: Text(_saving ? 'Salvando...' : 'Agregar masajista'),
+            label: Text(_saving ? 'Salvando...' : 'Adicionar massagista'),
           ),
         ],
       ],
@@ -4772,7 +4774,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   Future<void> _openProviderHistory(MassageProvider provider) async {
     await _openCatalogHistory(
       loadingKey: 'provider:${provider.id}',
-      title: 'Historial de ${provider.name}',
+      title: 'Historico de ${provider.name}',
       loader: () => widget.massageAppService.providerHistory(provider.id),
     );
   }
@@ -4783,11 +4785,9 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   ) async {
     await _openCatalogHistory(
       loadingKey: 'therapist:${therapist.id}',
-      title: 'Historial de ${therapist.name}',
-      loader: () => widget.massageAppService.therapistHistory(
-        provider.id,
-        therapist.id,
-      ),
+      title: 'Historico de ${therapist.name}',
+      loader: () =>
+          widget.massageAppService.therapistHistory(provider.id, therapist.id),
     );
   }
 
@@ -4972,7 +4972,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     if (exists) {
       await AppAlerts.info(
         context,
-        title: 'Masajista ja cadastrado',
+        title: 'Massagista ja cadastrado',
         message:
             'Ja existe um masajista com esse nome para o prestador selecionado.',
       );
@@ -5007,8 +5007,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       _therapistNameController.clear();
       await AppAlerts.success(
         context,
-        title: 'Masajista salvo',
-        message: 'Masajista criado para o prestador selecionado.',
+        title: 'Massagista salvo',
+        message: 'Massagista criado para o prestador selecionado.',
       );
     } catch (error) {
       if (!mounted) {
@@ -5067,7 +5067,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       });
       await AppAlerts.success(
         context,
-        title: 'Masajista actualizado',
+        title: 'Massagista atualizado',
         message: '${updated.name} foi atualizado com sucesso.',
       );
     } catch (error) {

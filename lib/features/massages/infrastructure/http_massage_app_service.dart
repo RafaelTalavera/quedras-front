@@ -231,7 +231,7 @@ final class HttpMassageAppService implements MassageAppService {
     }
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! List) {
-      throw StateError('Formato invalido del historial de prestadores.');
+      throw StateError('Formato invalido do historico de prestadores.');
     }
     return decoded
         .whereType<Map>()
@@ -301,7 +301,7 @@ final class HttpMassageAppService implements MassageAppService {
     }
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! List) {
-      throw StateError('Formato invalido del historial de masajistas.');
+      throw StateError('Formato invalido do historico de massagistas.');
     }
     return decoded
         .whereType<Map>()
@@ -360,7 +360,7 @@ final class HttpMassageAppService implements MassageAppService {
     }
     final Object? decoded = _tryDecode(response.body);
     if (decoded is! List) {
-      throw StateError('Formato invalido del historial de atenciones.');
+      throw StateError('Formato invalido do historico de atendimentos.');
     }
     return decoded
         .whereType<Map>()
