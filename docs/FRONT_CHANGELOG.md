@@ -758,3 +758,10 @@
   - `docs/FRONT_CHANGELOG.md`
 - Motivo del cambio: Alinear la semantica del frontend con la regla del sistema de que `SUPERVISOR` no es un perfil restringido respecto de `OPERATOR`, sino un acceso acumulado.
 - Impacto funcional: La sesion autenticada pasa a considerar `SUPERVISOR` como acceso operativo valido (`supervisor + operador`), evitando bloqueos futuros por checks de rol exacto en navegacion o UI.
+## 2026-07-10 - Maintenance catalogs, WhatsApp dispatch and responsive hardening
+
+- Mantenimiento: al guardar una orden, el sistema intenta abrir WhatsApp del responsable con el mensaje precargado y usa fallback a WhatsApp Web o portapapeles.
+- Mantenimiento: el guardado de orden ahora exige responsable con WhatsApp valido.
+- Catalogos > Locais: se agrego buscador, se ajusto el reparto horizontal y se mejoro la responsividad del formulario lateral.
+- Catalogos > Responsaveis: se agrego buscador, se amplio el formulario lateral y se alineo el criterio visual de espaciado y dropdowns expandidos.
+- Se documento el alcance en `docs/MAINTENANCE_CATALOGS_WHATSAPP_AND_RESPONSIVE_2026-07-10.md`.

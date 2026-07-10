@@ -4,6 +4,8 @@ import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/audit/audit_models.dart';
 import '../../../core/audit/audit_timeline_dialog.dart';
@@ -1308,14 +1310,19 @@ class _MaintenancePageState extends State<MaintenancePage>
         }
       }
 
+      final MaintenanceOrder savedOrder;
       if (editingOrderId == null) {
-        await widget.maintenanceAppService.createOrder(draft.toCreateModel());
+        savedOrder = await widget.maintenanceAppService.createOrder(
+          draft.toCreateModel(),
+        );
       } else {
-        await widget.maintenanceAppService.updateOrder(
+        savedOrder = await widget.maintenanceAppService.updateOrder(
           editingOrderId,
           draft.toUpdateModel(),
         );
       }
+      final _ProviderNotificationResult notificationResult =
+          await _notifyProviderForSavedOrder(savedOrder);
       await _load();
       if (!mounted) {
         return;
@@ -1323,7 +1330,8 @@ class _MaintenancePageState extends State<MaintenancePage>
       await AppAlerts.success(
         context,
         title: editingOrderId == null ? 'Ordem criada' : 'Ordem atualizada',
-        message: 'A ordem de manutencao foi salva com sucesso.',
+        message:
+            'A ordem de manutencao foi salva com sucesso.${notificationResult.userMessageSuffix}',
       );
     } catch (error) {
       if (!mounted) {
@@ -1636,6 +1644,90 @@ class _MaintenancePageState extends State<MaintenancePage>
     }
     return buffer.toString().trim();
   }
+
+  Future<_ProviderNotificationResult> _notifyProviderForSavedOrder(
+    MaintenanceOrder order,
+  ) async {
+    final MaintenanceProvider? provider = _findProviderById(order.providerId);
+    if (provider == null) {
+      return _ProviderNotificationResult.notConfigured(
+        ' Nenhum prestador foi vinculado para envio por WhatsApp.',
+      );
+    }
+
+    final String? whatsappNumber = _normalizeWhatsappNumber(provider.contact);
+    if (whatsappNumber == null) {
+      return _ProviderNotificationResult.notConfigured(
+        ' O prestador "${provider.name}" nao possui WhatsApp valido cadastrado.',
+      );
+    }
+
+    final String message = _buildOrderShareMessage(order);
+    final Uri appUri = Uri.parse(
+      'whatsapp://send?phone=$whatsappNumber&text=${Uri.encodeComponent(message)}',
+    );
+    final Uri webUri = Uri.parse(
+      'https://wa.me/$whatsappNumber?text=${Uri.encodeComponent(message)}',
+    );
+
+    try {
+      final bool launchedApp = await launchUrl(
+        appUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (launchedApp) {
+        return const _ProviderNotificationResult.sent(
+          ' WhatsApp aberto para envio ao prestador.',
+        );
+      }
+    } catch (_) {
+      // Fallback to WhatsApp Web below.
+    }
+
+    try {
+      final bool launchedWeb = await launchUrl(
+        webUri,
+        mode: LaunchMode.externalApplication,
+      );
+      if (launchedWeb) {
+        return const _ProviderNotificationResult.sent(
+          ' WhatsApp Web aberto para envio ao prestador.',
+        );
+      }
+    } catch (_) {
+      // Clipboard fallback below.
+    }
+
+    await Clipboard.setData(ClipboardData(text: message));
+    return const _ProviderNotificationResult.fallback(
+      ' Nao foi possivel abrir o WhatsApp; a mensagem foi copiada para a area de transferencia.',
+    );
+  }
+
+  MaintenanceProvider? _findProviderById(int? providerId) {
+    if (providerId == null) {
+      return null;
+    }
+    for (final MaintenanceProvider provider in _providers) {
+      if (provider.id == providerId) {
+        return provider;
+      }
+    }
+    return null;
+  }
+}
+
+final class _ProviderNotificationResult {
+  const _ProviderNotificationResult._(this.userMessageSuffix);
+
+  const _ProviderNotificationResult.sent(String message) : this._(message);
+
+  const _ProviderNotificationResult.notConfigured(String message)
+    : this._(message);
+
+  const _ProviderNotificationResult.fallback(String message) : this._(message);
+
+  final String userMessageSuffix;
 }
 
 enum _MaintenanceOrderAction {
@@ -1951,6 +2043,22 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
     ];
   }
 
+  MaintenanceProvider? get _selectedProvider {
+    final int? providerId = _providerId;
+    if (providerId == null) {
+      return null;
+    }
+    for (final MaintenanceProvider provider in widget.providers) {
+      if (provider.id == providerId) {
+        return provider;
+      }
+    }
+    return null;
+  }
+
+  String? get _selectedProviderWhatsapp =>
+      _normalizeWhatsappNumber(_selectedProvider?.contact);
+
   String _formatLocationPickerTitle(MaintenanceLocation location) {
     final String code = location.code.trim();
     final String label = _normalizeMaintenanceLocationLabel(location.label);
@@ -2108,7 +2216,14 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
                   value: _providerId,
                   isExpanded: true,
                   style: const TextStyle(overflow: TextOverflow.ellipsis),
-                  decoration: const InputDecoration(labelText: 'Prestador'),
+                  decoration: InputDecoration(
+                    labelText: 'Prestador',
+                    helperText: _providerId == null
+                        ? 'Selecione um prestador para envio por WhatsApp.'
+                        : _selectedProviderWhatsapp == null
+                        ? 'O prestador selecionado ainda nao possui WhatsApp valido.'
+                        : 'WhatsApp pronto para envio: $_selectedProviderWhatsapp',
+                  ),
                   items: <DropdownMenuItem<int?>>[
                     const DropdownMenuItem<int?>(
                       value: null,
@@ -2264,6 +2379,27 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
         context,
         title: 'Dados do hospede',
         message: 'Informe o nome do hospede.',
+      );
+      return;
+    }
+
+    if (_providerId == null) {
+      AppAlerts.warning(
+        context,
+        title: 'Prestador obrigatorio',
+        message:
+            'Selecione um prestador com WhatsApp valido para que a ordem seja enviada ao salvar.',
+      );
+      return;
+    }
+
+    if (_selectedProviderWhatsapp == null) {
+      final String providerName = _selectedProvider?.name ?? 'selecionado';
+      AppAlerts.warning(
+        context,
+        title: 'WhatsApp do prestador',
+        message:
+            'O prestador "$providerName" nao possui WhatsApp valido cadastrado. Ajuste o cadastro antes de salvar a ordem.',
       );
       return;
     }
@@ -3869,6 +4005,7 @@ class _CatalogLocationPane extends StatefulWidget {
 
 class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
   MaintenanceLocation? _selected;
+  late final TextEditingController _searchController;
   late final TextEditingController _codeController;
   late final TextEditingController _labelController;
   late final TextEditingController _floorController;
@@ -3882,6 +4019,7 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
   @override
   void initState() {
     super.initState();
+    _searchController = TextEditingController();
     _codeController = TextEditingController();
     _labelController = TextEditingController();
     _floorController = TextEditingController();
@@ -3890,6 +4028,7 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     _codeController.dispose();
     _labelController.dispose();
     _floorController.dispose();
@@ -3923,13 +4062,77 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
     return _normalizeMaintenanceLocationLabel(value);
   }
 
+  List<MaintenanceLocation> get _filteredLocations {
+    final String query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      return widget.locations;
+    }
+    return widget.locations.where((MaintenanceLocation item) {
+      final String haystack = <String>[
+        item.label,
+        item.code,
+        item.floor ?? '',
+        item.locationType.label,
+        item.locationCategory.label,
+      ].join(' ').toLowerCase();
+      return haystack.contains(query);
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final bool compact = constraints.maxWidth < 860;
+        final Widget locationsList = _buildLocationCatalogList();
+        final Widget form = _buildLocationCatalogForm();
+
+        if (compact) {
+          return Column(
+            children: <Widget>[
+              Expanded(child: locationsList),
+              const SizedBox(height: 16),
+              Expanded(child: form),
+            ],
+          );
+        }
+
+        return Row(
+          children: <Widget>[
+            Flexible(flex: 2, child: locationsList),
+            const SizedBox(width: 16),
+            SizedBox(width: 460, child: form),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildLocationCatalogList() {
+    return Column(
       children: <Widget>[
+        TextField(
+          controller: _searchController,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            labelText: 'Buscar local',
+            hintText: 'Nombre, referencia, piso...',
+            prefixIcon: const Icon(Icons.search_rounded),
+            suffixIcon: _searchController.text.isEmpty
+                ? null
+                : IconButton(
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() {});
+                    },
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+          ),
+        ),
+        const SizedBox(height: 12),
         Expanded(
           child: ListView(
-            children: widget.locations
+            children: _filteredLocations
                 .map(
                   (MaintenanceLocation item) => ListTile(
                     title: Text(_catalogLocationTitle(item)),
@@ -3960,126 +4163,137 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
                 .toList(),
           ),
         ),
-        const SizedBox(width: 16),
-        SizedBox(
-          width: 320,
-          child: Column(
-            children: <Widget>[
-              DropdownButtonFormField<MaintenanceLocationType>(
-                value: _type,
-                decoration: const InputDecoration(labelText: 'Tipo'),
-                items: MaintenanceLocationType.values
+      ],
+    );
+  }
+
+  Widget _buildLocationCatalogForm() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          const SizedBox(height: 12),
+          DropdownButtonFormField<MaintenanceLocationType>(
+            isExpanded: true,
+            value: _type,
+            decoration: const InputDecoration(labelText: 'Tipo'),
+            items: MaintenanceLocationType.values
+                .map(
+                  (MaintenanceLocationType item) =>
+                      DropdownMenuItem<MaintenanceLocationType>(
+                        value: item,
+                        child: Text(
+                          item.label,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                )
+                .toList(),
+            onChanged: (MaintenanceLocationType? value) {
+              if (value != null) {
+                setState(() {
+                  _type = value;
+                  if (_type == MaintenanceLocationType.commonArea) {
+                    _category = MaintenanceLocationCategory.commonArea;
+                  } else if (_category ==
+                      MaintenanceLocationCategory.commonArea) {
+                    _category = MaintenanceLocationCategory.apartment;
+                  }
+                });
+              }
+            },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<MaintenanceLocationCategory>(
+            isExpanded: true,
+            value: _type == MaintenanceLocationType.commonArea
+                ? MaintenanceLocationCategory.commonArea
+                : _category,
+            decoration: const InputDecoration(labelText: 'Categoria'),
+            items:
+                (_type == MaintenanceLocationType.commonArea
+                        ? const <MaintenanceLocationCategory>[
+                            MaintenanceLocationCategory.commonArea,
+                          ]
+                        : const <MaintenanceLocationCategory>[
+                            MaintenanceLocationCategory.apartment,
+                            MaintenanceLocationCategory.chalet,
+                          ])
                     .map(
-                      (MaintenanceLocationType item) =>
-                          DropdownMenuItem<MaintenanceLocationType>(
+                      (MaintenanceLocationCategory item) =>
+                          DropdownMenuItem<MaintenanceLocationCategory>(
                             value: item,
-                            child: Text(item.label),
+                            child: Text(
+                              item.label,
+                              overflow: TextOverflow.ellipsis,
+                            ),
                           ),
                     )
                     .toList(),
-                onChanged: (MaintenanceLocationType? value) {
-                  if (value != null) {
-                    setState(() {
-                      _type = value;
-                      if (_type == MaintenanceLocationType.commonArea) {
-                        _category = MaintenanceLocationCategory.commonArea;
-                      } else if (_category ==
-                          MaintenanceLocationCategory.commonArea) {
-                        _category = MaintenanceLocationCategory.apartment;
-                      }
-                    });
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<MaintenanceLocationCategory>(
-                value: _type == MaintenanceLocationType.commonArea
-                    ? MaintenanceLocationCategory.commonArea
-                    : _category,
-                decoration: const InputDecoration(labelText: 'Categoria'),
-                items:
-                    (_type == MaintenanceLocationType.commonArea
-                            ? const <MaintenanceLocationCategory>[
-                                MaintenanceLocationCategory.commonArea,
-                              ]
-                            : const <MaintenanceLocationCategory>[
-                                MaintenanceLocationCategory.apartment,
-                                MaintenanceLocationCategory.chalet,
-                              ])
-                        .map(
-                          (MaintenanceLocationCategory item) =>
-                              DropdownMenuItem<MaintenanceLocationCategory>(
-                                value: item,
-                                child: Text(item.label),
-                              ),
-                        )
-                        .toList(),
-                onChanged: _type == MaintenanceLocationType.commonArea
-                    ? null
-                    : (MaintenanceLocationCategory? value) {
-                        if (value != null) {
-                          setState(() => _category = value);
-                        }
-                      },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _codeController,
-                keyboardType: TextInputType.number,
-                decoration: const InputDecoration(
-                  labelText: 'Referencia numerica',
-                  helperText: 'Obrigatoria. Use 2 ou 3 digitos numericos.',
+            onChanged: _type == MaintenanceLocationType.commonArea
+                ? null
+                : (MaintenanceLocationCategory? value) {
+                    if (value != null) {
+                      setState(() => _category = value);
+                    }
+                  },
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _codeController,
+            keyboardType: TextInputType.number,
+            decoration: const InputDecoration(
+              labelText: 'Referencia numerica',
+              helperText: 'Obrigatoria. Use 2 ou 3 digitos numericos.',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _labelController,
+            decoration: const InputDecoration(labelText: 'Nome'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _floorController,
+            decoration: const InputDecoration(labelText: 'Andar'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _descriptionController,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Descricao',
+              alignLabelWithHint: true,
+            ),
+          ),
+          const SizedBox(height: 12),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _active,
+            onChanged: (bool value) => setState(() => _active = value),
+            title: const Text('Ativo'),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: FilledButton(
+                  onPressed: _saving ? null : _save,
+                  child: Text(_selected == null ? 'Criar' : 'Salvar'),
                 ),
               ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _labelController,
-                decoration: const InputDecoration(labelText: 'Nome'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _floorController,
-                decoration: const InputDecoration(labelText: 'Andar'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _descriptionController,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Descricao',
-                  alignLabelWithHint: true,
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _saving ? null : _clear,
+                  child: const Text('Novo'),
                 ),
-              ),
-              const SizedBox(height: 12),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _active,
-                onChanged: (bool value) => setState(() => _active = value),
-                title: const Text('Ativo'),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: _saving ? null : _save,
-                      child: Text(_selected == null ? 'Criar' : 'Salvar'),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _saving ? null : _clear,
-                      child: const Text('Novo'),
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 
@@ -4225,6 +4439,7 @@ class _CatalogProviderPane extends StatefulWidget {
 
 class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
   MaintenanceProvider? _selected;
+  late final TextEditingController _searchController;
   late final TextEditingController _nameController;
   late final TextEditingController _serviceLabelController;
   late final TextEditingController _scopeController;
@@ -4239,6 +4454,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
   @override
   void initState() {
     super.initState();
+    _searchController = TextEditingController();
     _nameController = TextEditingController();
     _serviceLabelController = TextEditingController();
     _scopeController = TextEditingController();
@@ -4247,6 +4463,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
 
   @override
   void dispose() {
+    _searchController.dispose();
     _nameController.dispose();
     _serviceLabelController.dispose();
     _scopeController.dispose();
@@ -4254,132 +4471,188 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
     super.dispose();
   }
 
+  List<MaintenanceProvider> get _filteredProviders {
+    final String query = _searchController.text.trim().toLowerCase();
+    if (query.isEmpty) {
+      return widget.providers;
+    }
+    return widget.providers.where((MaintenanceProvider item) {
+      final String haystack = <String>[
+        item.name,
+        item.serviceLabel,
+        item.scopeDescription ?? '',
+        item.contact ?? '',
+        item.providerType.label,
+        item.specialty.label,
+      ].join(' ').toLowerCase();
+      return haystack.contains(query);
+    }).toList();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Row(
       children: <Widget>[
-        Expanded(
-          child: ListView(
-            children: widget.providers
-                .map(
-                  (MaintenanceProvider item) => ListTile(
-                    title: Text(item.name),
-                    subtitle: Text(
-                      '${item.providerType.label} · ${item.specialty.label} · ${item.serviceLabel}',
-                    ),
-                    trailing: Wrap(
-                      spacing: 8,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: <Widget>[
-                        Text(item.active ? 'Ativo' : 'Inativo'),
-                        IconButton(
-                          onPressed: _historyLoadingKey == 'provider:${item.id}'
-                              ? null
-                              : () => _openProviderAudit(item),
-                          icon: Icon(
-                            _historyLoadingKey == 'provider:${item.id}'
-                                ? Icons.hourglass_top_rounded
-                                : Icons.history_rounded,
-                          ),
+        Flexible(
+          flex: 2,
+          child: Column(
+            children: <Widget>[
+              TextField(
+                controller: _searchController,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  labelText: 'Buscar responsable',
+                  hintText: 'Nombre, servicio, WhatsApp...',
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  suffixIcon: _searchController.text.isEmpty
+                      ? null
+                      : IconButton(
+                          onPressed: () {
+                            _searchController.clear();
+                            setState(() {});
+                          },
+                          icon: const Icon(Icons.close_rounded),
                         ),
-                      ],
-                    ),
-                    selected: _selected?.id == item.id,
-                    onTap: () => _load(item),
-                  ),
-                )
-                .toList(),
+                ),
+              ),
+              const SizedBox(height: 12),
+              Expanded(
+                child: ListView(
+                  children: _filteredProviders
+                      .map(
+                        (MaintenanceProvider item) => ListTile(
+                          title: Text(item.name),
+                          subtitle: Text(
+                            '${item.providerType.label} · ${item.specialty.label} · ${item.serviceLabel}',
+                          ),
+                          trailing: Wrap(
+                            spacing: 8,
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            children: <Widget>[
+                              Text(item.active ? 'Ativo' : 'Inativo'),
+                              IconButton(
+                                onPressed:
+                                    _historyLoadingKey == 'provider:${item.id}'
+                                    ? null
+                                    : () => _openProviderAudit(item),
+                                icon: Icon(
+                                  _historyLoadingKey == 'provider:${item.id}'
+                                      ? Icons.hourglass_top_rounded
+                                      : Icons.history_rounded,
+                                ),
+                              ),
+                            ],
+                          ),
+                          selected: _selected?.id == item.id,
+                          onTap: () => _load(item),
+                        ),
+                      )
+                      .toList(),
+                ),
+              ),
+            ],
           ),
         ),
         const SizedBox(width: 16),
         SizedBox(
-          width: 320,
-          child: Column(
-            children: <Widget>[
-              DropdownButtonFormField<MaintenanceProviderType>(
-                value: _type,
-                decoration: const InputDecoration(labelText: 'Tipo'),
-                items: MaintenanceProviderType.values
-                    .map(
-                      (MaintenanceProviderType item) =>
-                          DropdownMenuItem<MaintenanceProviderType>(
-                            value: item,
-                            child: Text(item.label),
-                          ),
-                    )
-                    .toList(),
-                onChanged: (MaintenanceProviderType? value) {
-                  if (value != null) setState(() => _type = value);
-                },
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<MaintenanceProviderSpecialty>(
-                value: _specialty,
-                decoration: const InputDecoration(labelText: 'Especialidade'),
-                items: MaintenanceProviderSpecialty.values
-                    .map(
-                      (MaintenanceProviderSpecialty item) =>
-                          DropdownMenuItem<MaintenanceProviderSpecialty>(
-                            value: item,
-                            child: Text(item.label),
-                          ),
-                    )
-                    .toList(),
-                onChanged: (MaintenanceProviderSpecialty? value) {
-                  if (value != null) setState(() => _specialty = value);
-                },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _nameController,
-                decoration: const InputDecoration(labelText: 'Nome'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _serviceLabelController,
-                decoration: const InputDecoration(labelText: 'Servico'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _scopeController,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Escopo',
-                  alignLabelWithHint: true,
+          width: 460,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: <Widget>[
+                const SizedBox(height: 12),
+                DropdownButtonFormField<MaintenanceProviderType>(
+                  isExpanded: true,
+                  value: _type,
+                  decoration: const InputDecoration(labelText: 'Tipo'),
+                  items: MaintenanceProviderType.values
+                      .map(
+                        (MaintenanceProviderType item) =>
+                            DropdownMenuItem<MaintenanceProviderType>(
+                              value: item,
+                              child: Text(item.label),
+                            ),
+                      )
+                      .toList(),
+                  onChanged: (MaintenanceProviderType? value) {
+                    if (value != null) setState(() => _type = value);
+                  },
                 ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _contactController,
-                decoration: const InputDecoration(labelText: 'Contato'),
-              ),
-              const SizedBox(height: 12),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _active,
-                onChanged: (bool value) => setState(() => _active = value),
-                title: const Text('Ativo'),
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: <Widget>[
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: _saving ? null : _save,
-                      child: Text(_selected == null ? 'Criar' : 'Salvar'),
-                    ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<MaintenanceProviderSpecialty>(
+                  isExpanded: true,
+                  value: _specialty,
+                  decoration: const InputDecoration(labelText: 'Especialidade'),
+                  items: MaintenanceProviderSpecialty.values
+                      .map(
+                        (MaintenanceProviderSpecialty item) =>
+                            DropdownMenuItem<MaintenanceProviderSpecialty>(
+                              value: item,
+                              child: Text(item.label),
+                            ),
+                      )
+                      .toList(),
+                  onChanged: (MaintenanceProviderSpecialty? value) {
+                    if (value != null) setState(() => _specialty = value);
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _nameController,
+                  decoration: const InputDecoration(labelText: 'Nome'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _serviceLabelController,
+                  decoration: const InputDecoration(labelText: 'Servico'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _scopeController,
+                  minLines: 2,
+                  maxLines: 4,
+                  decoration: const InputDecoration(
+                    labelText: 'Escopo',
+                    alignLabelWithHint: true,
                   ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: _saving ? null : _clear,
-                      child: const Text('Novo'),
-                    ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _contactController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'WhatsApp',
+                    hintText: '5511999998888',
+                    helperText: 'Formato internacional, solo numeros.',
                   ),
-                ],
-              ),
-            ],
+                ),
+                const SizedBox(height: 12),
+                SwitchListTile(
+                  contentPadding: EdgeInsets.zero,
+                  value: _active,
+                  onChanged: (bool value) => setState(() => _active = value),
+                  title: const Text('Ativo'),
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: <Widget>[
+                    Expanded(
+                      child: FilledButton(
+                        onPressed: _saving ? null : _save,
+                        child: Text(_selected == null ? 'Criar' : 'Salvar'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: _saving ? null : _clear,
+                        child: const Text('Novo'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ],
@@ -4422,6 +4695,19 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
       );
       return;
     }
+    final String? normalizedWhatsapp = _normalizeWhatsappNumber(
+      _contactController.text,
+    );
+    if (_contactController.text.trim().isNotEmpty &&
+        normalizedWhatsapp == null) {
+      await AppAlerts.warning(
+        context,
+        title: 'WhatsApp invalido',
+        message:
+            'Informe o numero no formato internacional, por exemplo 5511999998888.',
+      );
+      return;
+    }
     setState(() => _saving = true);
     try {
       if (_selected == null) {
@@ -4432,7 +4718,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
             name: _nameController.text,
             serviceLabel: _serviceLabelController.text,
             scopeDescription: _scopeController.text,
-            contact: _contactController.text,
+            contact: normalizedWhatsapp,
             active: _active,
           ),
         );
@@ -4445,7 +4731,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
             name: _nameController.text,
             serviceLabel: _serviceLabelController.text,
             scopeDescription: _scopeController.text,
-            contact: _contactController.text,
+            contact: normalizedWhatsapp,
             active: _active,
           ),
         );
@@ -4488,6 +4774,21 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
       }
     }
   }
+}
+
+String? _normalizeWhatsappNumber(String? rawValue) {
+  final String trimmed = (rawValue ?? '').trim();
+  if (trimmed.isEmpty) {
+    return null;
+  }
+  String digits = trimmed.replaceAll(RegExp(r'\D'), '');
+  if (digits.startsWith('00')) {
+    digits = digits.substring(2);
+  }
+  if (digits.length < 10 || digits.length > 15) {
+    return null;
+  }
+  return digits;
 }
 
 Widget _emptyScrollableBox(String message) {
