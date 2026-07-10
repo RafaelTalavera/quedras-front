@@ -1,5 +1,22 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-07-10 | Manutencao | Limpieza de vista general y concentracion de preventivos
+- Componente afectado: Frontend (`Manutencao`) + documentacion funcional
+- Archivos tocados:
+  - `lib/features/maintenance/presentation/maintenance_page.dart`
+  - `docs/MAINTENANCE_UI_SIMPLIFICATION_2026-07-10.md`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: continuar la simplificacion visual del modulo de manutencao, sacando bloques redundantes o demasiado densos de la pantalla principal y concentrando la operacion de preventivos detras de un acceso unico.
+- Impacto funcional:
+  - el boton superior pasa de `Novo preventivo` a `Preventivos`
+  - el acceso `Preventivos` abre un dialogo dedicado con listado, metricas, alta, edicion y generacion de ordens preventivas
+  - la pantalla general deja de renderizar `Planos preventivos`
+  - la pantalla general deja de renderizar `Resumo por local`, `Andares` y `Chales`
+  - la vista principal queda enfocada en el resumen ejecutivo de ordens y en los accesos operativos superiores
+- Validacion ejecutada:
+  - `dart format lib/features/maintenance/presentation/maintenance_page.dart`
+  - `flutter analyze lib/features/maintenance/presentation/maintenance_page.dart`
+
 ## 2026-05-20 | Quadras | Formulario con recurrencia para profesor parceiro y fecha con dia de la semana
 - Componente afectado: Frontend (`Quadras`)
 - Archivos tocados:
