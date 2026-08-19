@@ -55,3 +55,26 @@
 ## Regla de consistencia
 - Este layout debe reutilizarse como patron para futuras implementaciones de calendarios dentro del sistema.
 - Si se crea otro modulo con calendario, debe tomar este estandar como referencia salvo pedido explicito del usuario en sentido contrario.
+
+## Patron de agenda temporal operativa
+- La agenda temporal implementada en `Quadras` queda aprobada como referencia visual y funcional para `Quadras`, `Massagens` y `Tours`.
+- Estado actual:
+  - `Quadras`: implementado.
+  - `Massagens`: adopcion pendiente cuando se intervenga su agenda.
+  - `Tours`: adopcion pendiente cuando se intervenga su agenda.
+- La vista semanal debe ser la opcion predeterminada y permanecer visible en la pantalla principal.
+- Deben existir selectores para alternar entre vista `Diaria`, `Semanal` y `Mensal`.
+- La vista diaria y semanal debe representar el horario operativo como una linea horizontal con barras proporcionales a la hora de inicio y fin.
+- El renglon superior de la linea temporal se divide en dos mitades:
+  - horario operacional a la izquierda
+  - referencia de colores alineada a la derecha
+- Los colores deben comunicar estados operativos equivalentes, adaptando las etiquetas al dominio de cada modulo.
+- En escritorio, una reserva o actividad editable puede arrastrarse con el mouse hacia un horario libre.
+- El arrastre debe:
+  - ajustar el destino a intervalos operativos definidos por el modulo
+  - conservar la duracion original
+  - validar superposiciones antes de continuar
+  - abrir la edicion con fecha y horario propuestos
+  - exigir confirmacion explicita antes de persistir el cambio
+- Una actividad cancelada o no editable no debe poder arrastrarse.
+- La adopcion en `Massagens` y `Tours` debe preservar sus reglas de negocio, endpoints y acciones existentes; este estandar no autoriza cambios de contrato backend por si solo.

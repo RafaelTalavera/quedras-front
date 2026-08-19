@@ -42,6 +42,37 @@ void main() {
   );
 
   testWidgets(
+    'TennisRentalPage permite arrastrar una reserva para proponer otro horario',
+    (WidgetTester tester) async {
+      final _FakeCourtAppService service = _FakeCourtAppService(
+        bookingDate: DateTime.now(),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TennisRentalPage(
+              courtAppService: service,
+              scheduleSyncService: ScheduleSyncService(
+                baseUrl: 'http://localhost/api/v1/',
+                authorizationHeaderProvider: () => null,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.ensureVisible(find.text('08:00-09:00'));
+      await tester.pumpAndSettle();
+      await tester.drag(find.text('08:00-09:00'), const Offset(110, 0));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Editar reserva de quadra'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'TennisRentalPage muestra detalle de profesor parceiro con acciones de PDF',
     (WidgetTester tester) async {
       final _FakeCourtAppService service = _FakeCourtAppService();
@@ -90,8 +121,10 @@ void main() {
 }
 
 final class _FakeCourtAppService implements CourtAppService {
-  _FakeCourtAppService()
-    : _bookingDate = DateTime(DateTime.now().year, DateTime.now().month, 10);
+  _FakeCourtAppService({DateTime? bookingDate})
+    : _bookingDate =
+          bookingDate ??
+          DateTime(DateTime.now().year, DateTime.now().month, 10);
 
   final DateTime _bookingDate;
 

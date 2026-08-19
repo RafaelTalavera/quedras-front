@@ -1172,6 +1172,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                         onDialogRefresh();
                       },
                       onBookingTap: _openBookingActionDialog,
+                      onBookingMove: _openDraggedBookingEdit,
                     );
                   }),
                 ],
@@ -2235,7 +2236,51 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     }
   }
 
-  Future<void> _openEditDialog({CourtBooking? booking}) async {
+  Future<void> _openDraggedBookingEdit(
+    CourtBooking booking,
+    DateTime date,
+    int startMinutes,
+  ) async {
+    final int duration = booking.durationMinutes;
+    final int endMinutes = startMinutes + duration;
+    final bool overlaps = _bookings.any((CourtBooking item) {
+      if (item.id == booking.id ||
+          item.status == CourtBookingStatus.cancelled ||
+          !_sameDay(item.bookingDate, date)) {
+        return false;
+      }
+      final int itemStart = _timeStringToMinutes(item.startTime);
+      final int itemEnd = _timeStringToMinutes(item.endTime);
+      return startMinutes < itemEnd && endMinutes > itemStart;
+    });
+    if (overlaps) {
+      await AppAlerts.warning(
+        context,
+        title: 'Horario ocupado',
+        message: 'Solte a reserva em um horario livre para continuar.',
+      );
+      return;
+    }
+    await _openEditDialog(
+      booking: booking,
+      proposedDate: date,
+      proposedStartTime: TimeOfDay(
+        hour: startMinutes ~/ 60,
+        minute: startMinutes % 60,
+      ),
+      proposedEndTime: TimeOfDay(
+        hour: endMinutes ~/ 60,
+        minute: endMinutes % 60,
+      ),
+    );
+  }
+
+  Future<void> _openEditDialog({
+    CourtBooking? booking,
+    DateTime? proposedDate,
+    TimeOfDay? proposedStartTime,
+    TimeOfDay? proposedEndTime,
+  }) async {
     final CourtBooking? selected =
         booking ??
         await _pickBooking(
@@ -2252,6 +2297,9 @@ class _TennisRentalPageState extends State<TennisRentalPage>
           builder: (BuildContext context) => _CourtBookingDialog(
             service: widget.courtAppService,
             initialBooking: selected,
+            proposedDate: proposedDate,
+            proposedStartTime: proposedStartTime,
+            proposedEndTime: proposedEndTime,
           ),
         );
     if (result == null || !mounted) {
@@ -2746,6 +2794,7 @@ class _TimelineDayRow extends StatelessWidget {
     required this.bookings,
     required this.onDayTap,
     required this.onBookingTap,
+    required this.onBookingMove,
   });
 
   static const double _labelWidth = 108;
@@ -2758,6 +2807,8 @@ class _TimelineDayRow extends StatelessWidget {
   final List<CourtBooking> bookings;
   final VoidCallback onDayTap;
   final ValueChanged<CourtBooking> onBookingTap;
+  final void Function(CourtBooking booking, DateTime day, int startMinutes)
+  onBookingMove;
 
   @override
   Widget build(BuildContext context) {
@@ -2798,18 +2849,71 @@ class _TimelineDayRow extends StatelessWidget {
           SizedBox(
             width: _timelineWidth,
             height: 52,
-            child: Stack(
-              children: <Widget>[
-                ...List<Widget>.generate(18, (int index) {
-                  return Positioned(
-                    left: index * (_timelineWidth / 17),
-                    top: 0,
-                    bottom: 0,
-                    child: Container(width: 1, color: CostaNorteBrand.line),
-                  );
-                }),
-                ...bookings.map(_buildBookingBar),
-              ],
+            child: Builder(
+              builder: (BuildContext timelineContext) {
+                return DragTarget<_BookingDragData>(
+                  onWillAcceptWithDetails:
+                      (DragTargetDetails<_BookingDragData> details) =>
+                          details.data.booking.status ==
+                          CourtBookingStatus.scheduled,
+                  onAcceptWithDetails:
+                      (DragTargetDetails<_BookingDragData> details) {
+                        final RenderBox box =
+                            timelineContext.findRenderObject()! as RenderBox;
+                        final double localX = box
+                            .globalToLocal(details.offset)
+                            .dx;
+                        final int duration =
+                            details.data.booking.durationMinutes;
+                        final int latestStart =
+                            _openingMinutes + _totalMinutes - duration;
+                        final int rawMinutes =
+                            _openingMinutes +
+                            (localX / _timelineWidth * _totalMinutes).round();
+                        final int snappedMinutes =
+                            ((rawMinutes / 30).round() * 30).clamp(
+                              _openingMinutes,
+                              latestStart,
+                            );
+                        onBookingMove(
+                          details.data.booking,
+                          day,
+                          snappedMinutes,
+                        );
+                      },
+                  builder:
+                      (
+                        BuildContext context,
+                        List<_BookingDragData?> candidates,
+                        List<dynamic> rejected,
+                      ) {
+                        return DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: candidates.isNotEmpty
+                                ? CostaNorteBrand.mint
+                                : Colors.transparent,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Stack(
+                            children: <Widget>[
+                              ...List<Widget>.generate(18, (int index) {
+                                return Positioned(
+                                  left: index * (_timelineWidth / 17),
+                                  top: 0,
+                                  bottom: 0,
+                                  child: Container(
+                                    width: 1,
+                                    color: CostaNorteBrand.line,
+                                  ),
+                                );
+                              }),
+                              ...bookings.map(_buildBookingBar),
+                            ],
+                          ),
+                        );
+                      },
+                );
+              },
             ),
           ),
         ],
@@ -2838,37 +2942,48 @@ class _TimelineDayRow extends StatelessWidget {
     final String time =
         '${booking.startTime.substring(0, 5)}-${booking.endTime.substring(0, 5)}';
 
+    final Widget bar = Material(
+      color: color,
+      borderRadius: BorderRadius.circular(8),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => onBookingTap(booking),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 7),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              width >= 105 ? '${booking.customerName}  $time' : time,
+              maxLines: 1,
+              overflow: TextOverflow.clip,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+    final Widget interactiveBar = booking.status == CourtBookingStatus.scheduled
+        ? Draggable<_BookingDragData>(
+            data: _BookingDragData(booking),
+            dragAnchorStrategy: pointerDragAnchorStrategy,
+            feedback: SizedBox(width: width, height: 36, child: bar),
+            childWhenDragging: Opacity(opacity: 0.3, child: bar),
+            child: MouseRegion(cursor: SystemMouseCursors.grab, child: bar),
+          )
+        : bar;
+
     return Positioned(
       left: left,
       top: 8,
       width: width,
       height: 36,
       child: Tooltip(
-        message: '${booking.customerName}\n$time',
-        child: Material(
-          color: color,
-          borderRadius: BorderRadius.circular(8),
-          clipBehavior: Clip.antiAlias,
-          child: InkWell(
-            onTap: () => onBookingTap(booking),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 7),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  width >= 105 ? '${booking.customerName}  $time' : time,
-                  maxLines: 1,
-                  overflow: TextOverflow.clip,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ),
+        message: '${booking.customerName}\n$time\nArraste para remarcar',
+        child: interactiveBar,
       ),
     );
   }
@@ -2877,6 +2992,12 @@ class _TimelineDayRow extends StatelessWidget {
     final List<String> parts = value.split(':');
     return int.parse(parts[0]) * 60 + int.parse(parts[1]);
   }
+}
+
+class _BookingDragData {
+  const _BookingDragData(this.booking);
+
+  final CourtBooking booking;
 }
 
 class _DetailChip extends StatelessWidget {
@@ -3400,10 +3521,19 @@ class _PartnerCoachSummaryAccumulator {
 }
 
 class _CourtBookingDialog extends StatefulWidget {
-  const _CourtBookingDialog({required this.service, this.initialBooking});
+  const _CourtBookingDialog({
+    required this.service,
+    this.initialBooking,
+    this.proposedDate,
+    this.proposedStartTime,
+    this.proposedEndTime,
+  });
 
   final CourtAppService service;
   final CourtBooking? initialBooking;
+  final DateTime? proposedDate;
+  final TimeOfDay? proposedStartTime;
+  final TimeOfDay? proposedEndTime;
 
   @override
   State<_CourtBookingDialog> createState() => _CourtBookingDialogState();
@@ -3441,13 +3571,18 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
     _paid = booking?.paid ?? false;
     _paymentMethod = booking?.paymentMethod ?? CourtPaymentMethod.pix;
     _recurring = false;
-    _startTime = booking == null
-        ? const TimeOfDay(hour: 9, minute: 0)
-        : _parseTimeOfDay(booking.startTime.substring(0, 5));
-    _endTime = booking == null
-        ? const TimeOfDay(hour: 10, minute: 0)
-        : _parseTimeOfDay(booking.endTime.substring(0, 5));
-    _bookingDate = booking?.bookingDate ?? DateTime.now();
+    _startTime =
+        widget.proposedStartTime ??
+        (booking == null
+            ? const TimeOfDay(hour: 9, minute: 0)
+            : _parseTimeOfDay(booking.startTime.substring(0, 5)));
+    _endTime =
+        widget.proposedEndTime ??
+        (booking == null
+            ? const TimeOfDay(hour: 10, minute: 0)
+            : _parseTimeOfDay(booking.endTime.substring(0, 5)));
+    _bookingDate =
+        widget.proposedDate ?? booking?.bookingDate ?? DateTime.now();
     _recurrenceEndDate = booking?.recurrenceEndDate;
     final int rackets = booking == null
         ? 0
@@ -5191,6 +5326,11 @@ TimeOfDay _addMinutes(TimeOfDay value, int minutesToAdd) {
 
 int _timeOfDayToMinutes(TimeOfDay value) {
   return value.hour * 60 + value.minute;
+}
+
+int _timeStringToMinutes(String value) {
+  final List<String> parts = value.split(':');
+  return int.parse(parts[0]) * 60 + int.parse(parts[1]);
 }
 
 String _fullDateLabel(DateTime date) {

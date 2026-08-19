@@ -17,9 +17,14 @@
   - las barras permiten acceder a las acciones de la reserva
   - el banner queda limpio, sin la etiqueta `Operacao ativa` ni el texto descriptivo
   - el renglon informativo se divide en dos mitades: horario operacional a la izquierda y referencia de colores alineada a la derecha
+  - las reservas activas pueden arrastrarse con el mouse hacia otro horario o dia visible
+  - el destino se ajusta en intervalos de 30 minutos y conserva la duracion original
+  - antes de guardar, el sistema valida la disponibilidad y abre el formulario con el nuevo horario propuesto
+  - el cambio solo se persiste cuando el operador confirma la edicion
+  - esta agenda temporal queda definida como referencia para futuras adecuaciones de `Massagens` y `Tours`
 - Contrato backend: sin cambios; se reutiliza la consulta existente por rango de fechas.
 - Validacion ejecutada:
-  - `flutter test test/features/tennis/presentation/tennis_rental_page_test.dart`
+  - `flutter test test/features/tennis/presentation/tennis_rental_page_test.dart` (3 pruebas OK, incluida interaccion de arrastre)
   - `flutter analyze lib/features/tennis/presentation/tennis_rental_page.dart` (sin errores; permanecen avisos de APIs deprecadas preexistentes)
 
 ## 2026-07-10 | Manutencao | Limpieza de vista general y concentracion de preventivos
