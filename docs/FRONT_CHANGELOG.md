@@ -1,5 +1,25 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-08-19 | Quadras | Agenda temporal semanal visible
+- Componente afectado: Frontend (`Quadras`)
+- Archivos tocados:
+  - `lib/features/tennis/presentation/tennis_rental_page.dart`
+  - `test/features/tennis/presentation/tennis_rental_page_test.dart`
+  - `docs/FRONT_CHANGELOG.md`
+- Motivo del cambio: presentar la ocupacion de la cancha como una linea temporal operativa que permita identificar rapidamente los horarios reservados.
+- Impacto funcional:
+  - la agenda semanal queda visible de forma permanente en la pantalla principal
+  - la franja horaria se representa de `06:00` a `23:00`
+  - cada reserva se dibuja como una barra proporcional a su hora de inicio y fin
+  - los colores distinguen reservas pagadas, pendientes y canceladas
+  - el operador puede alternar entre vistas `Diaria`, `Semanal` y `Mensal`
+  - la vista semanal es la opcion predeterminada y permite navegar entre semanas
+  - las barras permiten acceder a las acciones de la reserva
+- Contrato backend: sin cambios; se reutiliza la consulta existente por rango de fechas.
+- Validacion ejecutada:
+  - `flutter test test/features/tennis/presentation/tennis_rental_page_test.dart`
+  - `flutter analyze lib/features/tennis/presentation/tennis_rental_page.dart` (sin errores; permanecen avisos de APIs deprecadas preexistentes)
+
 ## 2026-07-10 | Manutencao | Limpieza de vista general y concentracion de preventivos
 - Componente afectado: Frontend (`Manutencao`) + documentacion funcional
 - Archivos tocados:

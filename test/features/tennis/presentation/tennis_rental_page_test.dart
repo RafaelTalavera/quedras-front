@@ -13,6 +13,35 @@ import 'package:flutter_test/flutter_test.dart';
 
 void main() {
   testWidgets(
+    'TennisRentalPage muestra siempre la agenda semanal en la pantalla',
+    (WidgetTester tester) async {
+      final _FakeCourtAppService service = _FakeCourtAppService();
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TennisRentalPage(
+              courtAppService: service,
+              scheduleSyncService: ScheduleSyncService(
+                baseUrl: 'http://localhost/api/v1/',
+                authorizationHeaderProvider: () => null,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('Diaria'), findsOneWidget);
+      expect(find.text('Semanal'), findsOneWidget);
+      expect(find.text('Mensal'), findsOneWidget);
+      expect(find.text('Horario operacional: 06:00 a 23:00'), findsOneWidget);
+      expect(find.text('06:00'), findsOneWidget);
+      expect(find.text('23:00'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'TennisRentalPage muestra detalle de profesor parceiro con acciones de PDF',
     (WidgetTester tester) async {
       final _FakeCourtAppService service = _FakeCourtAppService();
@@ -342,7 +371,10 @@ final class _FakePartnerCoachReportPdfExporter
       '${directory.path}${Platform.pathSeparator}${buildFileName(detail: detail, startDate: startDate, endDate: endDate)}',
     );
     await file.writeAsString('pdf');
-    return FileSaveResult(fileName: file.uri.pathSegments.last, path: file.path);
+    return FileSaveResult(
+      fileName: file.uri.pathSegments.last,
+      path: file.path,
+    );
   }
 }
 

@@ -88,6 +88,8 @@ const List<String> _courtTimeSlots = <String>[
 
 enum TennisRentalSection { selectedDay, monthlyAgenda, summary }
 
+enum _CourtAgendaView { day, week, month }
+
 class TennisRentalPageController {
   _TennisRentalPageState? _state;
 
@@ -152,6 +154,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
   String? _agendaErrorMessage;
   String? _loadedAgendaKey;
   String? _loadedSummaryKey;
+  _CourtAgendaView _agendaView = _CourtAgendaView.week;
 
   @override
   void initState() {
@@ -244,7 +247,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                       ? null
                       : () => _showSection(TennisRentalSection.monthlyAgenda),
                   icon: const Icon(Icons.calendar_month_rounded),
-                  label: const Text('Agenda mensal'),
+                  label: const Text('Agenda'),
                 ),
                 OutlinedButton.icon(
                   onPressed: _loading
@@ -273,8 +276,20 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                 child: CircularProgressIndicator(),
               ),
             )
-          else
+          else ...<Widget>[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: _buildAgendaView(
+                  context,
+                  onDialogRefresh: () {},
+                  onDaySelected: () {},
+                ),
+              ),
+            ),
+            const SizedBox(height: 18),
             _buildSelectedDayCard(context),
+          ],
         ],
       ),
     );
@@ -325,16 +340,29 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       _summaryErrorMessage = null;
     });
     try {
+      final DateTime agendaStart = _agendaView == _CourtAgendaView.month
+          ? _monthStart(_selectedDate)
+          : _agendaView == _CourtAgendaView.week
+          ? _weekStart(_selectedDate)
+          : _selectedDate;
+      final DateTime agendaEnd = _agendaView == _CourtAgendaView.month
+          ? _monthEnd(_selectedDate)
+          : _agendaView == _CourtAgendaView.week
+          ? agendaStart.add(const Duration(days: 6))
+          : _selectedDate;
       final Future<List<CourtBooking>> bookingsFuture = widget.courtAppService
-          .listBookings(bookingDate: _formatDate(_selectedDate));
+          .listBookings(
+            dateFrom: _formatDate(agendaStart),
+            dateTo: _formatDate(agendaEnd),
+          );
       final List<CourtBooking> bookings = await bookingsFuture;
       if (!mounted) {
         return;
       }
       setState(() {
         _replaceCachedBookings(
-          startDate: _selectedDate,
-          endDate: _selectedDate,
+          startDate: agendaStart,
+          endDate: agendaEnd,
           bookings: bookings,
         );
         _selectedSummaryDetailKey = null;
@@ -450,6 +478,59 @@ class _TennisRentalPageState extends State<TennisRentalPage>
         _loadingAgenda = false;
         _agendaErrorMessage = error.toString().replaceFirst('Bad state: ', '');
       });
+    }
+  }
+
+  DateTime _weekStart(DateTime date) {
+    final DateTime normalized = DateTime(date.year, date.month, date.day);
+    return normalized.subtract(Duration(days: normalized.weekday - 1));
+  }
+
+  Future<void> _loadAgendaRange(DateTime startDate, DateTime endDate) async {
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _loadingAgenda = true;
+      _agendaErrorMessage = null;
+    });
+    try {
+      final List<CourtBooking> bookings = await widget.courtAppService
+          .listBookings(
+            dateFrom: _formatDate(startDate),
+            dateTo: _formatDate(endDate),
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _replaceCachedBookings(
+          startDate: startDate,
+          endDate: endDate,
+          bookings: bookings,
+        );
+        _loadingAgenda = false;
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _loadingAgenda = false;
+        _agendaErrorMessage = error.toString().replaceFirst('Bad state: ', '');
+      });
+    }
+  }
+
+  Future<void> _loadCurrentAgendaView() async {
+    switch (_agendaView) {
+      case _CourtAgendaView.day:
+        await _loadAgendaRange(_selectedDate, _selectedDate);
+      case _CourtAgendaView.week:
+        final DateTime start = _weekStart(_selectedDate);
+        await _loadAgendaRange(start, start.add(const Duration(days: 6)));
+      case _CourtAgendaView.month:
+        await _loadAgenda();
     }
   }
 
@@ -658,7 +739,8 @@ class _TennisRentalPageState extends State<TennisRentalPage>
 
   Future<void> _openAgendaDialog() async {
     _setCurrentSection(TennisRentalSection.monthlyAgenda);
-    await _loadAgenda();
+    _agendaView = _CourtAgendaView.week;
+    await _loadCurrentAgendaView();
     if (!mounted) {
       return;
     }
@@ -675,17 +757,16 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                 children: <Widget>[
                   _buildSectionDialogHeader(
                     context,
-                    title: 'Agenda mensal',
+                    title: 'Agenda de quadras',
                     subtitle:
-                        'Visualizacao mensal de reservas com acesso rapido por dia.',
+                        'Linha temporal semanal, com opcoes diaria e mensal.',
                   ),
                   const Divider(height: 1),
                   Expanded(
                     child: SingleChildScrollView(
                       padding: const EdgeInsets.all(24),
-                      child: _buildCalendarCard(
+                      child: _buildAgendaView(
                         context,
-                        asCard: false,
                         onDialogRefresh: () => setDialogState(() {}),
                         onDaySelected: () => Navigator.of(dialogContext).pop(),
                       ),
@@ -875,6 +956,213 @@ class _TennisRentalPageState extends State<TennisRentalPage>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildAgendaView(
+    BuildContext context, {
+    required VoidCallback onDialogRefresh,
+    required VoidCallback onDaySelected,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: <Widget>[
+            SegmentedButton<_CourtAgendaView>(
+              style: ButtonStyle(
+                foregroundColor: WidgetStateProperty.resolveWith<Color>((
+                  Set<WidgetState> states,
+                ) {
+                  return states.contains(WidgetState.selected)
+                      ? CostaNorteBrand.royalBlueDeep
+                      : CostaNorteBrand.mutedInk;
+                }),
+                backgroundColor: WidgetStateProperty.resolveWith<Color>((
+                  Set<WidgetState> states,
+                ) {
+                  return states.contains(WidgetState.selected)
+                      ? CostaNorteBrand.gold.withValues(alpha: 0.22)
+                      : Colors.white;
+                }),
+                side: const WidgetStatePropertyAll<BorderSide>(
+                  BorderSide(color: CostaNorteBrand.line),
+                ),
+              ),
+              segments: const <ButtonSegment<_CourtAgendaView>>[
+                ButtonSegment<_CourtAgendaView>(
+                  value: _CourtAgendaView.day,
+                  icon: Icon(Icons.view_day_rounded),
+                  label: Text('Diaria'),
+                ),
+                ButtonSegment<_CourtAgendaView>(
+                  value: _CourtAgendaView.week,
+                  icon: Icon(Icons.date_range_rounded),
+                  label: Text('Semanal'),
+                ),
+                ButtonSegment<_CourtAgendaView>(
+                  value: _CourtAgendaView.month,
+                  icon: Icon(Icons.calendar_month_rounded),
+                  label: Text('Mensal'),
+                ),
+              ],
+              selected: <_CourtAgendaView>{_agendaView},
+              onSelectionChanged: (Set<_CourtAgendaView> selection) {
+                setState(() => _agendaView = selection.first);
+                onDialogRefresh();
+                unawaited(
+                  _loadCurrentAgendaView().then((_) => onDialogRefresh()),
+                );
+              },
+            ),
+            if (_agendaView != _CourtAgendaView.month) ...<Widget>[
+              IconButton.outlined(
+                tooltip: _agendaView == _CourtAgendaView.week
+                    ? 'Semana anterior'
+                    : 'Dia anterior',
+                onPressed: _loadingAgenda
+                    ? null
+                    : () => _moveTimeline(-1, onDialogRefresh),
+                icon: const Icon(Icons.chevron_left_rounded),
+              ),
+              OutlinedButton(
+                onPressed: _loadingAgenda
+                    ? null
+                    : () async {
+                        setState(() => _selectedDate = _todayDate());
+                        onDialogRefresh();
+                        await _loadCurrentAgendaView();
+                        onDialogRefresh();
+                      },
+                child: const Text('Hoje'),
+              ),
+              IconButton.outlined(
+                tooltip: _agendaView == _CourtAgendaView.week
+                    ? 'Proxima semana'
+                    : 'Proximo dia',
+                onPressed: _loadingAgenda
+                    ? null
+                    : () => _moveTimeline(1, onDialogRefresh),
+                icon: const Icon(Icons.chevron_right_rounded),
+              ),
+            ],
+          ],
+        ),
+        const SizedBox(height: 18),
+        if (_agendaErrorMessage != null)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(
+              _agendaErrorMessage!,
+              style: TextStyle(color: Colors.red.shade700),
+            ),
+          ),
+        if (_agendaView == _CourtAgendaView.month)
+          _buildCalendarCard(
+            context,
+            asCard: false,
+            onDialogRefresh: onDialogRefresh,
+            onDaySelected: onDaySelected,
+          )
+        else
+          _buildTimelineAgenda(context, onDialogRefresh),
+      ],
+    );
+  }
+
+  Future<void> _moveTimeline(
+    int direction,
+    VoidCallback onDialogRefresh,
+  ) async {
+    final int days = _agendaView == _CourtAgendaView.week ? 7 : 1;
+    setState(() {
+      _selectedDate = _selectedDate.add(Duration(days: days * direction));
+    });
+    onDialogRefresh();
+    await _loadCurrentAgendaView();
+    onDialogRefresh();
+  }
+
+  Widget _buildTimelineAgenda(
+    BuildContext context,
+    VoidCallback onDialogRefresh,
+  ) {
+    final DateTime start = _agendaView == _CourtAgendaView.week
+        ? _weekStart(_selectedDate)
+        : _selectedDate;
+    final int dayCount = _agendaView == _CourtAgendaView.week ? 7 : 1;
+    final List<DateTime> days = List<DateTime>.generate(
+      dayCount,
+      (int index) => start.add(Duration(days: index)),
+    );
+    final String rangeLabel = dayCount == 1
+        ? _formatBookingDateWithWeekday(start)
+        : '${_formatShortDate(start)} a ${_formatShortDate(days.last)}';
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(rangeLabel, style: Theme.of(context).textTheme.titleMedium),
+        const SizedBox(height: 6),
+        Text(
+          'Horario operacional: 06:00 a 23:00',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+        const SizedBox(height: 12),
+        const Wrap(
+          spacing: 16,
+          runSpacing: 8,
+          children: <Widget>[
+            _TimelineLegend(
+              color: CostaNorteBrand.royalBlueDeep,
+              label: 'Reservado',
+            ),
+            _TimelineLegend(color: CostaNorteBrand.goldDeep, label: 'Pendente'),
+            _TimelineLegend(color: CostaNorteBrand.error, label: 'Cancelado'),
+          ],
+        ),
+        const SizedBox(height: 16),
+        if (_loadingAgenda)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 32),
+            child: Center(child: CircularProgressIndicator()),
+          )
+        else
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: SizedBox(
+              width: 1040,
+              child: Column(
+                children: <Widget>[
+                  const _TimelineHourHeader(),
+                  ...days.map((DateTime day) {
+                    final List<CourtBooking> bookings = _bookings
+                        .where(
+                          (CourtBooking item) =>
+                              _sameDay(item.bookingDate, day),
+                        )
+                        .toList();
+                    return _TimelineDayRow(
+                      day: day,
+                      selected: _sameDay(day, _selectedDate),
+                      bookings: bookings,
+                      onDayTap: () async {
+                        setState(() => _selectedDate = day);
+                        onDialogRefresh();
+                        await _load(showLoading: false);
+                        onDialogRefresh();
+                      },
+                      onBookingTap: _openBookingActionDialog,
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -2374,6 +2662,207 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
+class _TimelineLegend extends StatelessWidget {
+  const _TimelineLegend({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Container(
+          width: 12,
+          height: 12,
+          decoration: BoxDecoration(
+            color: color,
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+        const SizedBox(width: 6),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+  }
+}
+
+class _TimelineHourHeader extends StatelessWidget {
+  const _TimelineHourHeader();
+
+  static const double _labelWidth = 108;
+  static const double _timelineWidth = 932;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 34,
+      child: Row(
+        children: <Widget>[
+          const SizedBox(width: _labelWidth),
+          SizedBox(
+            width: _timelineWidth,
+            child: Stack(
+              children: List<Widget>.generate(18, (int index) {
+                final double left = index * (_timelineWidth / 17);
+                return Positioned(
+                  left: index == 17 ? left - 34 : left,
+                  top: 4,
+                  child: Text(
+                    '${(index + 6).toString().padLeft(2, '0')}:00',
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                );
+              }),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimelineDayRow extends StatelessWidget {
+  const _TimelineDayRow({
+    required this.day,
+    required this.selected,
+    required this.bookings,
+    required this.onDayTap,
+    required this.onBookingTap,
+  });
+
+  static const double _labelWidth = 108;
+  static const double _timelineWidth = 932;
+  static const int _openingMinutes = 6 * 60;
+  static const int _totalMinutes = 17 * 60;
+
+  final DateTime day;
+  final bool selected;
+  final List<CourtBooking> bookings;
+  final VoidCallback onDayTap;
+  final ValueChanged<CourtBooking> onBookingTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 68,
+      decoration: BoxDecoration(
+        color: selected
+            ? CostaNorteBrand.sand.withValues(alpha: 0.65)
+            : Colors.white,
+        border: const Border(top: BorderSide(color: CostaNorteBrand.line)),
+      ),
+      child: Row(
+        children: <Widget>[
+          SizedBox(
+            width: _labelWidth,
+            child: InkWell(
+              onTap: onDayTap,
+              borderRadius: BorderRadius.circular(12),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Text(
+                      _courtWeekLabels[day.weekday - 1],
+                      style: Theme.of(context).textTheme.labelLarge,
+                    ),
+                    Text(
+                      '${day.day.toString().padLeft(2, '0')}/${day.month.toString().padLeft(2, '0')}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+          SizedBox(
+            width: _timelineWidth,
+            height: 52,
+            child: Stack(
+              children: <Widget>[
+                ...List<Widget>.generate(18, (int index) {
+                  return Positioned(
+                    left: index * (_timelineWidth / 17),
+                    top: 0,
+                    bottom: 0,
+                    child: Container(width: 1, color: CostaNorteBrand.line),
+                  );
+                }),
+                ...bookings.map(_buildBookingBar),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBookingBar(CourtBooking booking) {
+    final int start = _minutes(
+      booking.startTime,
+    ).clamp(_openingMinutes, _openingMinutes + _totalMinutes);
+    final int end = _minutes(
+      booking.endTime,
+    ).clamp(_openingMinutes, _openingMinutes + _totalMinutes);
+    final double left =
+        (start - _openingMinutes) / _totalMinutes * _timelineWidth;
+    final double width = ((end - start) / _totalMinutes * _timelineWidth).clamp(
+      4,
+      _timelineWidth - left,
+    );
+    final Color color = booking.status == CourtBookingStatus.cancelled
+        ? CostaNorteBrand.error
+        : booking.paid
+        ? CostaNorteBrand.royalBlueDeep
+        : CostaNorteBrand.goldDeep;
+    final String time =
+        '${booking.startTime.substring(0, 5)}-${booking.endTime.substring(0, 5)}';
+
+    return Positioned(
+      left: left,
+      top: 8,
+      width: width,
+      height: 36,
+      child: Tooltip(
+        message: '${booking.customerName}\n$time',
+        child: Material(
+          color: color,
+          borderRadius: BorderRadius.circular(8),
+          clipBehavior: Clip.antiAlias,
+          child: InkWell(
+            onTap: () => onBookingTap(booking),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 7),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  width >= 105 ? '${booking.customerName}  $time' : time,
+                  maxLines: 1,
+                  overflow: TextOverflow.clip,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  int _minutes(String value) {
+    final List<String> parts = value.split(':');
+    return int.parse(parts[0]) * 60 + int.parse(parts[1]);
+  }
+}
+
 class _DetailChip extends StatelessWidget {
   const _DetailChip({
     required this.label,
@@ -2696,9 +3185,7 @@ class _CourtBookingActionDialog extends StatelessWidget {
                 icon: Icon(
                   sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
                 ),
-                label: Text(
-                  sharing ? 'Compartilhando...' : 'Compartilhar',
-                ),
+                label: Text(sharing ? 'Compartilhando...' : 'Compartilhar'),
               ),
               OutlinedButton.icon(
                 onPressed: () =>
