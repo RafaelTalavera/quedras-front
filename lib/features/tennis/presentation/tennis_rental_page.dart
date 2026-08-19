@@ -227,10 +227,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           BrandSectionHero(
-            eyebrow: 'Operacao ativa',
             title: 'Quadras de tenis',
-            description:
-                'Reserva operacional de quadras com controle de horas, pagamento, materiais e regras por tipo de usuario.',
             icon: Icons.sports_tennis_rounded,
             photoAlignment: Alignment.centerRight,
             action: Wrap(
@@ -263,6 +260,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                 ),
               ],
             ),
+            eyebrow: '',
           ),
           const SizedBox(height: 18),
           if (_errorMessage != null) ...<Widget>[
@@ -1107,21 +1105,39 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       children: <Widget>[
         Text(rangeLabel, style: Theme.of(context).textTheme.titleMedium),
         const SizedBox(height: 6),
-        Text(
-          'Horario operacional: 06:00 a 23:00',
-          style: Theme.of(context).textTheme.bodyMedium,
-        ),
-        const SizedBox(height: 12),
-        const Wrap(
-          spacing: 16,
-          runSpacing: 8,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            _TimelineLegend(
-              color: CostaNorteBrand.royalBlueDeep,
-              label: 'Reservado',
+            Expanded(
+              child: Text(
+                'Horario operacional: 06:00 a 23:00',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
             ),
-            _TimelineLegend(color: CostaNorteBrand.goldDeep, label: 'Pendente'),
-            _TimelineLegend(color: CostaNorteBrand.error, label: 'Cancelado'),
+            const Expanded(
+              child: Align(
+                alignment: Alignment.topRight,
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  spacing: 16,
+                  runSpacing: 8,
+                  children: <Widget>[
+                    _TimelineLegend(
+                      color: CostaNorteBrand.royalBlueDeep,
+                      label: 'Reservado',
+                    ),
+                    _TimelineLegend(
+                      color: CostaNorteBrand.goldDeep,
+                      label: 'Pendente',
+                    ),
+                    _TimelineLegend(
+                      color: CostaNorteBrand.error,
+                      label: 'Cancelado',
+                    ),
+                  ],
+                ),
+              ),
+            ),
           ],
         ),
         const SizedBox(height: 16),

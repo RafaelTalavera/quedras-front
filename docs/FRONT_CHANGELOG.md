@@ -15,6 +15,8 @@
   - el operador puede alternar entre vistas `Diaria`, `Semanal` y `Mensal`
   - la vista semanal es la opcion predeterminada y permite navegar entre semanas
   - las barras permiten acceder a las acciones de la reserva
+  - el banner queda limpio, sin la etiqueta `Operacao ativa` ni el texto descriptivo
+  - el renglon informativo se divide en dos mitades: horario operacional a la izquierda y referencia de colores alineada a la derecha
 - Contrato backend: sin cambios; se reutiliza la consulta existente por rango de fechas.
 - Validacion ejecutada:
   - `flutter test test/features/tennis/presentation/tennis_rental_page_test.dart`
