@@ -248,7 +248,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           BrandSectionHero(
-            eyebrow: 'Bem-estar',
             title: 'Agendamento de massagens',
             icon: Icons.spa_rounded,
             photoAlignment: Alignment.centerLeft,

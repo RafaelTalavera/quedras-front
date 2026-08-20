@@ -4,7 +4,7 @@ import '../theme/costa_norte_brand.dart';
 
 class BrandSectionHero extends StatelessWidget {
   const BrandSectionHero({
-    required this.eyebrow,
+    this.eyebrow = '',
     required this.title,
     required this.icon,
     this.description,

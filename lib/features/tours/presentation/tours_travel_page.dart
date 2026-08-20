@@ -560,10 +560,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           BrandSectionHero(
-            eyebrow: 'Experiencias externas',
             title: 'Tours e viagens',
-            description:
-                'Agenda operacional para documentar saídas con agências, pagamentos e comissão por fornecedor.',
             icon: Icons.explore_rounded,
             photoAlignment: Alignment.centerRight,
             action: Wrap(
