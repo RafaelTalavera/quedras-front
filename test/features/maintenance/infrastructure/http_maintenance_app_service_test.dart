@@ -173,6 +173,48 @@ void main() {
     },
   );
 
+  test(
+    'HttpMaintenanceAppService atualiza telefone do responsavel com resposta autoritativa',
+    () async {
+      final _FakeApiClient client = _FakeApiClient()
+        ..enqueue(
+          const ApiResponse(
+            statusCode: 200,
+            body:
+                '{"id":5,"providerType":"EXTERNAL","specialty":"AIR_CONDITIONING","name":"Servico de ar","serviceLabel":"Ar-condicionado","scopeDescription":"Hotel","contact":"5548999998888","whatsappNumber":"5548999998888","whatsappEnabled":true,"active":true,"createdAt":"2026-04-01T10:00:00Z","updatedAt":"2026-08-19T18:00:00Z","createdBy":"system","updatedBy":"supervisor.demo"}',
+          ),
+        );
+      final HttpMaintenanceAppService service = HttpMaintenanceAppService(
+        apiClient: client,
+      );
+
+      final MaintenanceProvider updated = await service.updateProvider(
+        5,
+        const UpdateMaintenanceProviderModel(
+          providerType: MaintenanceProviderType.external,
+          specialty: MaintenanceProviderSpecialty.airConditioning,
+          name: 'Servico de ar',
+          serviceLabel: 'Ar-condicionado',
+          scopeDescription: 'Hotel',
+          contact: '5548999998888',
+          active: true,
+          whatsappNumber: '5548999998888',
+          whatsappEnabled: true,
+        ),
+      );
+
+      expect(updated.whatsappNumber, '5548999998888');
+      expect(updated.whatsappEnabled, isTrue);
+      expect(client.calls.single.method, 'PUT');
+      expect(client.calls.single.path, 'maintenance/providers/5');
+      expect(client.calls.single.body, contains('"contact":"5548999998888"'));
+      expect(
+        client.calls.single.body,
+        contains('"whatsappNumber":"5548999998888"'),
+      );
+    },
+  );
+
   test('HttpMaintenanceAppService traduz falha de rede', () async {
     final _FakeApiClient client = _FakeApiClient()
       ..nextError = const SocketException('Connection refused');
@@ -238,6 +280,24 @@ void main() {
       );
     },
   );
+
+  test('HttpMaintenanceAppService exclui local e responsavel', () async {
+    final _FakeApiClient client = _FakeApiClient()
+      ..enqueue(const ApiResponse(statusCode: 204, body: ''))
+      ..enqueue(const ApiResponse(statusCode: 204, body: ''));
+    final HttpMaintenanceAppService service = HttpMaintenanceAppService(
+      apiClient: client,
+    );
+
+    await service.deleteLocation(12);
+    await service.deleteProvider(34);
+
+    expect(client.calls, hasLength(2));
+    expect(client.calls[0].method, 'DELETE');
+    expect(client.calls[0].path, 'maintenance/locations/12');
+    expect(client.calls[1].method, 'DELETE');
+    expect(client.calls[1].path, 'maintenance/providers/34');
+  });
 }
 
 final class _FakeApiClient implements ApiClient {

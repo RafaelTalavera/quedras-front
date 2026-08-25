@@ -75,6 +75,23 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
   }
 
   @override
+  Future<void> deleteLocation(int locationId) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.delete(
+        'maintenance/locations/$locationId',
+        headers: _jsonHeaders,
+      ),
+    );
+    if (!response.isSuccess) {
+      throw ApiException(
+        _extractApiErrorMessage(response),
+        kind: ApiErrorKind.http,
+        statusCode: response.statusCode,
+      );
+    }
+  }
+
+  @override
   Future<List<AuditEventModel>> locationAudit(int locationId) async {
     final ApiResponse response = await _runRequest(
       () => _apiClient.get(
@@ -246,6 +263,23 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
         invalidMessage: 'Resposta invalida do responsavel.',
       ),
     );
+  }
+
+  @override
+  Future<void> deleteProvider(int providerId) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.delete(
+        'maintenance/providers/$providerId',
+        headers: _jsonHeaders,
+      ),
+    );
+    if (!response.isSuccess) {
+      throw ApiException(
+        _extractApiErrorMessage(response),
+        kind: ApiErrorKind.http,
+        statusCode: response.statusCode,
+      );
+    }
   }
 
   @override

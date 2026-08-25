@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -62,6 +63,7 @@ class MaintenancePage extends StatefulWidget {
   const MaintenancePage({
     required this.maintenanceAppService,
     required this.scheduleSyncService,
+    this.isSupervisor = false,
     this.controller,
     this.onSectionChanged,
     super.key,
@@ -69,6 +71,7 @@ class MaintenancePage extends StatefulWidget {
 
   final MaintenanceAppService maintenanceAppService;
   final ScheduleSyncService scheduleSyncService;
+  final bool isSupervisor;
   final MaintenancePageController? controller;
   final ValueChanged<MaintenanceSection>? onSectionChanged;
 
@@ -90,9 +93,10 @@ class _MaintenancePageState extends State<MaintenancePage>
   bool _refreshingData = false;
   bool _loadingProviders = false;
   bool _saving = false;
-  bool _providersLoaded = false;
   bool _exportingDailyReport = false;
   bool _openingDailyReport = false;
+  bool _isActiveInTree = false;
+  bool _isAppResumed = true;
   int? _sharingOrderId;
   int? _loadingHistoryOrderId;
   String? _errorMessage;
@@ -115,11 +119,10 @@ class _MaintenancePageState extends State<MaintenancePage>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _isActiveInTree = true;
     widget.controller?._attach(this);
     _selectedDate = _today();
-    _syncSubscription = widget.scheduleSyncService.events.listen(
-      _handleSyncEvent,
-    );
+    _subscribeToSyncEvents();
     _load();
   }
 
@@ -134,15 +137,47 @@ class _MaintenancePageState extends State<MaintenancePage>
 
   @override
   void dispose() {
+    _isActiveInTree = false;
     WidgetsBinding.instance.removeObserver(this);
-    _syncSubscription?.cancel();
+    _unsubscribeFromSyncEvents();
     widget.controller?._detach(this);
     _scrollController.dispose();
     super.dispose();
   }
 
   @override
+  void activate() {
+    super.activate();
+    _isActiveInTree = true;
+    _subscribeToSyncEvents();
+  }
+
+  @override
+  void deactivate() {
+    _isActiveInTree = false;
+    _unsubscribeFromSyncEvents();
+    super.deactivate();
+  }
+
+  void _subscribeToSyncEvents() {
+    if (_syncSubscription != null) {
+      return;
+    }
+    _syncSubscription = widget.scheduleSyncService.events.listen(
+      _handleSyncEvent,
+    );
+  }
+
+  void _unsubscribeFromSyncEvents() {
+    final StreamSubscription<ScheduleSyncEvent>? subscription =
+        _syncSubscription;
+    _syncSubscription = null;
+    subscription?.cancel();
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    _isAppResumed = state == AppLifecycleState.resumed;
     if (state == AppLifecycleState.resumed) {
       unawaited(_load(showLoading: false));
     }
@@ -168,6 +203,11 @@ class _MaintenancePageState extends State<MaintenancePage>
                   onPressed: _saving ? null : () => _createOrder(),
                   icon: const Icon(Icons.add_circle_outline_rounded),
                   label: const Text('Nova ordem'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _loading ? null : _openOrderStatusOverview,
+                  icon: const Icon(Icons.assignment_late_rounded),
+                  label: const Text('Estado das ordens'),
                 ),
                 ..._quickLaunchers.map(
                   (_MaintenanceQuickLauncher launcher) => OutlinedButton.icon(
@@ -211,7 +251,7 @@ class _MaintenancePageState extends State<MaintenancePage>
           else
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[_buildExecutiveSummaryCard()],
+              children: <Widget>[_buildOperationalMapCard()],
             ),
         ],
       ),
@@ -289,16 +329,21 @@ class _MaintenancePageState extends State<MaintenancePage>
           widget.maintenanceAppService.getDailyExecutiveReport(
             date: _formatDateApi(_selectedDate),
           );
+      final Future<List<MaintenanceProvider>> providersFuture = widget
+          .maintenanceAppService
+          .listProviders();
       final List<MaintenanceLocation> locations = await locationsFuture;
       final List<MaintenanceOrder> orders = await ordersFuture;
       final MaintenanceDailyExecutiveReport executiveReport =
           await executiveReportFuture;
+      final List<MaintenanceProvider> providers = await providersFuture;
       if (!mounted) {
         return;
       }
       setState(() {
         _locations = List<MaintenanceLocation>.of(locations)
           ..sort(_compareLocationCatalogOrder);
+        _providers = providers;
         _orders = orders;
         _executiveReport = executiveReport;
         _loading = false;
@@ -323,9 +368,6 @@ class _MaintenancePageState extends State<MaintenancePage>
   }
 
   Future<void> _loadProviders() async {
-    if (_providersLoaded) {
-      return;
-    }
     if (!mounted) {
       return;
     }
@@ -341,7 +383,6 @@ class _MaintenancePageState extends State<MaintenancePage>
       }
       setState(() {
         _providers = providers;
-        _providersLoaded = true;
         _loadingProviders = false;
       });
     } catch (error) {
@@ -356,13 +397,13 @@ class _MaintenancePageState extends State<MaintenancePage>
   }
 
   bool _canAutoRefresh() {
-    final ModalRoute<dynamic>? route = ModalRoute.of(context);
     return mounted &&
+        _isActiveInTree &&
+        _isAppResumed &&
         !_loading &&
         !_refreshingData &&
         !_loadingProviders &&
-        !_saving &&
-        (route?.isCurrent ?? true);
+        !_saving;
   }
 
   void _handleSyncEvent(ScheduleSyncEvent event) {
@@ -415,7 +456,63 @@ class _MaintenancePageState extends State<MaintenancePage>
     await _load(showLoading: false);
   }
 
-  Widget _buildExecutiveSummaryCard() {
+  Future<void> _openOrderStatusOverview() async {
+    await showDialog<void>(
+      context: context,
+      builder: (BuildContext dialogContext) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setDialogState) =>
+              AppDialogShell(
+                maxWidth: 1120,
+                maxHeight: MediaQuery.sizeOf(context).height * 0.9,
+                padding: const EdgeInsets.all(18),
+                child: Column(
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            'Estado das ordens',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Fechar',
+                          onPressed: () => Navigator.of(context).pop(),
+                          icon: const Icon(Icons.close_rounded),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: _buildExecutiveSummaryCard(
+                          onFilterChanged: (_) => setDialogState(() {}),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+        );
+      },
+    );
+  }
+
+  Widget _buildOperationalMapCard() {
+    final List<MaintenanceOrder> openOrders =
+        _executiveReport?.allOpenOrders ?? _openDayOrders;
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(17),
+        child: _buildOperationalLocationMap(openOrders),
+      ),
+    );
+  }
+
+  Widget _buildExecutiveSummaryCard({
+    ValueChanged<_ExecutiveSummaryFilter>? onFilterChanged,
+  }) {
     final MaintenanceDailyExecutiveReport? executiveReport = _executiveReport;
     final List<MaintenanceOrder> openOrders =
         executiveReport?.allOpenOrders ?? _openDayOrders;
@@ -522,6 +619,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                         _ExecutiveSummaryFilter.allOpen,
                     onTap: () => _setExecutiveSummaryFilter(
                       _ExecutiveSummaryFilter.allOpen,
+                      onFilterChanged: onFilterChanged,
                     ),
                     compact: true,
                   ),
@@ -537,6 +635,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                         _ExecutiveSummaryFilter.urgent,
                     onTap: () => _setExecutiveSummaryFilter(
                       _ExecutiveSummaryFilter.urgent,
+                      onFilterChanged: onFilterChanged,
                     ),
                     compact: true,
                   ),
@@ -552,6 +651,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                         _ExecutiveSummaryFilter.scheduled,
                     onTap: () => _setExecutiveSummaryFilter(
                       _ExecutiveSummaryFilter.scheduled,
+                      onFilterChanged: onFilterChanged,
                     ),
                     compact: true,
                   ),
@@ -567,6 +667,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                         _ExecutiveSummaryFilter.inProgress,
                     onTap: () => _setExecutiveSummaryFilter(
                       _ExecutiveSummaryFilter.inProgress,
+                      onFilterChanged: onFilterChanged,
                     ),
                     compact: true,
                   ),
@@ -582,13 +683,13 @@ class _MaintenancePageState extends State<MaintenancePage>
                         _ExecutiveSummaryFilter.unassigned,
                     onTap: () => _setExecutiveSummaryFilter(
                       _ExecutiveSummaryFilter.unassigned,
+                      onFilterChanged: onFilterChanged,
                     ),
                     compact: true,
                   ),
                 ),
               ],
             ),
-            const SizedBox(height: 14),
             if (filteredOrders.isEmpty)
               _emptyBox(
                 _executiveSummaryFilter == _ExecutiveSummaryFilter.allOpen
@@ -716,6 +817,517 @@ class _MaintenancePageState extends State<MaintenancePage>
     );
   }
 
+  Widget _buildOperationalLocationMap(List<MaintenanceOrder> openOrders) {
+    final Map<int, List<MaintenanceOrder>> ordersByLocation =
+        <int, List<MaintenanceOrder>>{};
+    for (final MaintenanceOrder order in openOrders) {
+      ordersByLocation
+          .putIfAbsent(order.locationId, () => <MaintenanceOrder>[])
+          .add(order);
+    }
+
+    final List<MaintenanceLocation> apartments =
+        _locations
+            .where(
+              (MaintenanceLocation location) =>
+                  location.active &&
+                  location.locationCategory ==
+                      MaintenanceLocationCategory.apartment,
+            )
+            .toList()
+          ..sort(_compareLocationCatalogOrder);
+    final List<MaintenanceLocation> commonAreas =
+        _locations
+            .where(
+              (MaintenanceLocation location) =>
+                  location.active &&
+                  location.locationCategory ==
+                      MaintenanceLocationCategory.commonArea,
+            )
+            .toList()
+          ..sort(_compareLocationCatalogOrder);
+    final List<MaintenanceLocation> chalets =
+        _locations
+            .where(
+              (MaintenanceLocation location) =>
+                  location.active &&
+                  location.locationCategory ==
+                      MaintenanceLocationCategory.chalet,
+            )
+            .toList()
+          ..sort(_compareLocationCatalogOrder);
+
+    final Map<String, List<MaintenanceLocation>> locationsByFloor =
+        <String, List<MaintenanceLocation>>{};
+    for (final MaintenanceLocation location in apartments) {
+      locationsByFloor
+          .putIfAbsent(
+            _operationalFloorLabel(location),
+            () => <MaintenanceLocation>[],
+          )
+          .add(location);
+    }
+    final Map<String, List<MaintenanceLocation>> governanceByFloor =
+        <String, List<MaintenanceLocation>>{};
+    for (final MaintenanceLocation location in commonAreas) {
+      governanceByFloor
+          .putIfAbsent(
+            _operationalFloorLabel(location),
+            () => <MaintenanceLocation>[],
+          )
+          .add(location);
+    }
+    final List<String> floorLabels = <String>{
+      ...locationsByFloor.keys,
+      ...governanceByFloor.keys,
+    }.toList()..sort(_compareOperationalFloors);
+    final List<String> groundFloorLabels = floorLabels
+        .where(_isOperationalGroundFloor)
+        .toList();
+    final List<String> buildingFloorLabels = floorLabels
+        .where((String floor) => !_isOperationalGroundFloor(floor))
+        .toList();
+    final List<MaintenanceLocation> groundFloorLocations =
+        <MaintenanceLocation>[
+          for (final String floor
+              in groundFloorLabels) ...<MaintenanceLocation>[
+            ...?locationsByFloor[floor],
+            ...?governanceByFloor[floor],
+          ],
+        ];
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: CostaNorteBrand.mist.withValues(alpha: 0.55),
+        borderRadius: BorderRadius.circular(17),
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Text(
+            'Mapa operacional',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 4),
+       
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 12,
+            runSpacing: 6,
+            children: <Widget>[
+              _operationalMapLegend('Urgente', CostaNorteBrand.error),
+              _operationalMapLegend('En andamento', CostaNorteBrand.success),
+              _operationalMapLegend('Agendada', CostaNorteBrand.royalBlueDeep),
+              _operationalMapLegend('Aberta', CostaNorteBrand.goldDeep),
+            ],
+          ),
+          const SizedBox(height: 14),
+          if (_locations.isEmpty)
+            _emptyBox('Cadastre os locais para visualizar o mapa operacional.')
+          else ...<Widget>[
+            if (buildingFloorLabels.isNotEmpty)
+              _buildOperationalMapSection(
+                icon: Icons.apartment_rounded,
+                title: 'Edificio principal',
+                children: buildingFloorLabels
+                    .map(
+                      (String floor) => _buildOperationalFloorRow(
+                        floor,
+                        <MaintenanceLocation>[
+                          ...?locationsByFloor[floor],
+                          ...?governanceByFloor[floor],
+                        ],
+                        ordersByLocation,
+                      ),
+                    )
+                    .toList(),
+              ),
+            if (chalets.isNotEmpty) ...<Widget>[
+              if (buildingFloorLabels.isNotEmpty) const SizedBox(height: 12),
+              _buildOperationalMapSection(
+                icon: Icons.cottage_rounded,
+                title: 'Chales',
+                children: <Widget>[
+                  _buildOperationalFloorLocationsRow(chalets, ordersByLocation),
+                ],
+              ),
+            ],
+            if (groundFloorLocations.isNotEmpty) ...<Widget>[
+              if (buildingFloorLabels.isNotEmpty || chalets.isNotEmpty)
+                const SizedBox(height: 12),
+              _buildOperationalMapSection(
+                icon: Icons.meeting_room_rounded,
+                title: 'PB',
+                children: <Widget>[
+                  _buildOperationalFloorLocationsRow(
+                    groundFloorLocations,
+                    ordersByLocation,
+                  ),
+                ],
+              ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOperationalMapSection({
+    required IconData icon,
+    required String title,
+    required List<Widget> children,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: CostaNorteBrand.line),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Row(
+            children: <Widget>[
+              Icon(icon, size: 18, color: CostaNorteBrand.royalBlueDeep),
+              const SizedBox(width: 7),
+              Text(title, style: Theme.of(context).textTheme.titleMedium),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildOperationalFloorRow(
+    String floor,
+    List<MaintenanceLocation> locations,
+    Map<int, List<MaintenanceOrder>> ordersByLocation,
+  ) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 9),
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final Widget locationsRow = _buildOperationalFloorLocationsRow(
+            locations,
+            ordersByLocation,
+          );
+          if (constraints.maxWidth < 620) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text(floor, style: Theme.of(context).textTheme.labelLarge),
+                const SizedBox(height: 7),
+                locationsRow,
+              ],
+            );
+          }
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              SizedBox(
+                width: 92,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 12),
+                  child: Text(
+                    floor,
+                    style: Theme.of(context).textTheme.labelLarge,
+                  ),
+                ),
+              ),
+              Expanded(child: locationsRow),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildOperationalFloorLocationsRow(
+    List<MaintenanceLocation> locations,
+    Map<int, List<MaintenanceOrder>> ordersByLocation,
+  ) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        for (int index = 0; index < locations.length; index++) ...<Widget>[
+          if (index > 0) const SizedBox(width: 4),
+          Expanded(
+            child: _buildOperationalLocationTile(
+              locations[index],
+              ordersByLocation[locations[index].id] ??
+                  const <MaintenanceOrder>[],
+              compact: true,
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildOperationalLocationTile(
+    MaintenanceLocation location,
+    List<MaintenanceOrder> orders, {
+    bool compact = false,
+  }) {
+    final Color stateColor = _operationalLocationColor(orders);
+    final bool hasOrders = orders.isNotEmpty;
+    return Semantics(
+      button: hasOrders,
+      label:
+          '${location.label}, ${orders.length} ordem${orders.length == 1 ? '' : 'ns'} aberta${orders.length == 1 ? '' : 's'}',
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: hasOrders ? () => _openLocationOrders(location, orders) : null,
+          borderRadius: BorderRadius.circular(12),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minWidth: compact ? 0 : 86,
+              minHeight: compact ? 46 : 52,
+            ),
+            child: Ink(
+              padding: EdgeInsets.symmetric(
+                horizontal: compact ? 4 : 10,
+                vertical: compact ? 6 : 8,
+              ),
+              decoration: BoxDecoration(
+                color: hasOrders
+                    ? stateColor.withValues(alpha: 0.12)
+                    : const Color(0xFFFAFBFC),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: hasOrders ? stateColor : CostaNorteBrand.line,
+                  width: hasOrders ? 1.5 : 1,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Container(
+                    width: compact ? 6 : 9,
+                    height: compact ? 6 : 9,
+                    decoration: BoxDecoration(
+                      color: hasOrders ? stateColor : CostaNorteBrand.line,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  SizedBox(width: compact ? 3 : 7),
+                  Expanded(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            compact &&
+                                    location.locationCategory ==
+                                        MaintenanceLocationCategory.commonArea
+                                ? 'Governança'
+                                : compact && location.code.trim().isNotEmpty
+                                ? location.code.trim()
+                                : _normalizeMaintenanceLocationLabel(
+                                    location.label,
+                                  ),
+                            maxLines: 1,
+                            style: Theme.of(context).textTheme.labelLarge
+                                ?.copyWith(fontSize: compact ? 11 : null),
+                          ),
+                        ),
+                        FittedBox(
+                          fit: BoxFit.scaleDown,
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            hasOrders
+                                ? '${orders.length} aberta${orders.length == 1 ? '' : 's'}'
+                                : 'Livre',
+                            maxLines: 1,
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  fontSize: compact ? 9 : null,
+                                  color: hasOrders
+                                      ? stateColor
+                                      : CostaNorteBrand.mutedInk,
+                                  fontWeight: hasOrders
+                                      ? FontWeight.w700
+                                      : null,
+                                ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _operationalMapLegend(String label, Color color) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: <Widget>[
+        Container(
+          width: 9,
+          height: 9,
+          decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+        ),
+        const SizedBox(width: 5),
+        Text(label, style: Theme.of(context).textTheme.bodySmall),
+      ],
+    );
+  }
+
+  Color _operationalLocationColor(List<MaintenanceOrder> orders) {
+    if (orders.any(
+      (MaintenanceOrder order) => order.priority == MaintenancePriority.urgent,
+    )) {
+      return CostaNorteBrand.error;
+    }
+    if (orders.any(
+      (MaintenanceOrder order) =>
+          order.status == MaintenanceOrderStatus.inProgress,
+    )) {
+      return CostaNorteBrand.success;
+    }
+    if (orders.any(
+      (MaintenanceOrder order) =>
+          order.status == MaintenanceOrderStatus.scheduled,
+    )) {
+      return CostaNorteBrand.royalBlueDeep;
+    }
+    return CostaNorteBrand.goldDeep;
+  }
+
+  String _operationalFloorLabel(MaintenanceLocation location) {
+    final String explicitFloor = (location.floor ?? '').trim();
+    if (explicitFloor.isNotEmpty) {
+      final String? floorNumber = RegExp(
+        r'\d+',
+      ).firstMatch(explicitFloor)?.group(0);
+      if (floorNumber != null) {
+        if (int.tryParse(floorNumber) == 0) {
+          return 'PB';
+        }
+        return '$floorNumberº andar';
+      }
+      if (_isOperationalGroundFloor(explicitFloor)) {
+        return 'PB';
+      }
+      return _normalizeMaintenanceLocationLabel(explicitFloor);
+    }
+    final String locationReference = '${location.code} ${location.label}';
+    final Match? referencedFloor = RegExp(
+      r'(?:andar|piso)\s*(\d+)',
+      caseSensitive: false,
+    ).firstMatch(locationReference);
+    final String? referencedFloorNumber = referencedFloor?.group(1);
+    if (referencedFloorNumber != null) {
+      if (int.tryParse(referencedFloorNumber) == 0) {
+        return 'PB';
+      }
+      return '$referencedFloorNumberº andar';
+    }
+    if (_isOperationalGroundFloor(locationReference)) {
+      return 'PB';
+    }
+    if (location.locationCategory == MaintenanceLocationCategory.commonArea) {
+      return 'PB';
+    }
+    final Match? roomNumber = RegExp(r'\d+').firstMatch(location.code);
+    final String? code = roomNumber?.group(0);
+    if (code != null && code.length >= 3) {
+      return '${code.substring(0, 1)}º andar';
+    }
+    return 'Sem andar';
+  }
+
+  int _compareOperationalFloors(String a, String b) {
+    final int? aNumber = int.tryParse(
+      RegExp(r'\d+').firstMatch(a)?.group(0) ?? '',
+    );
+    final int? bNumber = int.tryParse(
+      RegExp(r'\d+').firstMatch(b)?.group(0) ?? '',
+    );
+    if (aNumber != null && bNumber != null) {
+      return bNumber.compareTo(aNumber);
+    }
+    if (aNumber != null) return -1;
+    if (bNumber != null) return 1;
+    return a.compareTo(b);
+  }
+
+  bool _isOperationalGroundFloor(String floor) {
+    final String normalized = floor.trim().toLowerCase();
+    return normalized == 'pb' ||
+        RegExp(r'\bpb\b').hasMatch(normalized) ||
+        RegExp(r'(?:andar|piso)\s*0\b').hasMatch(normalized) ||
+        normalized == '0' ||
+        normalized.contains('planta baixa') ||
+        normalized.contains('planta baja') ||
+        normalized.contains('terreo') ||
+        normalized.contains('térreo');
+  }
+
+  Future<void> _openLocationOrders(
+    MaintenanceLocation location,
+    List<MaintenanceOrder> orders,
+  ) async {
+    final MaintenanceOrder? selected = await showDialog<MaintenanceOrder>(
+      context: context,
+      builder: (BuildContext dialogContext) => SimpleDialog(
+        title: Text(
+          '${_normalizeMaintenanceLocationLabel(location.label)} - ordens abertas',
+        ),
+        children: orders
+            .map(
+              (MaintenanceOrder order) => SimpleDialogOption(
+                onPressed: () => Navigator.of(dialogContext).pop(order),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 6),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Text(
+                              order.title,
+                              style: Theme.of(context).textTheme.titleSmall,
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '${order.status.label} - ${order.providerLabel}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const Icon(Icons.chevron_right_rounded),
+                    ],
+                  ),
+                ),
+              ),
+            )
+            .toList(),
+      ),
+    );
+    if (selected == null || !mounted) return;
+    setState(() => _selectedOrderId = selected.id);
+    await _openOrderActionDialog(selected);
+  }
+
   int _compareLocationCatalogOrder(
     MaintenanceLocation a,
     MaintenanceLocation b,
@@ -829,13 +1441,17 @@ class _MaintenancePageState extends State<MaintenancePage>
     );
   }
 
-  void _setExecutiveSummaryFilter(_ExecutiveSummaryFilter filter) {
+  void _setExecutiveSummaryFilter(
+    _ExecutiveSummaryFilter filter, {
+    ValueChanged<_ExecutiveSummaryFilter>? onFilterChanged,
+  }) {
     if (_executiveSummaryFilter == filter) {
       return;
     }
     setState(() {
       _executiveSummaryFilter = filter;
     });
+    onFilterChanged?.call(filter);
   }
 
   List<MaintenanceOrder> _filterExecutiveOrders({
@@ -1462,6 +2078,7 @@ class _MaintenancePageState extends State<MaintenancePage>
         locations: _locations,
         providers: _providers,
         service: widget.maintenanceAppService,
+        isSupervisor: widget.isSupervisor,
       ),
     );
     if (!mounted) {
@@ -1670,24 +2287,28 @@ class _MaintenancePageState extends State<MaintenancePage>
       'https://wa.me/$whatsappNumber?text=${Uri.encodeComponent(message)}',
     );
 
-    try {
-      final bool launchedApp = await launchUrl(
-        appUri,
-        mode: LaunchMode.externalApplication,
-      );
-      if (launchedApp) {
-        return const _ProviderNotificationResult.sent(
-          ' WhatsApp aberto para envio ao prestador.',
+    if (!kIsWeb) {
+      try {
+        final bool launchedApp = await launchUrl(
+          appUri,
+          mode: LaunchMode.externalApplication,
         );
+        if (launchedApp) {
+          return const _ProviderNotificationResult.sent(
+            ' WhatsApp aberto para envio ao prestador.',
+          );
+        }
+      } catch (_) {
+        // Fallback to WhatsApp Web below.
       }
-    } catch (_) {
-      // Fallback to WhatsApp Web below.
     }
 
     try {
       final bool launchedWeb = await launchUrl(
         webUri,
-        mode: LaunchMode.externalApplication,
+        mode: kIsWeb
+            ? LaunchMode.platformDefault
+            : LaunchMode.externalApplication,
       );
       if (launchedWeb) {
         return const _ProviderNotificationResult.sent(
@@ -3563,11 +4184,13 @@ class _MaintenanceCatalogsDialog extends StatefulWidget {
     required this.locations,
     required this.providers,
     required this.service,
+    required this.isSupervisor,
   });
 
   final List<MaintenanceLocation> locations;
   final List<MaintenanceProvider> providers;
   final MaintenanceAppService service;
+  final bool isSupervisor;
 
   @override
   State<_MaintenanceCatalogsDialog> createState() =>
@@ -3578,6 +4201,7 @@ class _MaintenanceCatalogsDialogState
     extends State<_MaintenanceCatalogsDialog> {
   late List<MaintenanceLocation> _locations;
   late List<MaintenanceProvider> _providers;
+  int _selectedCatalog = 0;
   String? _historyError;
 
   @override
@@ -3590,60 +4214,178 @@ class _MaintenanceCatalogsDialogState
   @override
   Widget build(BuildContext context) {
     return AppDialogShell(
-      maxWidth: 920,
-      maxHeight: 720,
-      child: DefaultTabController(
-        length: 2,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: <Widget>[
-            Text('Catalogos', style: Theme.of(context).textTheme.headlineSmall),
-            if (_historyError != null) ...<Widget>[
-              const SizedBox(height: 8),
-              Text(
-                _historyError!,
-                style: const TextStyle(color: CostaNorteBrand.error),
-              ),
-            ],
-            const SizedBox(height: 12),
-            const TabBar(
-              tabs: <Tab>[
-                Tab(text: 'Locais'),
-                Tab(text: 'Responsaveis'),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Expanded(
-              child: TabBarView(
+      maxWidth: 1080,
+      maxHeight: 760,
+      child: LayoutBuilder(
+        builder: (BuildContext context, BoxConstraints constraints) {
+          final bool compact = constraints.maxWidth < 760;
+          final Widget catalogSelector = compact
+              ? _buildCompactCatalogSelector()
+              : SizedBox(width: 220, child: _buildCatalogNavigation());
+          final Widget content = _selectedCatalog == 0
+              ? _CatalogLocationPane(
+                  key: const ValueKey<String>('locations'),
+                  locations: _locations,
+                  service: widget.service,
+                  onHistoryError: _setHistoryError,
+                  onCreate: _createLocation,
+                  onUpdate: _updateLocation,
+                  onDelete: widget.isSupervisor ? _deleteLocation : null,
+                )
+              : _CatalogProviderPane(
+                  key: const ValueKey<String>('providers'),
+                  providers: _providers,
+                  service: widget.service,
+                  onHistoryError: _setHistoryError,
+                  onCreate: _createProvider,
+                  onUpdate: _updateProvider,
+                  onDelete: widget.isSupervisor ? _deleteProvider : null,
+                );
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Row(
                 children: <Widget>[
-                  _CatalogLocationPane(
-                    locations: _locations,
-                    service: widget.service,
-                    onHistoryError: _setHistoryError,
-                    onCreate: _createLocation,
-                    onUpdate: _updateLocation,
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: CostaNorteBrand.foam,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.inventory_2_outlined,
+                      color: CostaNorteBrand.royalBlueDeep,
+                    ),
                   ),
-                  _CatalogProviderPane(
-                    providers: _providers,
-                    service: widget.service,
-                    onHistoryError: _setHistoryError,
-                    onCreate: _createProvider,
-                    onUpdate: _updateProvider,
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text(
+                          'Catálogos de manutenção',
+                          style: Theme.of(context).textTheme.headlineSmall,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Organize os locais atendidos e quem executa cada serviço.',
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Fechar',
+                    onPressed: () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
                   ),
                 ],
               ),
-            ),
-            Align(
-              alignment: Alignment.centerRight,
-              child: TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Fechar'),
+              if (_historyError != null) ...<Widget>[
+                const SizedBox(height: 8),
+                Text(
+                  _historyError!,
+                  style: const TextStyle(color: CostaNorteBrand.error),
+                ),
+              ],
+              const SizedBox(height: 20),
+              if (compact) ...<Widget>[
+                catalogSelector,
+                const SizedBox(height: 16),
+              ],
+              Expanded(
+                child: compact
+                    ? content
+                    : Row(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: <Widget>[
+                          catalogSelector,
+                          const VerticalDivider(width: 32),
+                          Expanded(child: content),
+                        ],
+                      ),
               ),
-            ),
-          ],
-        ),
+            ],
+          );
+        },
       ),
     );
+  }
+
+  Widget _buildCompactCatalogSelector() {
+    return SegmentedButton<int>(
+      segments: <ButtonSegment<int>>[
+        ButtonSegment<int>(
+          value: 0,
+          icon: const Icon(Icons.place_outlined),
+          label: Text('Locais (${_locations.length})'),
+        ),
+        ButtonSegment<int>(
+          value: 1,
+          icon: const Icon(Icons.groups_outlined),
+          label: Text('Responsáveis (${_providers.length})'),
+        ),
+      ],
+      selected: <int>{_selectedCatalog},
+      onSelectionChanged: (Set<int> value) {
+        setState(() {
+          _selectedCatalog = value.first;
+          _historyError = null;
+        });
+      },
+      style: ButtonStyle(
+        foregroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+          return states.contains(WidgetState.selected)
+              ? CostaNorteBrand.royalBlueDeep
+              : CostaNorteBrand.mutedInk;
+        }),
+        backgroundColor: WidgetStateProperty.resolveWith<Color>((states) {
+          return states.contains(WidgetState.selected)
+              ? CostaNorteBrand.foam
+              : Colors.white;
+        }),
+      ),
+      showSelectedIcon: false,
+    );
+  }
+
+  Widget _buildCatalogNavigation() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Text(
+          'GESTÃO DE CATÁLOGOS',
+          style: Theme.of(context).textTheme.labelMedium,
+        ),
+        const SizedBox(height: 10),
+        _CatalogNavigationCard(
+          selected: _selectedCatalog == 0,
+          icon: Icons.place_outlined,
+          title: 'Locais',
+          description: 'Quartos, chalés e áreas comuns',
+          count: _locations.length,
+          onTap: () => _selectCatalog(0),
+        ),
+        const SizedBox(height: 10),
+        _CatalogNavigationCard(
+          selected: _selectedCatalog == 1,
+          icon: Icons.groups_outlined,
+          title: 'Responsáveis',
+          description: 'Equipe interna e prestadores',
+          count: _providers.length,
+          onTap: () => _selectCatalog(1),
+        ),
+      ],
+    );
+  }
+
+  void _selectCatalog(int index) {
+    setState(() {
+      _selectedCatalog = index;
+      _historyError = null;
+    });
   }
 
   Future<MaintenanceLocation> _createLocation(
@@ -3752,6 +4494,24 @@ class _MaintenanceCatalogsDialogState
             });
     });
     return provider;
+  }
+
+  Future<void> _deleteLocation(int locationId) async {
+    await widget.service.deleteLocation(locationId);
+    setState(() {
+      _locations = _locations
+          .where((MaintenanceLocation item) => item.id != locationId)
+          .toList();
+    });
+  }
+
+  Future<void> _deleteProvider(int providerId) async {
+    await widget.service.deleteProvider(providerId);
+    setState(() {
+      _providers = _providers
+          .where((MaintenanceProvider item) => item.id != providerId)
+          .toList();
+    });
   }
 
   void _setHistoryError(String? message) {
@@ -3979,13 +4739,99 @@ class _MaintenanceAttachmentsDialogState
   }
 }
 
+class _CatalogNavigationCard extends StatelessWidget {
+  const _CatalogNavigationCard({
+    required this.selected,
+    required this.icon,
+    required this.title,
+    required this.description,
+    required this.count,
+    required this.onTap,
+  });
+
+  final bool selected;
+  final IconData icon;
+  final String title;
+  final String description;
+  final int count;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: selected ? CostaNorteBrand.foam : Colors.transparent,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(18),
+        side: BorderSide(
+          color: selected ? CostaNorteBrand.royalBlue : CostaNorteBrand.line,
+        ),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Padding(
+          padding: const EdgeInsets.all(14),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Icon(
+                icon,
+                color: selected
+                    ? CostaNorteBrand.royalBlueDeep
+                    : CostaNorteBrand.mutedInk,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Row(
+                      children: <Widget>[
+                        Expanded(
+                          child: Text(
+                            title,
+                            style: Theme.of(context).textTheme.titleSmall
+                                ?.copyWith(color: CostaNorteBrand.ink),
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 7,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text('$count'),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      description,
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CatalogLocationPane extends StatefulWidget {
   const _CatalogLocationPane({
+    super.key,
     required this.locations,
     required this.service,
     required this.onHistoryError,
     required this.onCreate,
     required this.onUpdate,
+    required this.onDelete,
   });
 
   final List<MaintenanceLocation> locations;
@@ -3998,6 +4844,7 @@ class _CatalogLocationPane extends StatefulWidget {
     UpdateMaintenanceLocationModel,
   )
   onUpdate;
+  final Future<void> Function(int)? onDelete;
 
   @override
   State<_CatalogLocationPane> createState() => _CatalogLocationPaneState();
@@ -4005,6 +4852,7 @@ class _CatalogLocationPane extends StatefulWidget {
 
 class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
   MaintenanceLocation? _selected;
+  bool _showEditor = false;
   late final TextEditingController _searchController;
   late final TextEditingController _codeController;
   late final TextEditingController _labelController;
@@ -4081,36 +4929,36 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (BuildContext context, BoxConstraints constraints) {
-        final bool compact = constraints.maxWidth < 860;
-        final Widget locationsList = _buildLocationCatalogList();
-        final Widget form = _buildLocationCatalogForm();
-
-        if (compact) {
-          return Column(
-            children: <Widget>[
-              Expanded(child: locationsList),
-              const SizedBox(height: 16),
-              Expanded(child: form),
-            ],
-          );
-        }
-
-        return Row(
-          children: <Widget>[
-            Flexible(flex: 2, child: locationsList),
-            const SizedBox(width: 16),
-            SizedBox(width: 460, child: form),
-          ],
-        );
-      },
-    );
+    return _showEditor
+        ? _buildLocationCatalogForm()
+        : _buildLocationCatalogList();
   }
 
   Widget _buildLocationCatalogList() {
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                'Locais cadastrados',
+                style: Theme.of(context).textTheme.titleMedium,
+              ),
+            ),
+            IconButton.filled(
+              tooltip: 'Adicionar local',
+              onPressed: _startCreate,
+              icon: const Icon(Icons.add_rounded),
+            ),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(
+          '${_filteredLocations.length} de ${widget.locations.length} locais',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 10),
         TextField(
           controller: _searchController,
           onChanged: (_) => setState(() {}),
@@ -4172,6 +5020,17 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
+          Text(
+            _selected == null ? 'Adicionar local' : 'Editar local',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 3),
+          Text(
+            _selected == null
+                ? 'Cadastre um novo espaço para receber ordens.'
+                : 'Atualize os dados de ${_catalogLocationTitle(_selected!)}.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(height: 12),
           DropdownButtonFormField<MaintenanceLocationType>(
             isExpanded: true,
@@ -4286,19 +5145,36 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
               const SizedBox(width: 8),
               Expanded(
                 child: OutlinedButton(
-                  onPressed: _saving ? null : _clear,
-                  child: const Text('Novo'),
+                  onPressed: _saving ? null : _closeEditor,
+                  child: const Text('Cancelar'),
                 ),
               ),
             ],
           ),
+          if (_selected != null && widget.onDelete != null) ...<Widget>[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _saving ? null : _deleteSelected,
+              icon: const Icon(Icons.delete_outline_rounded),
+              label: const Text('Excluir local'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: CostaNorteBrand.error,
+              ),
+            ),
+          ],
         ],
       ),
     );
   }
 
+  void _dismissActiveInput() {
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
   void _load(MaintenanceLocation item) {
+    _dismissActiveInput();
     setState(() {
+      _showEditor = true;
       _selected = item;
       _type = item.locationType;
       _category = item.locationCategory;
@@ -4311,6 +5187,7 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
   }
 
   void _clear() {
+    _dismissActiveInput();
     setState(() {
       _selected = null;
       _type = MaintenanceLocationType.room;
@@ -4321,6 +5198,16 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
       _descriptionController.clear();
       _active = true;
     });
+  }
+
+  void _startCreate() {
+    _clear();
+    setState(() => _showEditor = true);
+  }
+
+  void _closeEditor() {
+    _clear();
+    setState(() => _showEditor = false);
   }
 
   Future<void> _save() async {
@@ -4374,6 +5261,9 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
         );
       }
       _clear();
+      if (mounted) {
+        setState(() => _showEditor = false);
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -4381,6 +5271,45 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
       await AppAlerts.error(
         context,
         title: 'Locais',
+        message: error.toString().replaceFirst('Bad state: ', ''),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  Future<void> _deleteSelected() async {
+    final MaintenanceLocation? location = _selected;
+    final Future<void> Function(int)? onDelete = widget.onDelete;
+    if (location == null || onDelete == null) {
+      return;
+    }
+    final bool confirmed = await AppAlerts.confirm(
+      context,
+      title: 'Excluir local',
+      message:
+          'Deseja excluir ${_catalogLocationTitle(location)}? Esta ação não pode ser desfeita.',
+      confirmLabel: 'Excluir',
+      cancelLabel: 'Cancelar',
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await onDelete(location.id);
+      if (!mounted) return;
+      _closeEditor();
+      await AppAlerts.success(
+        context,
+        title: 'Local excluído',
+        message: 'O local foi removido do catálogo.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      await AppAlerts.error(
+        context,
+        title: 'Não foi possível excluir',
         message: error.toString().replaceFirst('Bad state: ', ''),
       );
     } finally {
@@ -4415,11 +5344,13 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
 
 class _CatalogProviderPane extends StatefulWidget {
   const _CatalogProviderPane({
+    super.key,
     required this.providers,
     required this.service,
     required this.onHistoryError,
     required this.onCreate,
     required this.onUpdate,
+    required this.onDelete,
   });
 
   final List<MaintenanceProvider> providers;
@@ -4432,6 +5363,7 @@ class _CatalogProviderPane extends StatefulWidget {
     UpdateMaintenanceProviderModel,
   )
   onUpdate;
+  final Future<void> Function(int)? onDelete;
 
   @override
   State<_CatalogProviderPane> createState() => _CatalogProviderPaneState();
@@ -4439,6 +5371,7 @@ class _CatalogProviderPane extends StatefulWidget {
 
 class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
   MaintenanceProvider? _selected;
+  bool _showEditor = false;
   late final TextEditingController _searchController;
   late final TextEditingController _nameController;
   late final TextEditingController _serviceLabelController;
@@ -4448,6 +5381,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
   MaintenanceProviderSpecialty _specialty =
       MaintenanceProviderSpecialty.generalMaintenance;
   bool _active = true;
+  bool _whatsappEnabled = false;
   bool _saving = false;
   String? _historyLoadingKey;
 
@@ -4491,188 +5425,250 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
+    return _showEditor
+        ? _buildProviderCatalogForm()
+        : _buildProviderCatalogList();
+  }
+
+  Widget _buildProviderCatalogList() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
-        Flexible(
-          flex: 2,
-          child: Column(
-            children: <Widget>[
-              TextField(
-                controller: _searchController,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  labelText: 'Buscar responsable',
-                  hintText: 'Nombre, servicio, WhatsApp...',
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  suffixIcon: _searchController.text.isEmpty
-                      ? null
-                      : IconButton(
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() {});
-                          },
-                          icon: const Icon(Icons.close_rounded),
-                        ),
-                ),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Text(
+                'Responsáveis cadastrados',
+                style: Theme.of(context).textTheme.titleMedium,
               ),
-              const SizedBox(height: 12),
-              Expanded(
-                child: ListView(
-                  children: _filteredProviders
-                      .map(
-                        (MaintenanceProvider item) => ListTile(
-                          title: Text(item.name),
-                          subtitle: Text(
-                            '${item.providerType.label} · ${item.specialty.label} · ${item.serviceLabel}',
-                          ),
-                          trailing: Wrap(
-                            spacing: 8,
-                            crossAxisAlignment: WrapCrossAlignment.center,
-                            children: <Widget>[
-                              Text(item.active ? 'Ativo' : 'Inativo'),
-                              IconButton(
-                                onPressed:
-                                    _historyLoadingKey == 'provider:${item.id}'
-                                    ? null
-                                    : () => _openProviderAudit(item),
-                                icon: Icon(
-                                  _historyLoadingKey == 'provider:${item.id}'
-                                      ? Icons.hourglass_top_rounded
-                                      : Icons.history_rounded,
-                                ),
-                              ),
-                            ],
-                          ),
-                          selected: _selected?.id == item.id,
-                          onTap: () => _load(item),
-                        ),
-                      )
-                      .toList(),
-                ),
-              ),
-            ],
+            ),
+            IconButton.filled(
+              tooltip: 'Adicionar responsável',
+              onPressed: _startCreate,
+              icon: const Icon(Icons.add_rounded),
+            ),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Text(
+          '${_filteredProviders.length} de ${widget.providers.length} responsáveis',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 10),
+        TextField(
+          controller: _searchController,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(
+            labelText: 'Buscar responsável',
+            hintText: 'Nome, serviço, WhatsApp...',
+            prefixIcon: const Icon(Icons.search_rounded),
+            suffixIcon: _searchController.text.isEmpty
+                ? null
+                : IconButton(
+                    onPressed: () {
+                      _searchController.clear();
+                      setState(() {});
+                    },
+                    icon: const Icon(Icons.close_rounded),
+                  ),
           ),
         ),
-        const SizedBox(width: 16),
-        SizedBox(
-          width: 460,
-          child: SingleChildScrollView(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: <Widget>[
-                const SizedBox(height: 12),
-                DropdownButtonFormField<MaintenanceProviderType>(
-                  isExpanded: true,
-                  value: _type,
-                  decoration: const InputDecoration(labelText: 'Tipo'),
-                  items: MaintenanceProviderType.values
-                      .map(
-                        (MaintenanceProviderType item) =>
-                            DropdownMenuItem<MaintenanceProviderType>(
-                              value: item,
-                              child: Text(item.label),
-                            ),
-                      )
-                      .toList(),
-                  onChanged: (MaintenanceProviderType? value) {
-                    if (value != null) setState(() => _type = value);
-                  },
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<MaintenanceProviderSpecialty>(
-                  isExpanded: true,
-                  value: _specialty,
-                  decoration: const InputDecoration(labelText: 'Especialidade'),
-                  items: MaintenanceProviderSpecialty.values
-                      .map(
-                        (MaintenanceProviderSpecialty item) =>
-                            DropdownMenuItem<MaintenanceProviderSpecialty>(
-                              value: item,
-                              child: Text(item.label),
-                            ),
-                      )
-                      .toList(),
-                  onChanged: (MaintenanceProviderSpecialty? value) {
-                    if (value != null) setState(() => _specialty = value);
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _nameController,
-                  decoration: const InputDecoration(labelText: 'Nome'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _serviceLabelController,
-                  decoration: const InputDecoration(labelText: 'Servico'),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _scopeController,
-                  minLines: 2,
-                  maxLines: 4,
-                  decoration: const InputDecoration(
-                    labelText: 'Escopo',
-                    alignLabelWithHint: true,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: _contactController,
-                  keyboardType: TextInputType.phone,
-                  decoration: const InputDecoration(
-                    labelText: 'WhatsApp',
-                    hintText: '5511999998888',
-                    helperText: 'Formato internacional, solo numeros.',
-                  ),
-                ),
-                const SizedBox(height: 12),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  value: _active,
-                  onChanged: (bool value) => setState(() => _active = value),
-                  title: const Text('Ativo'),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: <Widget>[
-                    Expanded(
-                      child: FilledButton(
-                        onPressed: _saving ? null : _save,
-                        child: Text(_selected == null ? 'Criar' : 'Salvar'),
-                      ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: ListView(
+            children: _filteredProviders
+                .map(
+                  (MaintenanceProvider item) => ListTile(
+                    title: Text(item.name),
+                    subtitle: Text(
+                      '${item.providerType.label} · ${item.specialty.label} · ${item.serviceLabel}'
+                      '${(item.whatsappNumber ?? item.contact ?? '').isEmpty ? '' : ' · ${(item.whatsappNumber ?? item.contact)!}'}',
                     ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: OutlinedButton(
-                        onPressed: _saving ? null : _clear,
-                        child: const Text('Novo'),
-                      ),
+                    trailing: Wrap(
+                      spacing: 8,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: <Widget>[
+                        Text(item.active ? 'Ativo' : 'Inativo'),
+                        IconButton(
+                          onPressed: _historyLoadingKey == 'provider:${item.id}'
+                              ? null
+                              : () => _openProviderAudit(item),
+                          icon: Icon(
+                            _historyLoadingKey == 'provider:${item.id}'
+                                ? Icons.hourglass_top_rounded
+                                : Icons.history_rounded,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-              ],
-            ),
+                    selected: _selected?.id == item.id,
+                    onTap: () => _load(item),
+                  ),
+                )
+                .toList(),
           ),
         ),
       ],
     );
   }
 
+  Widget _buildProviderCatalogForm() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: <Widget>[
+          Text(
+            _selected == null ? 'Adicionar responsável' : 'Editar responsável',
+            style: Theme.of(context).textTheme.titleMedium,
+          ),
+          const SizedBox(height: 3),
+          Text(
+            _selected == null
+                ? 'Cadastre a equipe interna ou um prestador externo.'
+                : 'Atualize os dados de ${_selected!.name}.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<MaintenanceProviderType>(
+            isExpanded: true,
+            value: _type,
+            decoration: const InputDecoration(labelText: 'Tipo'),
+            items: MaintenanceProviderType.values
+                .map(
+                  (MaintenanceProviderType item) =>
+                      DropdownMenuItem<MaintenanceProviderType>(
+                        value: item,
+                        child: Text(item.label),
+                      ),
+                )
+                .toList(),
+            onChanged: (MaintenanceProviderType? value) {
+              if (value != null) setState(() => _type = value);
+            },
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<MaintenanceProviderSpecialty>(
+            isExpanded: true,
+            value: _specialty,
+            decoration: const InputDecoration(labelText: 'Especialidade'),
+            items: MaintenanceProviderSpecialty.values
+                .map(
+                  (MaintenanceProviderSpecialty item) =>
+                      DropdownMenuItem<MaintenanceProviderSpecialty>(
+                        value: item,
+                        child: Text(item.label),
+                      ),
+                )
+                .toList(),
+            onChanged: (MaintenanceProviderSpecialty? value) {
+              if (value != null) setState(() => _specialty = value);
+            },
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _nameController,
+            decoration: const InputDecoration(labelText: 'Nome'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _serviceLabelController,
+            decoration: const InputDecoration(labelText: 'Servico'),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _scopeController,
+            minLines: 2,
+            maxLines: 4,
+            decoration: const InputDecoration(
+              labelText: 'Escopo',
+              alignLabelWithHint: true,
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _contactController,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              labelText: 'WhatsApp',
+              hintText: '5511999998888',
+              helperText: 'Formato internacional, solo numeros.',
+            ),
+          ),
+          const SizedBox(height: 12),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _whatsappEnabled,
+            onChanged: _type == MaintenanceProviderType.external
+                ? (bool value) => setState(() => _whatsappEnabled = value)
+                : null,
+            title: const Text('Envio automatico por WhatsApp'),
+            subtitle: const Text(
+              'Somente responsaveis externos recebem ordens automaticamente.',
+            ),
+          ),
+          const SizedBox(height: 4),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _active,
+            onChanged: (bool value) => setState(() => _active = value),
+            title: const Text('Ativo'),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: <Widget>[
+              Expanded(
+                child: FilledButton(
+                  onPressed: _saving ? null : _save,
+                  child: Text(_selected == null ? 'Criar' : 'Salvar'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: _saving ? null : _closeEditor,
+                  child: const Text('Cancelar'),
+                ),
+              ),
+            ],
+          ),
+          if (_selected != null && widget.onDelete != null) ...<Widget>[
+            const SizedBox(height: 12),
+            OutlinedButton.icon(
+              onPressed: _saving ? null : _deleteSelected,
+              icon: const Icon(Icons.delete_outline_rounded),
+              label: const Text('Excluir responsável'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: CostaNorteBrand.error,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  void _dismissActiveInput() {
+    FocusManager.instance.primaryFocus?.unfocus();
+  }
+
   void _load(MaintenanceProvider item) {
+    _dismissActiveInput();
     setState(() {
+      _showEditor = true;
       _selected = item;
       _type = item.providerType;
       _specialty = item.specialty;
       _nameController.text = item.name;
       _serviceLabelController.text = item.serviceLabel;
       _scopeController.text = item.scopeDescription ?? '';
-      _contactController.text = item.contact ?? '';
+      _contactController.text = item.whatsappNumber ?? item.contact ?? '';
+      _whatsappEnabled = item.whatsappEnabled;
       _active = item.active;
     });
   }
 
   void _clear() {
+    _dismissActiveInput();
     setState(() {
       _selected = null;
       _type = MaintenanceProviderType.internal;
@@ -4681,8 +5677,19 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
       _serviceLabelController.clear();
       _scopeController.clear();
       _contactController.clear();
+      _whatsappEnabled = false;
       _active = true;
     });
+  }
+
+  void _startCreate() {
+    _clear();
+    setState(() => _showEditor = true);
+  }
+
+  void _closeEditor() {
+    _clear();
+    setState(() => _showEditor = false);
   }
 
   Future<void> _save() async {
@@ -4710,8 +5717,9 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
     }
     setState(() => _saving = true);
     try {
+      late final MaintenanceProvider savedProvider;
       if (_selected == null) {
-        await widget.onCreate(
+        savedProvider = await widget.onCreate(
           CreateMaintenanceProviderModel(
             providerType: _type,
             specialty: _specialty,
@@ -4720,10 +5728,13 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
             scopeDescription: _scopeController.text,
             contact: normalizedWhatsapp,
             active: _active,
+            whatsappNumber: normalizedWhatsapp,
+            whatsappEnabled:
+                _whatsappEnabled && _type == MaintenanceProviderType.external,
           ),
         );
       } else {
-        await widget.onUpdate(
+        savedProvider = await widget.onUpdate(
           _selected!.id,
           UpdateMaintenanceProviderModel(
             providerType: _type,
@@ -4733,10 +5744,24 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
             scopeDescription: _scopeController.text,
             contact: normalizedWhatsapp,
             active: _active,
+            whatsappNumber: normalizedWhatsapp,
+            whatsappEnabled:
+                _whatsappEnabled && _type == MaintenanceProviderType.external,
           ),
         );
       }
-      _clear();
+      if (!mounted) {
+        return;
+      }
+      _load(savedProvider);
+      await AppAlerts.success(
+        context,
+        title: 'Responsavel salvo',
+        message: 'As alteracoes foram confirmadas pelo servidor.',
+      );
+      if (mounted) {
+        _closeEditor();
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -4772,6 +5797,45 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
       if (mounted) {
         setState(() => _historyLoadingKey = null);
       }
+    }
+  }
+
+  Future<void> _deleteSelected() async {
+    final MaintenanceProvider? provider = _selected;
+    final Future<void> Function(int)? onDelete = widget.onDelete;
+    if (provider == null || onDelete == null) {
+      return;
+    }
+    final bool confirmed = await AppAlerts.confirm(
+      context,
+      title: 'Excluir responsável',
+      message:
+          'Deseja excluir ${provider.name}? Esta ação não pode ser desfeita.',
+      confirmLabel: 'Excluir',
+      cancelLabel: 'Cancelar',
+    );
+    if (!confirmed || !mounted) {
+      return;
+    }
+    setState(() => _saving = true);
+    try {
+      await onDelete(provider.id);
+      if (!mounted) return;
+      _closeEditor();
+      await AppAlerts.success(
+        context,
+        title: 'Responsável excluído',
+        message: 'O responsável foi removido do catálogo.',
+      );
+    } catch (error) {
+      if (!mounted) return;
+      await AppAlerts.error(
+        context,
+        title: 'Não foi possível excluir',
+        message: error.toString().replaceFirst('Bad state: ', ''),
+      );
+    } finally {
+      if (mounted) setState(() => _saving = false);
     }
   }
 }

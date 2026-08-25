@@ -13,6 +13,8 @@ abstract interface class MaintenanceAppService {
     UpdateMaintenanceLocationModel input,
   );
 
+  Future<void> deleteLocation(int locationId);
+
   Future<List<AuditEventModel>> locationAudit(int locationId);
 
   Future<List<MaintenanceOrder>> getLocationHistory(int locationId);
@@ -41,6 +43,8 @@ abstract interface class MaintenanceAppService {
     int providerId,
     UpdateMaintenanceProviderModel input,
   );
+
+  Future<void> deleteProvider(int providerId);
 
   Future<List<AuditEventModel>> providerAudit(int providerId);
 

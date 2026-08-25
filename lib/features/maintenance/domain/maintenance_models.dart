@@ -298,6 +298,8 @@ class MaintenanceProvider {
     required this.serviceLabel,
     required this.scopeDescription,
     required this.contact,
+    this.whatsappNumber,
+    this.whatsappEnabled = false,
     required this.active,
     required this.createdAt,
     required this.updatedAt,
@@ -312,6 +314,8 @@ class MaintenanceProvider {
   final String serviceLabel;
   final String? scopeDescription;
   final String? contact;
+  final String? whatsappNumber;
+  final bool whatsappEnabled;
   final bool active;
   final DateTime? createdAt;
   final DateTime? updatedAt;
@@ -331,6 +335,8 @@ class MaintenanceProvider {
       serviceLabel: _readString(json, 'serviceLabel') ?? '',
       scopeDescription: _trimOrNull(_readString(json, 'scopeDescription')),
       contact: _trimOrNull(_readString(json, 'contact')),
+      whatsappNumber: _trimOrNull(_readString(json, 'whatsappNumber')),
+      whatsappEnabled: json['whatsappEnabled'] == true,
       active: json['active'] as bool? ?? false,
       createdAt: _tryParseDateTime(_readString(json, 'createdAt')),
       updatedAt: _tryParseDateTime(_readString(json, 'updatedAt')),
@@ -574,6 +580,8 @@ class MaintenancePlan {
     required this.nextDueDate,
     required this.lastGeneratedOn,
     required this.active,
+    this.whatsappNumber,
+    this.whatsappEnabled = false,
     required this.createdAt,
     required this.updatedAt,
     required this.createdBy,
@@ -596,6 +604,8 @@ class MaintenancePlan {
   final DateTime? nextDueDate;
   final DateTime? lastGeneratedOn;
   final bool active;
+  final String? whatsappNumber;
+  final bool whatsappEnabled;
   final DateTime? createdAt;
   final DateTime? updatedAt;
   final String? createdBy;
@@ -1006,6 +1016,8 @@ class CreateMaintenanceProviderModel {
     required this.scopeDescription,
     required this.contact,
     required this.active,
+    this.whatsappNumber,
+    this.whatsappEnabled = false,
   });
 
   final MaintenanceProviderType providerType;
@@ -1015,6 +1027,8 @@ class CreateMaintenanceProviderModel {
   final String? scopeDescription;
   final String? contact;
   final bool active;
+  final String? whatsappNumber;
+  final bool whatsappEnabled;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -1025,6 +1039,8 @@ class CreateMaintenanceProviderModel {
       'scopeDescription': _trimOrNull(scopeDescription),
       'contact': _trimOrNull(contact),
       'active': active,
+      'whatsappNumber': _trimOrNull(whatsappNumber),
+      'whatsappEnabled': whatsappEnabled,
     };
   }
 }
@@ -1038,6 +1054,8 @@ class UpdateMaintenanceProviderModel extends CreateMaintenanceProviderModel {
     required super.scopeDescription,
     required super.contact,
     required super.active,
+    super.whatsappNumber,
+    super.whatsappEnabled,
   });
 }
 
