@@ -1148,7 +1148,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                           child: Text(
                             hasOrders
                                 ? '${orders.length} aberta${orders.length == 1 ? '' : 's'}'
-                                : 'Livre',
+                                : 'Sem ordens',
                             maxLines: 1,
                             style: Theme.of(context).textTheme.bodySmall
                                 ?.copyWith(

@@ -1,5 +1,13 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-08-25 | Manutencao | Etiqueta sin ambiguedad en el mapa operacional
+- Componente afectado: Frontend (`Manutencao`)
+- Archivo funcional: `lib/features/maintenance/presentation/maintenance_page.dart`
+- Motivo del cambio: evitar que el estado sin ordenes abiertas se confunda con la disponibilidad u ocupacion del cuarto.
+- Impacto funcional: los locales sin ordenes de mantenimiento abiertas ahora muestran `Sem ordens` en lugar de `Livre`.
+- Contrato backend: sin cambios.
+- Validacion ejecutada: `flutter analyze lib/features/maintenance/presentation/maintenance_page.dart` sin errores; permanecen 10 avisos informativos preexistentes por APIs deprecadas.
+
 ## 2026-08-19 | Quadras | Agenda temporal semanal visible
 - Componente afectado: Frontend (`Quadras`)
 - Archivos tocados:
