@@ -191,47 +191,62 @@ class _MaintenancePageState extends State<MaintenancePage>
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           BrandSectionHero(
-            eyebrow: 'Manutencao',
             title: '',
             icon: Icons.build_circle_rounded,
             photoAlignment: Alignment.centerRight,
-            action: Wrap(
-              spacing: 12,
-              runSpacing: 12,
+            action: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: <Widget>[
-                FilledButton.icon(
-                  onPressed: _saving ? null : () => _createOrder(),
-                  icon: const Icon(Icons.add_circle_outline_rounded),
-                  label: const Text('Nova ordem'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _loading ? null : _openOrderStatusOverview,
-                  icon: const Icon(Icons.assignment_late_rounded),
-                  label: const Text('Estado das ordens'),
-                ),
-                ..._quickLaunchers.map(
-                  (_MaintenanceQuickLauncher launcher) => OutlinedButton.icon(
-                    onPressed: _saving ? null : () => _createOrder(launcher),
-                    icon: Icon(_launcherIcon(launcher)),
-                    label: Text(_launcherLabel(launcher)),
+                _buildHeroActionGroup('Criar ordem', <Widget>[
+                  FilledButton.icon(
+                    onPressed: _saving ? null : () => _createOrder(),
+                    icon: const Icon(Icons.add_circle_outline_rounded),
+                    label: const Text('General'),
                   ),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _saving ? null : _openPreventivePlans,
-                  icon: const Icon(Icons.event_repeat_rounded),
-                  label: const Text('Preventivos'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _saving || _loadingProviders
-                      ? null
-                      : _manageCatalogs,
-                  icon: const Icon(Icons.inventory_2_rounded),
-                  label: const Text('Catalogos'),
-                ),
-                OutlinedButton.icon(
-                  onPressed: _saving ? null : _pickSelectedDate,
-                  icon: const Icon(Icons.edit_calendar_rounded),
-                  label: const Text('Alterar dia'),
+                  ..._quickLaunchers.map(
+                    (_MaintenanceQuickLauncher launcher) => OutlinedButton.icon(
+                      onPressed: _saving ? null : () => _createOrder(launcher),
+                      icon: Icon(_launcherIcon(launcher)),
+                      label: Text(_launcherLabel(launcher)),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 16),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    Expanded(
+                      child: _buildHeroActionGroup('Consultas', <Widget>[
+                        OutlinedButton.icon(
+                          onPressed: _loading ? null : _openOrderStatusOverview,
+                          icon: const Icon(Icons.assignment_late_rounded),
+                          label: const Text('Estado das ordens'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _saving ? null : _pickSelectedDate,
+                          icon: const Icon(Icons.edit_calendar_rounded),
+                          label: const Text('Alterar dia'),
+                        ),
+                      ]),
+                    ),
+                    const SizedBox(width: 24),
+                    Expanded(
+                      child: _buildHeroActionGroup('Gestao', <Widget>[
+                        OutlinedButton.icon(
+                          onPressed: _saving ? null : _openPreventivePlans,
+                          icon: const Icon(Icons.event_repeat_rounded),
+                          label: const Text('Preventivos'),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _saving || _loadingProviders
+                              ? null
+                              : _manageCatalogs,
+                          icon: const Icon(Icons.inventory_2_rounded),
+                          label: const Text('Catalogos'),
+                        ),
+                      ]),
+                    ),
+                  ],
                 ),
               ],
             ),
@@ -255,6 +270,23 @@ class _MaintenancePageState extends State<MaintenancePage>
             ),
         ],
       ),
+    );
+  }
+
+  Widget _buildHeroActionGroup(String title, List<Widget> buttons) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: <Widget>[
+        Text(
+          title,
+          style: Theme.of(context).textTheme.labelLarge?.copyWith(
+            color: Colors.white,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(spacing: 12, runSpacing: 8, children: buttons),
+      ],
     );
   }
 
@@ -1722,8 +1754,8 @@ class _MaintenancePageState extends State<MaintenancePage>
   String _launcherLabel(_MaintenanceQuickLauncher launcher) {
     return switch (launcher) {
       _MaintenanceQuickLauncher.elevators => 'Elevadores',
-      _MaintenanceQuickLauncher.airConditioning => 'Ar-condicionado',
-      _MaintenanceQuickLauncher.internet => 'Internet',
+      _MaintenanceQuickLauncher.airConditioning => 'AA',
+      _MaintenanceQuickLauncher.internet => 'Portas e janelas',
       _MaintenanceQuickLauncher.internal => 'Interno',
     };
   }
