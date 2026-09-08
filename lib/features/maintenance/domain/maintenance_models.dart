@@ -1,6 +1,6 @@
 enum MaintenanceLocationType {
   room('ROOM', 'Quarto'),
-  commonArea('COMMON_AREA', 'Area comum');
+  commonArea('COMMON_AREA', 'Área comum');
 
   const MaintenanceLocationType(this.apiValue, this.label);
 
@@ -21,7 +21,7 @@ enum MaintenanceLocationType {
 enum MaintenanceLocationCategory {
   apartment('APARTMENT', 'Apartamento'),
   chalet('CHALET', 'Chalet'),
-  commonArea('COMMON_AREA', 'Area comum');
+  commonArea('COMMON_AREA', 'Área comum');
 
   const MaintenanceLocationCategory(this.apiValue, this.label);
 

@@ -899,10 +899,10 @@ class _MaintenancePageState extends State<MaintenancePage>
           )
           .add(location);
     }
-    final Map<String, List<MaintenanceLocation>> governanceByFloor =
+    final Map<String, List<MaintenanceLocation>> commonAreasByFloor =
         <String, List<MaintenanceLocation>>{};
     for (final MaintenanceLocation location in commonAreas) {
-      governanceByFloor
+      commonAreasByFloor
           .putIfAbsent(
             _operationalFloorLabel(location),
             () => <MaintenanceLocation>[],
@@ -911,7 +911,7 @@ class _MaintenancePageState extends State<MaintenancePage>
     }
     final List<String> floorLabels = <String>{
       ...locationsByFloor.keys,
-      ...governanceByFloor.keys,
+      ...commonAreasByFloor.keys,
     }.toList()..sort(_compareOperationalFloors);
     final List<String> groundFloorLabels = floorLabels
         .where(_isOperationalGroundFloor)
@@ -924,7 +924,7 @@ class _MaintenancePageState extends State<MaintenancePage>
           for (final String floor
               in groundFloorLabels) ...<MaintenanceLocation>[
             ...?locationsByFloor[floor],
-            ...?governanceByFloor[floor],
+            ...?commonAreasByFloor[floor],
           ],
         ];
 
@@ -970,7 +970,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                         floor,
                         <MaintenanceLocation>[
                           ...?locationsByFloor[floor],
-                          ...?governanceByFloor[floor],
+                          ...?commonAreasByFloor[floor],
                         ],
                         ordersByLocation,
                       ),
@@ -994,7 +994,7 @@ class _MaintenancePageState extends State<MaintenancePage>
                 icon: Icons.meeting_room_rounded,
                 title: 'PB',
                 children: <Widget>[
-                  _buildOperationalFloorLocationsRow(
+                  _buildGroundFloorLocationsGrid(
                     groundFloorLocations,
                     ordersByLocation,
                   ),
@@ -1103,6 +1103,50 @@ class _MaintenancePageState extends State<MaintenancePage>
     );
   }
 
+  Widget _buildGroundFloorLocationsGrid(
+    List<MaintenanceLocation> locations,
+    Map<int, List<MaintenanceOrder>> ordersByLocation,
+  ) {
+    if (locations.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    const double spacing = 8;
+    const double minimumTileWidth = 150;
+    const int maximumColumns = 4;
+
+    return LayoutBuilder(
+      builder: (BuildContext context, BoxConstraints constraints) {
+        final int fittingColumns =
+            ((constraints.maxWidth + spacing) / (minimumTileWidth + spacing))
+                .floor();
+        final int columnCount = fittingColumns.clamp(
+          1,
+          locations.length < maximumColumns ? locations.length : maximumColumns,
+        );
+        final double tileWidth =
+            (constraints.maxWidth - (spacing * (columnCount - 1))) /
+            columnCount;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: <Widget>[
+            for (final MaintenanceLocation location in locations)
+              SizedBox(
+                width: tileWidth,
+                child: _buildOperationalLocationTile(
+                  location,
+                  ordersByLocation[location.id] ?? const <MaintenanceOrder>[],
+                  compact: true,
+                ),
+              ),
+          ],
+        );
+      },
+    );
+  }
+
   Widget _buildOperationalLocationTile(
     MaintenanceLocation location,
     List<MaintenanceOrder> orders, {
@@ -1160,10 +1204,11 @@ class _MaintenancePageState extends State<MaintenancePage>
                           fit: BoxFit.scaleDown,
                           alignment: Alignment.centerLeft,
                           child: Text(
-                            compact &&
-                                    location.locationCategory ==
-                                        MaintenanceLocationCategory.commonArea
-                                ? 'Governança'
+                            location.locationCategory ==
+                                    MaintenanceLocationCategory.commonArea
+                                ? _normalizeMaintenanceLocationLabel(
+                                    location.label,
+                                  )
                                 : compact && location.code.trim().isNotEmpty
                                 ? location.code.trim()
                                 : _normalizeMaintenanceLocationLabel(
@@ -5906,6 +5951,10 @@ String _normalizeMaintenanceLocationLabel(String value) {
     return normalized;
   }
 
+  normalized = normalized.replaceAll(
+    RegExp(r'\b(?:area|área)s?\s+comu(?:m|ns)\b', caseSensitive: false),
+    'Área comum',
+  );
   normalized = normalized.replaceAllMapped(
     RegExp(r'\bescaleras?\b', caseSensitive: false),
     (Match match) =>
