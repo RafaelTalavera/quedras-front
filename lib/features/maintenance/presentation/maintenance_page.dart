@@ -3,19 +3,16 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../../core/audit/audit_models.dart';
 import '../../../core/audit/audit_timeline_dialog.dart';
 import '../../../core/feedback/app_alerts.dart';
-import '../../../core/feedback/app_share.dart';
 import '../../../core/files/file_save_result.dart';
 import '../../../core/sync/schedule_sync_event.dart';
 import '../../../core/sync/schedule_sync_service.dart';
 import '../../../core/theme/costa_norte_brand.dart';
+import '../../../core/whatsapp/manual_whatsapp_dialog.dart';
 import '../../../core/widgets/app_dialog_dimensions.dart';
 import '../../../core/widgets/app_dialog_shell.dart';
 import '../../../core/widgets/brand_section_hero.dart';
@@ -1861,13 +1858,7 @@ class _MaintenancePageState extends State<MaintenancePage>
       _sharingOrderId = selected.id;
     });
     try {
-      await AppShare.shareText(
-        context,
-        text: _buildOrderShareMessage(selected),
-        subject: 'Ordem de manutencao ${selected.id}',
-        failureTitle: 'Falha ao compartilhar ordem',
-        failureMessagePrefix: 'Nao foi possivel preparar a mensagem da ordem',
-      );
+      await _prepareOrderWhatsapp(selected);
       if (!mounted) {
         return;
       }
@@ -2014,8 +2005,6 @@ class _MaintenancePageState extends State<MaintenancePage>
           draft.toUpdateModel(),
         );
       }
-      final _ProviderNotificationResult notificationResult =
-          await _notifyProviderForSavedOrder(savedOrder);
       await _load();
       if (!mounted) {
         return;
@@ -2023,9 +2012,14 @@ class _MaintenancePageState extends State<MaintenancePage>
       await AppAlerts.success(
         context,
         title: editingOrderId == null ? 'Ordem criada' : 'Ordem atualizada',
-        message:
-            'A ordem de manutencao foi salva com sucesso.${notificationResult.userMessageSuffix}',
+        message: 'A ordem de manutencao foi salva com sucesso.',
       );
+      final MaintenanceProvider? savedProvider = _findProviderById(
+        savedOrder.providerId,
+      );
+      if (mounted && savedProvider?.whatsappEnabled == true) {
+        await _prepareOrderWhatsapp(savedOrder);
+      }
     } catch (error) {
       if (!mounted) {
         return;
@@ -2339,67 +2333,27 @@ class _MaintenancePageState extends State<MaintenancePage>
     return buffer.toString().trim();
   }
 
-  Future<_ProviderNotificationResult> _notifyProviderForSavedOrder(
-    MaintenanceOrder order,
-  ) async {
+  Future<void> _prepareOrderWhatsapp(MaintenanceOrder order) async {
     final MaintenanceProvider? provider = _findProviderById(order.providerId);
-    if (provider == null) {
-      return _ProviderNotificationResult.notConfigured(
-        ' Nenhum prestador foi vinculado para envio por WhatsApp.',
-      );
-    }
-
-    final String? whatsappNumber = _normalizeWhatsappNumber(provider.contact);
-    if (whatsappNumber == null) {
-      return _ProviderNotificationResult.notConfigured(
-        ' O prestador "${provider.name}" nao possui WhatsApp valido cadastrado.',
-      );
-    }
-
-    final String message = _buildOrderShareMessage(order);
-    final Uri appUri = Uri.parse(
-      'whatsapp://send?phone=$whatsappNumber&text=${Uri.encodeComponent(message)}',
-    );
-    final Uri webUri = Uri.parse(
-      'https://wa.me/$whatsappNumber?text=${Uri.encodeComponent(message)}',
-    );
-
-    if (!kIsWeb) {
-      try {
-        final bool launchedApp = await launchUrl(
-          appUri,
-          mode: LaunchMode.externalApplication,
-        );
-        if (launchedApp) {
-          return const _ProviderNotificationResult.sent(
-            ' WhatsApp aberto para envio ao prestador.',
-          );
-        }
-      } catch (_) {
-        // Fallback to WhatsApp Web below.
-      }
-    }
-
     try {
-      final bool launchedWeb = await launchUrl(
-        webUri,
-        mode: kIsWeb
-            ? LaunchMode.platformDefault
-            : LaunchMode.externalApplication,
+      await showManualWhatsappDialog(
+        context,
+        providerName: provider?.name ?? order.providerLabel,
+        phoneNumber: provider?.whatsappEnabled == true
+            ? provider?.whatsappNumber
+            : null,
+        message: _buildOrderShareMessage(order),
       );
-      if (launchedWeb) {
-        return const _ProviderNotificationResult.sent(
-          ' WhatsApp Web aberto para envio ao prestador.',
+    } catch (error) {
+      if (mounted) {
+        await AppAlerts.warning(
+          context,
+          title: 'Aviso não preparado',
+          message:
+              'A ordem foi salva, mas o aviso não pôde ser preparado: $error',
         );
       }
-    } catch (_) {
-      // Clipboard fallback below.
     }
-
-    await Clipboard.setData(ClipboardData(text: message));
-    return const _ProviderNotificationResult.fallback(
-      ' Nao foi possivel abrir o WhatsApp; a mensagem foi copiada para a area de transferencia.',
-    );
   }
 
   MaintenanceProvider? _findProviderById(int? providerId) {
@@ -2413,19 +2367,6 @@ class _MaintenancePageState extends State<MaintenancePage>
     }
     return null;
   }
-}
-
-final class _ProviderNotificationResult {
-  const _ProviderNotificationResult._(this.userMessageSuffix);
-
-  const _ProviderNotificationResult.sent(String message) : this._(message);
-
-  const _ProviderNotificationResult.notConfigured(String message)
-    : this._(message);
-
-  const _ProviderNotificationResult.fallback(String message) : this._(message);
-
-  final String userMessageSuffix;
 }
 
 enum _MaintenanceOrderAction {
@@ -2498,7 +2439,7 @@ class _MaintenanceOrderActionDialog extends StatelessWidget {
                 icon: Icon(
                   sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
                 ),
-                label: Text(sharing ? 'Compartilhando...' : 'Compartilhar'),
+                label: Text(sharing ? 'Preparando...' : 'Avisar no WhatsApp'),
               ),
               OutlinedButton.icon(
                 onPressed: canStart
@@ -2755,7 +2696,9 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
   }
 
   String? get _selectedProviderWhatsapp =>
-      _normalizeWhatsappNumber(_selectedProvider?.contact);
+      _selectedProvider?.whatsappEnabled == true
+      ? _normalizeWhatsappNumber(_selectedProvider?.whatsappNumber)
+      : null;
 
   String _formatLocationPickerTitle(MaintenanceLocation location) {
     final String code = location.code.trim();
@@ -2917,19 +2860,12 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
                   decoration: InputDecoration(
                     labelText: 'Prestador',
                     helperText: _providerId == null
-                        ? 'Selecione um prestador para envio por WhatsApp.'
+                        ? 'Selecione um prestador para a ordem.'
                         : _selectedProviderWhatsapp == null
-                        ? 'O prestador selecionado ainda nao possui WhatsApp valido.'
-                        : 'WhatsApp pronto para envio: $_selectedProviderWhatsapp',
+                        ? 'Aviso manual indisponível: sem número WhatsApp.'
+                        : 'Aviso manual disponível: $_selectedProviderWhatsapp',
                   ),
                   items: <DropdownMenuItem<int?>>[
-                    const DropdownMenuItem<int?>(
-                      value: null,
-                      child: Text(
-                        'Sem responsavel definido',
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
                     ...widget.providers.map(
                       (MaintenanceProvider item) => DropdownMenuItem<int?>(
                         value: item.id,
@@ -3085,19 +3021,7 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
       AppAlerts.warning(
         context,
         title: 'Prestador obrigatorio',
-        message:
-            'Selecione um prestador com WhatsApp valido para que a ordem seja enviada ao salvar.',
-      );
-      return;
-    }
-
-    if (_selectedProviderWhatsapp == null) {
-      final String providerName = _selectedProvider?.name ?? 'selecionado';
-      AppAlerts.warning(
-        context,
-        title: 'WhatsApp do prestador',
-        message:
-            'O prestador "$providerName" nao possui WhatsApp valido cadastrado. Ajuste o cadastro antes de salvar a ordem.',
+        message: 'Selecione um prestador para a ordem.',
       );
       return;
     }
