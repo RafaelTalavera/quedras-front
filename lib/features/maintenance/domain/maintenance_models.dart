@@ -79,10 +79,14 @@ enum MaintenanceProviderType {
 }
 
 enum MaintenanceProviderSpecialty {
-  generalMaintenance('GENERAL_MAINTENANCE', 'Manutencao geral'),
+  generalMaintenance('GENERAL_MAINTENANCE', 'Interno'),
   elevators('ELEVATORS', 'Elevadores'),
-  airConditioning('AIR_CONDITIONING', 'Ar-condicionado'),
-  internet('INTERNET', 'Internet');
+  airConditioning('AIR_CONDITIONING', 'AA'),
+  internet('INTERNET', 'Internet'),
+  doorsAndWindows('DOORS_AND_WINDOWS', 'Portas e janelas'),
+  cameras('CAMERAS', 'Câmeras'),
+  telephones('TELEPHONES', 'Telefones'),
+  itSupport('IT_SUPPORT', 'TI');
 
   const MaintenanceProviderSpecialty(this.apiValue, this.label);
 
@@ -531,8 +535,16 @@ class MaintenanceOrder {
 
   DateTime get referenceDate => scheduledStartAt ?? reportedAt;
 
-  String get providerLabel =>
-      _trimOrNull(providerNameSnapshot) ?? 'Sem responsavel';
+  String get providerLabel {
+    final String? name = _trimOrNull(providerNameSnapshot);
+    if (name == null) {
+      return 'Sem prestador';
+    }
+    if (RegExp(r'\binternet\b', caseSensitive: false).hasMatch(name)) {
+      return MaintenanceProviderSpecialty.internet.label;
+    }
+    return name;
+  }
 
   String get serviceLabel =>
       _trimOrNull(serviceLabelSnapshot) ?? 'Servico nao definido';

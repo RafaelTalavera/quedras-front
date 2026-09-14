@@ -18,14 +18,19 @@ import '../../../core/widgets/app_dialog_shell.dart';
 import '../../../core/widgets/brand_section_hero.dart';
 import '../application/maintenance_app_service.dart';
 import '../application/maintenance_daily_report_pdf_exporter.dart';
+import '../application/maintenance_provider_selection.dart';
 import '../domain/maintenance_models.dart';
 
 enum MaintenanceSection { operationalSummary }
 
 enum _MaintenanceQuickLauncher {
-  elevators,
   airConditioning,
+  elevators,
+  doorsAndWindows,
   internet,
+  cameras,
+  telephones,
+  itSupport,
   internal,
 }
 
@@ -106,9 +111,13 @@ class _MaintenancePageState extends State<MaintenancePage>
 
   static const List<_MaintenanceQuickLauncher> _quickLaunchers =
       <_MaintenanceQuickLauncher>[
-        _MaintenanceQuickLauncher.elevators,
         _MaintenanceQuickLauncher.airConditioning,
+        _MaintenanceQuickLauncher.elevators,
+        _MaintenanceQuickLauncher.doorsAndWindows,
         _MaintenanceQuickLauncher.internet,
+        _MaintenanceQuickLauncher.cameras,
+        _MaintenanceQuickLauncher.telephones,
+        _MaintenanceQuickLauncher.itSupport,
         _MaintenanceQuickLauncher.internal,
       ];
 
@@ -941,7 +950,7 @@ class _MaintenancePageState extends State<MaintenancePage>
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 4),
-       
+
           const SizedBox(height: 10),
           Wrap(
             spacing: 12,
@@ -1714,17 +1723,17 @@ class _MaintenancePageState extends State<MaintenancePage>
     if (!mounted) {
       return;
     }
-    final List<MaintenanceProvider> activeProviders = _providers
-        .where((MaintenanceProvider item) => item.active)
-        .toList();
+    final List<MaintenanceProvider> activeProviders =
+        canonicalMaintenanceProviders(
+          _providers.where((MaintenanceProvider item) => item.active).toList(),
+        );
     final List<MaintenanceProvider> dialogProviders = _prioritizeProviders(
       activeProviders,
       launcher,
     );
-    final int? initialProviderId = _initialProviderIdForLauncher(
-      dialogProviders,
-      launcher,
-    );
+    final int? initialProviderId =
+        _initialProviderIdForLauncher(dialogProviders, launcher) ??
+        (dialogProviders.isEmpty ? null : dialogProviders.first.id);
     final _MaintenanceOrderDraft? draft =
         await showDialog<_MaintenanceOrderDraft>(
           context: context,
@@ -1786,10 +1795,20 @@ class _MaintenancePageState extends State<MaintenancePage>
         provider.specialty == MaintenanceProviderSpecialty.elevators,
       _MaintenanceQuickLauncher.airConditioning =>
         provider.specialty == MaintenanceProviderSpecialty.airConditioning,
+      _MaintenanceQuickLauncher.doorsAndWindows =>
+        provider.specialty == MaintenanceProviderSpecialty.doorsAndWindows,
       _MaintenanceQuickLauncher.internet =>
         provider.specialty == MaintenanceProviderSpecialty.internet,
+      _MaintenanceQuickLauncher.cameras =>
+        provider.specialty == MaintenanceProviderSpecialty.cameras,
+      _MaintenanceQuickLauncher.telephones =>
+        provider.specialty == MaintenanceProviderSpecialty.telephones,
+      _MaintenanceQuickLauncher.itSupport =>
+        provider.specialty == MaintenanceProviderSpecialty.itSupport,
       _MaintenanceQuickLauncher.internal =>
-        provider.providerType == MaintenanceProviderType.internal,
+        provider.providerType == MaintenanceProviderType.internal &&
+            provider.specialty ==
+                MaintenanceProviderSpecialty.generalMaintenance,
     };
   }
 
@@ -1797,7 +1816,11 @@ class _MaintenancePageState extends State<MaintenancePage>
     return switch (launcher) {
       _MaintenanceQuickLauncher.elevators => 'Elevadores',
       _MaintenanceQuickLauncher.airConditioning => 'AA',
-      _MaintenanceQuickLauncher.internet => 'Portas e janelas',
+      _MaintenanceQuickLauncher.doorsAndWindows => 'Portas e janelas',
+      _MaintenanceQuickLauncher.internet => 'Internet',
+      _MaintenanceQuickLauncher.cameras => 'Câmeras',
+      _MaintenanceQuickLauncher.telephones => 'Telefones',
+      _MaintenanceQuickLauncher.itSupport => 'TI',
       _MaintenanceQuickLauncher.internal => 'Interno',
     };
   }
@@ -1806,7 +1829,12 @@ class _MaintenancePageState extends State<MaintenancePage>
     return switch (launcher) {
       _MaintenanceQuickLauncher.elevators => Icons.elevator_rounded,
       _MaintenanceQuickLauncher.airConditioning => Icons.ac_unit_rounded,
+      _MaintenanceQuickLauncher.doorsAndWindows =>
+        Icons.door_front_door_rounded,
       _MaintenanceQuickLauncher.internet => Icons.router_rounded,
+      _MaintenanceQuickLauncher.cameras => Icons.videocam_rounded,
+      _MaintenanceQuickLauncher.telephones => Icons.phone_rounded,
+      _MaintenanceQuickLauncher.itSupport => Icons.computer_rounded,
       _MaintenanceQuickLauncher.internal => Icons.handyman_rounded,
     };
   }
@@ -2014,10 +2042,7 @@ class _MaintenancePageState extends State<MaintenancePage>
         title: editingOrderId == null ? 'Ordem criada' : 'Ordem atualizada',
         message: 'A ordem de manutencao foi salva com sucesso.',
       );
-      final MaintenanceProvider? savedProvider = _findProviderById(
-        savedOrder.providerId,
-      );
-      if (mounted && savedProvider?.whatsappEnabled == true) {
+      if (mounted) {
         await _prepareOrderWhatsapp(savedOrder);
       }
     } catch (error) {
@@ -2287,7 +2312,7 @@ class _MaintenancePageState extends State<MaintenancePage>
               (MaintenanceOrder item) => SimpleDialogOption(
                 onPressed: () => Navigator.of(context).pop(item),
                 child: Text(
-                  '${item.title} - ${item.locationDisplayLabel} - ${item.providerNameSnapshot}',
+                  '${item.title} - ${item.locationDisplayLabel} - ${_normalizeMaintenanceProviderName(item.providerNameSnapshot)}',
                 ),
               ),
             )
@@ -2312,8 +2337,9 @@ class _MaintenancePageState extends State<MaintenancePage>
       ..writeln(
         'Contato: ${provider != null && (provider.contact ?? '').isNotEmpty ? provider.contact : 'nao informado'}',
       )
-      ..writeln('Servico: ${order.serviceLabel}')
-      ..writeln('Tipo: ${order.orderKind.label}')
+      ..writeln(
+        'Servico: ${_normalizeMaintenanceServiceLabel(order.serviceLabel)}',
+      )
       ..writeln('Prioridade tecnica: ${order.priority.label}')
       ..writeln('Origem: ${order.requestOrigin.label}')
       ..writeln('Status: ${order.status.label}')
@@ -2349,8 +2375,7 @@ class _MaintenancePageState extends State<MaintenancePage>
         await AppAlerts.warning(
           context,
           title: 'Aviso não preparado',
-          message:
-              'A ordem foi salva, mas o aviso não pôde ser preparado: $error',
+          message: 'O aviso não pôde ser preparado: $error',
         );
       }
     }
@@ -2627,9 +2652,7 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
     final MaintenanceOrder? order = widget.initialOrder;
     _locationId = order?.locationId ?? widget.locations.first.id;
     _providerId = order?.providerId ?? widget.initialProviderId;
-    _orderKind = widget.launcherLabel != null && order == null
-        ? MaintenanceOrderKind.corrective
-        : order?.orderKind ?? MaintenanceOrderKind.corrective;
+    _orderKind = order?.orderKind ?? MaintenanceOrderKind.corrective;
     _requestOrigin =
         order?.requestOrigin ?? MaintenanceRequestOrigin.internalRole;
     _hasSchedule = order?.scheduledStartAt != null;
@@ -2668,19 +2691,6 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
       widget.initialOrder == null &&
       widget.launcherLabel != null &&
       widget.initialProviderId != null;
-
-  bool get _shouldHideOrderKindField =>
-      widget.initialOrder == null && widget.launcherLabel != null;
-
-  List<MaintenanceOrderKind> get _availableOrderKinds {
-    if (widget.initialOrder?.orderKind == MaintenanceOrderKind.preventive) {
-      return MaintenanceOrderKind.values;
-    }
-    return <MaintenanceOrderKind>[
-      MaintenanceOrderKind.corrective,
-      MaintenanceOrderKind.visit,
-    ];
-  }
 
   MaintenanceProvider? get _selectedProvider {
     final int? providerId = _providerId;
@@ -2807,27 +2817,6 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
                 onTap: _pickLocation,
               ),
               const SizedBox(height: 12),
-              if (!_shouldHideOrderKindField) ...<Widget>[
-                DropdownButtonFormField<MaintenanceOrderKind>(
-                  value: _orderKind,
-                  decoration: const InputDecoration(labelText: 'Tipo de ordem'),
-                  items: _availableOrderKinds
-                      .map(
-                        (MaintenanceOrderKind item) =>
-                            DropdownMenuItem<MaintenanceOrderKind>(
-                              value: item,
-                              child: Text(item.label),
-                            ),
-                      )
-                      .toList(),
-                  onChanged: (MaintenanceOrderKind? value) {
-                    if (value != null) {
-                      setState(() => _orderKind = value);
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-              ],
               DropdownButtonFormField<MaintenanceRequestOrigin>(
                 value: _requestOrigin,
                 decoration: const InputDecoration(
@@ -2862,16 +2851,14 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
                     helperText: _providerId == null
                         ? 'Selecione um prestador para a ordem.'
                         : _selectedProviderWhatsapp == null
-                        ? 'Aviso manual indisponível: sem número WhatsApp.'
+                        ? 'Aviso manual indisponível: configure número e habilite WhatsApp no cadastro.'
                         : 'Aviso manual disponível: $_selectedProviderWhatsapp',
                   ),
                   items: <DropdownMenuItem<int?>>[
                     ...widget.providers.map(
                       (MaintenanceProvider item) => DropdownMenuItem<int?>(
                         value: item.id,
-                        child: Text(
-                          '${item.name} · ${item.specialty.label} · ${item.serviceLabel}',
-                        ),
+                        child: Text(_maintenanceProviderDisplayName(item)),
                       ),
                     ),
                   ],
@@ -3730,7 +3717,7 @@ class _MaintenancePlanDialogState extends State<_MaintenancePlanDialog> {
                     (MaintenanceProvider item) => DropdownMenuItem<int?>(
                       value: item.id,
                       child: Text(
-                        '${item.name} - ${item.specialty.label}',
+                        '${_maintenanceProviderDisplayName(item)} - ${item.specialty.label}',
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -4326,7 +4313,7 @@ class _MaintenanceCatalogsDialogState
         ButtonSegment<int>(
           value: 1,
           icon: const Icon(Icons.groups_outlined),
-          label: Text('Responsáveis (${_providers.length})'),
+          label: Text('Prestadores (${_providers.length})'),
         ),
       ],
       selected: <int>{_selectedCatalog},
@@ -4373,7 +4360,7 @@ class _MaintenanceCatalogsDialogState
         _CatalogNavigationCard(
           selected: _selectedCatalog == 1,
           icon: Icons.groups_outlined,
-          title: 'Responsáveis',
+          title: 'Prestadores',
           description: 'Equipe interna e prestadores',
           count: _providers.length,
           onTap: () => _selectCatalog(1),
@@ -5378,6 +5365,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
   late final TextEditingController _serviceLabelController;
   late final TextEditingController _scopeController;
   late final TextEditingController _contactController;
+  late final TextEditingController _whatsappController;
   MaintenanceProviderType _type = MaintenanceProviderType.internal;
   MaintenanceProviderSpecialty _specialty =
       MaintenanceProviderSpecialty.generalMaintenance;
@@ -5394,6 +5382,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
     _serviceLabelController = TextEditingController();
     _scopeController = TextEditingController();
     _contactController = TextEditingController();
+    _whatsappController = TextEditingController();
   }
 
   @override
@@ -5403,15 +5392,18 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
     _serviceLabelController.dispose();
     _scopeController.dispose();
     _contactController.dispose();
+    _whatsappController.dispose();
     super.dispose();
   }
 
   List<MaintenanceProvider> get _filteredProviders {
+    final List<MaintenanceProvider> canonicalProviders =
+        canonicalMaintenanceProviders(widget.providers);
     final String query = _searchController.text.trim().toLowerCase();
     if (query.isEmpty) {
-      return widget.providers;
+      return canonicalProviders;
     }
-    return widget.providers.where((MaintenanceProvider item) {
+    return canonicalProviders.where((MaintenanceProvider item) {
       final String haystack = <String>[
         item.name,
         item.serviceLabel,
@@ -5439,12 +5431,12 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
           children: <Widget>[
             Expanded(
               child: Text(
-                'Responsáveis cadastrados',
+                'Prestadores cadastrados',
                 style: Theme.of(context).textTheme.titleMedium,
               ),
             ),
             IconButton.filled(
-              tooltip: 'Adicionar responsável',
+              tooltip: 'Adicionar prestador',
               onPressed: _startCreate,
               icon: const Icon(Icons.add_rounded),
             ),
@@ -5452,7 +5444,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
         ),
         const SizedBox(height: 3),
         Text(
-          '${_filteredProviders.length} de ${widget.providers.length} responsáveis',
+          '${_filteredProviders.length} prestadores',
           style: Theme.of(context).textTheme.bodySmall,
         ),
         const SizedBox(height: 10),
@@ -5460,7 +5452,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
           controller: _searchController,
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
-            labelText: 'Buscar responsável',
+            labelText: 'Buscar prestador',
             hintText: 'Nome, serviço, WhatsApp...',
             prefixIcon: const Icon(Icons.search_rounded),
             suffixIcon: _searchController.text.isEmpty
@@ -5480,9 +5472,9 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
             children: _filteredProviders
                 .map(
                   (MaintenanceProvider item) => ListTile(
-                    title: Text(item.name),
+                    title: Text(_maintenanceProviderDisplayName(item)),
                     subtitle: Text(
-                      '${item.providerType.label} · ${item.specialty.label} · ${item.serviceLabel}'
+                      '${item.providerType.label} · ${item.specialty.label} · ${_normalizeMaintenanceServiceLabel(item.serviceLabel)}'
                       '${(item.whatsappNumber ?? item.contact ?? '').isEmpty ? '' : ' · ${(item.whatsappNumber ?? item.contact)!}'}',
                     ),
                     trailing: Wrap(
@@ -5519,14 +5511,14 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
-            _selected == null ? 'Adicionar responsável' : 'Editar responsável',
+            _selected == null ? 'Adicionar prestador' : 'Editar prestador',
             style: Theme.of(context).textTheme.titleMedium,
           ),
           const SizedBox(height: 3),
           Text(
             _selected == null
                 ? 'Cadastre a equipe interna ou um prestador externo.'
-                : 'Atualize os dados de ${_selected!.name}.',
+                : 'Atualize os dados de ${_maintenanceProviderDisplayName(_selected!)}.',
             style: Theme.of(context).textTheme.bodySmall,
           ),
           const SizedBox(height: 12),
@@ -5562,7 +5554,14 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
                 )
                 .toList(),
             onChanged: (MaintenanceProviderSpecialty? value) {
-              if (value != null) setState(() => _specialty = value);
+              if (value != null) {
+                setState(() {
+                  _specialty = value;
+                  if (value == MaintenanceProviderSpecialty.doorsAndWindows) {
+                    _serviceLabelController.text = value.label;
+                  }
+                });
+              }
             },
           ),
           const SizedBox(height: 12),
@@ -5588,6 +5587,14 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
           const SizedBox(height: 12),
           TextField(
             controller: _contactController,
+            decoration: const InputDecoration(
+              labelText: 'Contato geral',
+              hintText: 'Telefone, e-mail ou observação',
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _whatsappController,
             keyboardType: TextInputType.phone,
             decoration: const InputDecoration(
               labelText: 'WhatsApp',
@@ -5599,12 +5606,10 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
           SwitchListTile(
             contentPadding: EdgeInsets.zero,
             value: _whatsappEnabled,
-            onChanged: _type == MaintenanceProviderType.external
-                ? (bool value) => setState(() => _whatsappEnabled = value)
-                : null,
-            title: const Text('Envio automatico por WhatsApp'),
+            onChanged: (bool value) => setState(() => _whatsappEnabled = value),
+            title: const Text('Disponível para contato por WhatsApp'),
             subtitle: const Text(
-              'Somente responsaveis externos recebem ordens automaticamente.',
+              'O operador prepara e envia o aviso manualmente.',
             ),
           ),
           const SizedBox(height: 4),
@@ -5637,7 +5642,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
             OutlinedButton.icon(
               onPressed: _saving ? null : _deleteSelected,
               icon: const Icon(Icons.delete_outline_rounded),
-              label: const Text('Excluir responsável'),
+              label: const Text('Excluir prestador'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: CostaNorteBrand.error,
               ),
@@ -5659,10 +5664,13 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
       _selected = item;
       _type = item.providerType;
       _specialty = item.specialty;
-      _nameController.text = item.name;
-      _serviceLabelController.text = item.serviceLabel;
+      _nameController.text = _maintenanceProviderDisplayName(item);
+      _serviceLabelController.text = _normalizeMaintenanceServiceLabel(
+        item.serviceLabel,
+      );
       _scopeController.text = item.scopeDescription ?? '';
-      _contactController.text = item.whatsappNumber ?? item.contact ?? '';
+      _contactController.text = item.contact ?? '';
+      _whatsappController.text = item.whatsappNumber ?? '';
       _whatsappEnabled = item.whatsappEnabled;
       _active = item.active;
     });
@@ -5678,6 +5686,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
       _serviceLabelController.clear();
       _scopeController.clear();
       _contactController.clear();
+      _whatsappController.clear();
       _whatsappEnabled = false;
       _active = true;
     });
@@ -5699,14 +5708,14 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
       await AppAlerts.warning(
         context,
         title: 'Campos obrigatorios',
-        message: 'Informe nome e servico do responsavel.',
+        message: 'Informe nome e servico do prestador.',
       );
       return;
     }
     final String? normalizedWhatsapp = _normalizeWhatsappNumber(
-      _contactController.text,
+      _whatsappController.text,
     );
-    if (_contactController.text.trim().isNotEmpty &&
+    if (_whatsappController.text.trim().isNotEmpty &&
         normalizedWhatsapp == null) {
       await AppAlerts.warning(
         context,
@@ -5716,7 +5725,24 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
       );
       return;
     }
+    if (_whatsappEnabled && normalizedWhatsapp == null) {
+      await AppAlerts.warning(
+        context,
+        title: 'WhatsApp obrigatório',
+        message:
+            'Informe um número válido para habilitar o contato por WhatsApp.',
+      );
+      return;
+    }
     setState(() => _saving = true);
+    final String serviceLabel =
+        _specialty == MaintenanceProviderSpecialty.doorsAndWindows
+        ? _specialty.label
+        : _serviceLabelController.text.trim();
+    final String providerName =
+        _specialty == MaintenanceProviderSpecialty.doorsAndWindows
+        ? _specialty.label
+        : _nameController.text.trim();
     try {
       late final MaintenanceProvider savedProvider;
       if (_selected == null) {
@@ -5724,14 +5750,13 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
           CreateMaintenanceProviderModel(
             providerType: _type,
             specialty: _specialty,
-            name: _nameController.text,
-            serviceLabel: _serviceLabelController.text,
+            name: providerName,
+            serviceLabel: serviceLabel,
             scopeDescription: _scopeController.text,
-            contact: normalizedWhatsapp,
+            contact: _contactController.text.trim(),
             active: _active,
             whatsappNumber: normalizedWhatsapp,
-            whatsappEnabled:
-                _whatsappEnabled && _type == MaintenanceProviderType.external,
+            whatsappEnabled: _whatsappEnabled,
           ),
         );
       } else {
@@ -5740,14 +5765,13 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
           UpdateMaintenanceProviderModel(
             providerType: _type,
             specialty: _specialty,
-            name: _nameController.text,
-            serviceLabel: _serviceLabelController.text,
+            name: providerName,
+            serviceLabel: serviceLabel,
             scopeDescription: _scopeController.text,
-            contact: normalizedWhatsapp,
+            contact: _contactController.text.trim(),
             active: _active,
             whatsappNumber: normalizedWhatsapp,
-            whatsappEnabled:
-                _whatsappEnabled && _type == MaintenanceProviderType.external,
+            whatsappEnabled: _whatsappEnabled,
           ),
         );
       }
@@ -5757,7 +5781,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
       _load(savedProvider);
       await AppAlerts.success(
         context,
-        title: 'Responsavel salvo',
+        title: 'Prestador salvo',
         message: 'As alteracoes foram confirmadas pelo servidor.',
       );
       if (mounted) {
@@ -5769,7 +5793,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
       }
       await AppAlerts.error(
         context,
-        title: 'Responsaveis',
+        title: 'Prestadores',
         message: error.toString().replaceFirst('Bad state: ', ''),
       );
     } finally {
@@ -5789,7 +5813,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
       }
       await showAuditTimelineDialog(
         context: context,
-        title: 'Historico de ${provider.name}',
+        title: 'Historico de ${_maintenanceProviderDisplayName(provider)}',
         events: events,
       );
     } catch (error) {
@@ -5809,9 +5833,9 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
     }
     final bool confirmed = await AppAlerts.confirm(
       context,
-      title: 'Excluir responsável',
+      title: 'Excluir prestador',
       message:
-          'Deseja excluir ${provider.name}? Esta ação não pode ser desfeita.',
+          'Deseja excluir ${_maintenanceProviderDisplayName(provider)}? Esta ação não pode ser desfeita.',
       confirmLabel: 'Excluir',
       cancelLabel: 'Cancelar',
     );
@@ -5825,8 +5849,8 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
       _closeEditor();
       await AppAlerts.success(
         context,
-        title: 'Responsável excluído',
-        message: 'O responsável foi removido do catálogo.',
+        title: 'Prestador excluído',
+        message: 'O prestador foi removido do catálogo.',
       );
     } catch (error) {
       if (!mounted) return;
@@ -5867,6 +5891,32 @@ Widget _emptyScrollableBox(String message) {
     ),
     child: Text(message),
   );
+}
+
+String _normalizeMaintenanceServiceLabel(String value) {
+  final String normalized = value.trim();
+  if (RegExp(r'^internet$', caseSensitive: false).hasMatch(normalized)) {
+    return MaintenanceProviderSpecialty.internet.label;
+  }
+  return normalized;
+}
+
+String _normalizeMaintenanceProviderName(String? value) {
+  final String normalized = value?.trim() ?? '';
+  if (normalized.isEmpty) {
+    return 'Sem prestador';
+  }
+  if (RegExp(r'\binternet\b', caseSensitive: false).hasMatch(normalized)) {
+    return MaintenanceProviderSpecialty.internet.label;
+  }
+  return normalized;
+}
+
+String _maintenanceProviderDisplayName(MaintenanceProvider provider) {
+  if (provider.specialty == MaintenanceProviderSpecialty.doorsAndWindows) {
+    return MaintenanceProviderSpecialty.doorsAndWindows.label;
+  }
+  return _normalizeMaintenanceProviderName(provider.name);
 }
 
 String _normalizeMaintenanceLocationLabel(String value) {

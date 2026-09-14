@@ -11,24 +11,6 @@ Future<void> showManualWhatsappDialog(
   required String message,
 }) async {
   final String? number = normalizeManualWhatsappNumber(phoneNumber);
-  if (number == null) {
-    await showDialog<void>(
-      context: context,
-      builder: (BuildContext context) => AlertDialog(
-        title: const Text('WhatsApp indisponível'),
-        content: const Text(
-          'Cadastre um número de WhatsApp internacional válido para este prestador.',
-        ),
-        actions: <Widget>[
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Fechar'),
-          ),
-        ],
-      ),
-    );
-    return;
-  }
   if (!context.mounted) return;
   await showDialog<void>(
     context: context,
@@ -47,17 +29,26 @@ String? normalizeManualWhatsappNumber(String? value) {
   return digits.length >= 10 && digits.length <= 15 ? digits : null;
 }
 
-Uri manualWhatsappWebUri(String number, String message) => Uri.https(
-  'web.whatsapp.com',
-  '/send',
-  <String, String>{'phone': number, 'text': message},
-);
+Uri manualWhatsappWebUri(String? number, String message) {
+  if (number == null) {
+    return Uri.https('web.whatsapp.com', '/');
+  }
+  return Uri.https('web.whatsapp.com', '/send', <String, String>{
+    'phone': number,
+    'text': message,
+  });
+}
 
-Uri manualWhatsappWindowsUri(String number, String message) => Uri(
-  scheme: 'whatsapp',
-  host: 'send',
-  queryParameters: <String, String>{'phone': number, 'text': message},
-);
+Uri manualWhatsappWindowsUri(String? number, String message) {
+  if (number == null) {
+    return Uri(scheme: 'whatsapp');
+  }
+  return Uri(
+    scheme: 'whatsapp',
+    host: 'send',
+    queryParameters: <String, String>{'phone': number, 'text': message},
+  );
+}
 
 class _ManualWhatsappDialog extends StatefulWidget {
   const _ManualWhatsappDialog({
@@ -67,7 +58,7 @@ class _ManualWhatsappDialog extends StatefulWidget {
   });
 
   final String providerName;
-  final String number;
+  final String? number;
   final String message;
 
   @override
@@ -150,14 +141,24 @@ class _ManualWhatsappDialogState extends State<_ManualWhatsappDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               Text('Prestador: ${widget.providerName}'),
-              Text('Número: +${widget.number}'),
+              Text(
+                widget.number == null
+                    ? 'Número WhatsApp: não configurado ou não habilitado'
+                    : 'Número: +${widget.number}',
+              ),
+              if (widget.number == null) ...<Widget>[
+                const SizedBox(height: 8),
+                const Text(
+                  'Sem numero configurado, o WhatsApp sera aberto sem conversa pronta. Escolha o contato manualmente e cole o texto com Ctrl+V.',
+                ),
+              ],
               const SizedBox(height: 12),
               const Text(
                 'O sistema apenas prepara a conversa. O envio precisa ser confirmado dentro do WhatsApp.',
               ),
               const SizedBox(height: 8),
               const Text(
-                'Ao abrir o WhatsApp, o texto também é copiado. Se a mensagem não aparecer, cole com Ctrl+V na conversa.',
+                'Ao abrir o WhatsApp, o texto tambem e copiado. Se a mensagem nao aparecer, cole com Ctrl+V na conversa.',
               ),
               const SizedBox(height: 12),
               SelectableText(widget.message),

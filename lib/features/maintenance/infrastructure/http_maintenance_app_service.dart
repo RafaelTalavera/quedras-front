@@ -137,7 +137,7 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
     );
     final List<Object?> decoded = _expectSuccessList(
       response,
-      invalidMessage: 'Formato invalido da lista de responsaveis.',
+      invalidMessage: 'Formato invalido da lista de prestadores.',
     );
     return decoded
         .map<MaintenanceProvider>(
@@ -240,7 +240,7 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
     return MaintenanceProvider.fromJson(
       _expectSuccessObject(
         response,
-        invalidMessage: 'Resposta invalida do responsavel.',
+        invalidMessage: 'Resposta invalida do prestador.',
       ),
     );
   }
@@ -260,7 +260,7 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
     return MaintenanceProvider.fromJson(
       _expectSuccessObject(
         response,
-        invalidMessage: 'Resposta invalida do responsavel.',
+        invalidMessage: 'Resposta invalida do prestador.',
       ),
     );
   }
@@ -292,7 +292,7 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
     );
     final List<Object?> decoded = _expectSuccessList(
       response,
-      invalidMessage: 'Formato invalido do historico de responsaveis.',
+      invalidMessage: 'Formato invalido do historico de prestadores.',
     );
     return decoded
         .whereType<Map>()

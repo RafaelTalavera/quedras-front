@@ -96,6 +96,74 @@ void main() {
     expect(Uri.parse(launchedUrls.single).queryParameters['text'], message);
   });
 
+  testWidgets('mostra WhatsApp Web e copia sem numero configurado', (
+    tester,
+  ) async {
+    const MethodChannel launcher = MethodChannel(
+      'plugins.flutter.io/url_launcher',
+    );
+    final List<String> launchedUrls = <String>[];
+    String? copiedText;
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(SystemChannels.platform, (
+          MethodCall call,
+        ) async {
+          if (call.method == 'Clipboard.setData') {
+            copiedText =
+                (call.arguments as Map<Object?, Object?>)['text'] as String?;
+          }
+          return null;
+        });
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(launcher, (MethodCall call) async {
+          if (call.method == 'launch') {
+            launchedUrls.add(
+              (call.arguments as Map<Object?, Object?>)['url']! as String,
+            );
+            return true;
+          }
+          return false;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(launcher, null);
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showManualWhatsappDialog(
+              context,
+              providerName: 'Equipe interna',
+              phoneNumber: null,
+              message: 'Ordem de manutenção interna',
+            ),
+            child: const Text('Preparar'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Preparar'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Ordem de manutenção interna'), findsOneWidget);
+    expect(find.textContaining('não configurado'), findsOneWidget);
+    expect(find.text('Copiar texto'), findsOneWidget);
+    expect(find.text('WhatsApp Web'), findsOneWidget);
+
+    await tester.tap(find.text('WhatsApp Web'));
+    await tester.pumpAndSettle();
+
+    expect(copiedText, 'Ordem de manutenção interna');
+    expect(launchedUrls, hasLength(1));
+    final Uri uri = Uri.parse(launchedUrls.single);
+    expect(uri.host, 'web.whatsapp.com');
+    expect(uri.path, '/');
+  });
+
   test('normaliza número internacional y rechaza datos inválidos', () {
     expect(
       normalizeManualWhatsappNumber('+55 (48) 99999-8888'),
@@ -116,5 +184,15 @@ void main() {
     expect(windows.queryParameters['text'], message);
     expect(web.host, 'web.whatsapp.com');
     expect(windows.scheme, 'whatsapp');
+  });
+
+  test('abre canais sem destinatario para fluxo manual', () {
+    final web = manualWhatsappWebUri(null, 'Aviso');
+    final windows = manualWhatsappWindowsUri(null, 'Aviso');
+    expect(web.host, 'web.whatsapp.com');
+    expect(web.path, '/');
+    expect(web.queryParameters, isEmpty);
+    expect(windows.scheme, 'whatsapp');
+    expect(windows.host, isEmpty);
   });
 }

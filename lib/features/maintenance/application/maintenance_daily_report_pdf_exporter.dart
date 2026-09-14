@@ -224,7 +224,7 @@ final class DefaultMaintenanceDailyReportPdfExporter
         children: <pw.Widget>[
           pw.Expanded(
             child: pw.Text(
-              'Hoja de ruta operativa para execucao rapida. Cada linha resume uma ordem com foco em faixa, local, tarefa e responsavel.',
+              'Hoja de ruta operativa para execucao rapida. Cada linha resume uma ordem com foco em faixa, local, tarefa e prestador.',
               style: pw.TextStyle(fontSize: 8.4, color: _mutedColor),
             ),
           ),
@@ -254,10 +254,8 @@ final class DefaultMaintenanceDailyReportPdfExporter
       children: <pw.TableRow>[
         _buildTableHeaderRow(),
         ...orders.map(
-          (MaintenanceOrder order) => _buildTableDataRow(
-            order: order,
-            selectedDate: selectedDate,
-          ),
+          (MaintenanceOrder order) =>
+              _buildTableDataRow(order: order, selectedDate: selectedDate),
         ),
       ],
     );
@@ -282,22 +280,13 @@ final class DefaultMaintenanceDailyReportPdfExporter
     return pw.TableRow(
       verticalAlignment: pw.TableCellVerticalAlignment.middle,
       children: <pw.Widget>[
-        _buildTableCell(
-          _compactTimeBlock(order, selectedDate),
-          fontSize: 7.6,
-        ),
+        _buildTableCell(_compactTimeBlock(order, selectedDate), fontSize: 7.6),
         _buildTableCell(
           _truncate(order.locationDisplayLabel, 34),
           fontSize: 7.8,
         ),
-        _buildTableCell(
-          _compactTaskLabel(order),
-          fontSize: 7.8,
-        ),
-        _buildTableCell(
-          _compactExecutionLabel(order),
-          fontSize: 7.6,
-        ),
+        _buildTableCell(_compactTaskLabel(order), fontSize: 7.8),
+        _buildTableCell(_compactExecutionLabel(order), fontSize: 7.6),
         _buildTableCell(
           _compactContextLabel(order, selectedDate),
           fontSize: 7.4,
@@ -374,7 +363,8 @@ String _compactExecutionLabel(MaintenanceOrder order) {
     _truncate(order.providerLabel, 28),
     _truncate(order.serviceLabel, 28),
   ];
-  if (order.assignedUsername != null && order.assignedUsername!.trim().isNotEmpty) {
+  if (order.assignedUsername != null &&
+      order.assignedUsername!.trim().isNotEmpty) {
     lines.add('Resp. ${_truncate(order.assignedUsername!.trim(), 22)}');
   }
   return lines.join('\n');
@@ -392,7 +382,8 @@ String _compactContextLabel(MaintenanceOrder order, DateTime selectedDate) {
 
   final String source = order.guestLabel != null
       ? 'Hospede ${_truncate(order.guestLabel!, 24)}'
-      : order.requestedByRole != null && order.requestedByRole!.trim().isNotEmpty
+      : order.requestedByRole != null &&
+            order.requestedByRole!.trim().isNotEmpty
       ? 'Origem ${_truncate(order.requestedByRole!.trim(), 20)}'
       : order.requestOrigin.label;
   parts.add(source);
