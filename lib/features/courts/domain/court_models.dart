@@ -276,6 +276,7 @@ class CourtBooking {
     required this.endTime,
     required this.durationMinutes,
     required this.customerName,
+    this.customerWhatsappNumber,
     required this.customerReference,
     required this.customerType,
     required this.pricingPeriod,
@@ -308,6 +309,7 @@ class CourtBooking {
   final String endTime;
   final int durationMinutes;
   final String customerName;
+  final String? customerWhatsappNumber;
   final String customerReference;
   final CourtCustomerType customerType;
   final CourtPricingPeriod pricingPeriod;
@@ -342,6 +344,7 @@ class CourtBooking {
       endTime: _normalizeTime(_readString(json, 'endTime') ?? '00:00:00'),
       durationMinutes: _readInt(json, 'durationMinutes') ?? 0,
       customerName: _readString(json, 'customerName') ?? '',
+      customerWhatsappNumber: _trimOrNull(_readString(json, 'customerWhatsappNumber')),
       customerReference: _readString(json, 'customerReference') ?? '',
       customerType: CourtCustomerType.tryParse(
         _readString(json, 'customerType'),
@@ -529,6 +532,7 @@ class CreateCourtBookingModel {
     required this.startTime,
     required this.endTime,
     required this.customerName,
+    this.customerWhatsappNumber,
     required this.customerReference,
     required this.customerType,
     required this.paid,
@@ -543,6 +547,7 @@ class CreateCourtBookingModel {
   final String startTime;
   final String endTime;
   final String customerName;
+  final String? customerWhatsappNumber;
   final String customerReference;
   final CourtCustomerType customerType;
   final bool paid;
@@ -558,6 +563,7 @@ class CreateCourtBookingModel {
       'startTime': startTime,
       'endTime': endTime,
       'customerName': customerName,
+      'customerWhatsappNumber': _trimOrNull(customerWhatsappNumber),
       'customerReference': customerReference,
       'customerType': customerType.apiValue,
       'paid': paid,
@@ -599,6 +605,7 @@ class UpdateCourtBookingModel extends CreateCourtBookingModel {
     required super.startTime,
     required super.endTime,
     required super.customerName,
+    super.customerWhatsappNumber,
     required super.customerReference,
     required super.customerType,
     required super.paid,

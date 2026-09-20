@@ -3,6 +3,10 @@
 Fecha: 2026-09-14. Alcance: frontend `quedras-front`; el contrato y la
 persistencia de prestadores del backend no cambian en esta correccion.
 
+El criterio comun vigente para todos los modulos esta documentado en
+`WHATSAPP_MANUAL_OPERATION_STANDARD.md`; esta nota conserva los detalles
+especificos de mantenimiento.
+
 ## Comportamiento
 
 AA es el patron operativo. Elevadores, Portas e janelas, Internet, Camaras,
