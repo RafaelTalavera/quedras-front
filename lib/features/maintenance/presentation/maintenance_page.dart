@@ -2063,11 +2063,7 @@ class _MaintenancePageState extends State<MaintenancePage>
     }
   }
 
-  Future<void> _startOrder() async {
-    final MaintenanceOrder? order = _selectedOrder;
-    if (order == null) {
-      return;
-    }
+  Future<void> _startOrder(MaintenanceOrder order) async {
     final bool confirm = await AppAlerts.confirm(
       context,
       title: 'Iniciar ordem',
@@ -2082,11 +2078,7 @@ class _MaintenancePageState extends State<MaintenancePage>
     );
   }
 
-  Future<void> _completeOrder() async {
-    final MaintenanceOrder? order = _selectedOrder;
-    if (order == null) {
-      return;
-    }
+  Future<void> _completeOrder(MaintenanceOrder order) async {
     final _CompletionDraft? draft = await showDialog<_CompletionDraft>(
       context: context,
       builder: (BuildContext context) => const _CompletionDialog(),
@@ -2106,11 +2098,7 @@ class _MaintenancePageState extends State<MaintenancePage>
     );
   }
 
-  Future<void> _cancelOrder() async {
-    final MaintenanceOrder? order = _selectedOrder;
-    if (order == null) {
-      return;
-    }
+  Future<void> _cancelOrder(MaintenanceOrder order) async {
     final String? notes = await showDialog<String>(
       context: context,
       builder: (BuildContext context) => const _CancelDialog(),
@@ -2195,11 +2183,7 @@ class _MaintenancePageState extends State<MaintenancePage>
     await _load(showLoading: false);
   }
 
-  Future<void> _manageAttachments() async {
-    final MaintenanceOrder? order = _selectedOrder;
-    if (order == null) {
-      return;
-    }
+  Future<void> _manageAttachments(MaintenanceOrder order) async {
     await showDialog<void>(
       context: context,
       builder: (BuildContext context) => _MaintenanceAttachmentsDialog(
@@ -2238,16 +2222,16 @@ class _MaintenancePageState extends State<MaintenancePage>
         await _shareOrderToWhatsApp(order: order);
         return;
       case _MaintenanceOrderAction.start:
-        await _startOrder();
+        await _startOrder(order);
         return;
       case _MaintenanceOrderAction.complete:
-        await _completeOrder();
+        await _completeOrder(order);
         return;
       case _MaintenanceOrderAction.cancel:
-        await _cancelOrder();
+        await _cancelOrder(order);
         return;
       case _MaintenanceOrderAction.attachments:
-        await _manageAttachments();
+        await _manageAttachments(order);
         return;
       case _MaintenanceOrderAction.history:
         await _openOrderHistory(order);

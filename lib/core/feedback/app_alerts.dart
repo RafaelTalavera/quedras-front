@@ -120,9 +120,15 @@ final class AppAlerts {
         }
       },
       onDismissCallback: (_) {
-        if (!completer.isCompleted) {
-          completer.complete(false);
-        }
+        // AwesomeDialog cierra la ruta antes de invocar el callback del boton
+        // positivo. Al diferir este descarte, el callback positivo puede
+        // resolver la confirmacion como true; los cierres por fondo, tecla
+        // atras o el boton de cancelar siguen resolviendo como false.
+        Future<void>.delayed(Duration.zero, () {
+          if (!completer.isCompleted) {
+            completer.complete(false);
+          }
+        });
       },
     ).show();
 
