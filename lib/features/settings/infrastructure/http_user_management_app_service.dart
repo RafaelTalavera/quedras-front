@@ -61,9 +61,7 @@ final class HttpUserManagementAppService implements UserManagementAppService {
     }
 
     return decoded
-        .map<ManagedUser>(
-          (Object? item) => ManagedUser.fromJson(_asMap(item)),
-        )
+        .map<ManagedUser>((Object? item) => ManagedUser.fromJson(_asMap(item)))
         .toList();
   }
 
@@ -85,7 +83,10 @@ final class HttpUserManagementAppService implements UserManagementAppService {
   }
 
   @override
-  Future<ManagedUser> updateUser(int userId, UpdateManagedUserInput input) async {
+  Future<ManagedUser> updateUser(
+    int userId,
+    UpdateManagedUserInput input,
+  ) async {
     final ApiResponse response = await _runRequest(
       () => _apiClient.put(
         'users/$userId',

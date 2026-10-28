@@ -2,6 +2,19 @@ import '../../../core/whatsapp/manual_whatsapp_dialog.dart'
     show normalizeManualWhatsappNumber;
 import '../domain/maintenance_models.dart';
 
+/// Resolves the WhatsApp destination, including providers created before the
+/// dedicated WhatsApp fields existed and whose phone is stored in `contact`.
+/// An explicitly configured but disabled WhatsApp number remains disabled.
+String? maintenanceProviderWhatsappNumber(MaintenanceProvider provider) {
+  final String? explicitNumber = normalizeManualWhatsappNumber(
+    provider.whatsappNumber,
+  );
+  if (provider.whatsappNumber != null) {
+    return provider.whatsappEnabled ? explicitNumber : null;
+  }
+  return normalizeManualWhatsappNumber(provider.contact);
+}
+
 /// Keeps one visible provider per maintenance specialty, preferring a provider
 /// whose manual WhatsApp contact is ready for the operator.
 List<MaintenanceProvider> canonicalMaintenanceProviders(
@@ -36,11 +49,9 @@ List<MaintenanceProvider> canonicalMaintenanceProviders(
               return left.active ? -1 : 1;
             }
             final bool leftReady =
-                left.whatsappEnabled &&
-                normalizeManualWhatsappNumber(left.whatsappNumber) != null;
+                maintenanceProviderWhatsappNumber(left) != null;
             final bool rightReady =
-                right.whatsappEnabled &&
-                normalizeManualWhatsappNumber(right.whatsappNumber) != null;
+                maintenanceProviderWhatsappNumber(right) != null;
             if (leftReady != rightReady) {
               return leftReady ? -1 : 1;
             }

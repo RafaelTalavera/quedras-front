@@ -45,6 +45,8 @@ class MassageProvider {
     required this.name,
     required this.specialty,
     required this.contact,
+    this.whatsappNumber,
+    this.whatsappEnabled = false,
     required this.active,
     required this.therapists,
   });
@@ -53,6 +55,8 @@ class MassageProvider {
   final String name;
   final String specialty;
   final String contact;
+  final String? whatsappNumber;
+  final bool whatsappEnabled;
   final bool active;
   final List<MassageTherapist> therapists;
 
@@ -72,6 +76,8 @@ class MassageProvider {
           _readString(json, 'contact') ??
           _readString(contactPerson, 'contact') ??
           '',
+      whatsappNumber: _readString(json, 'whatsappNumber'),
+      whatsappEnabled: json['whatsappEnabled'] == true,
       active: json['active'] as bool? ?? false,
       therapists: therapistsRaw is List
           ? therapistsRaw
@@ -90,6 +96,8 @@ class MassageProvider {
     String? name,
     String? specialty,
     String? contact,
+    String? whatsappNumber,
+    bool? whatsappEnabled,
     bool? active,
     List<MassageTherapist>? therapists,
   }) {
@@ -98,6 +106,8 @@ class MassageProvider {
       name: name ?? this.name,
       specialty: specialty ?? this.specialty,
       contact: contact ?? this.contact,
+      whatsappNumber: whatsappNumber ?? this.whatsappNumber,
+      whatsappEnabled: whatsappEnabled ?? this.whatsappEnabled,
       active: active ?? this.active,
       therapists: therapists ?? this.therapists,
     );
@@ -273,11 +283,15 @@ class MassageTherapist {
     required this.id,
     required this.name,
     required this.active,
+    this.whatsappNumber,
+    this.whatsappEnabled = false,
   });
 
   final int id;
   final String name;
   final bool active;
+  final String? whatsappNumber;
+  final bool whatsappEnabled;
 
   factory MassageTherapist.fromJson(Map<String, dynamic> json) {
     final Map<String, dynamic>? nested = _asMapOrNull(
@@ -288,6 +302,8 @@ class MassageTherapist {
       name: _readString(json, 'name') ?? _readString(nested, 'name') ?? '',
       active:
           (json['active'] as bool?) ?? (nested?['active'] as bool?) ?? false,
+      whatsappNumber: _readString(json, 'whatsappNumber'),
+      whatsappEnabled: json['whatsappEnabled'] == true,
     );
   }
 
@@ -306,6 +322,7 @@ class MassageBooking {
     required this.bookingDate,
     required this.startTime,
     required this.clientName,
+    this.clientWhatsappNumber,
     required this.guestReference,
     required this.treatment,
     required this.amount,
@@ -333,6 +350,7 @@ class MassageBooking {
   final DateTime bookingDate;
   final String startTime;
   final String clientName;
+  final String? clientWhatsappNumber;
   final String guestReference;
   final String treatment;
   final double amount;
@@ -365,6 +383,7 @@ class MassageBooking {
       bookingDate: DateTime.parse(json['bookingDate'] as String),
       startTime: _normalizeTime(json['startTime'] as String? ?? '00:00:00'),
       clientName: json['clientName'] as String? ?? '',
+      clientWhatsappNumber: _normalizeNullable(json['clientWhatsappNumber'] as String?),
       guestReference: json['guestReference'] as String? ?? '',
       treatment: json['treatment'] as String? ?? '',
       amount: (json['amount'] as num?)?.toDouble() ?? 0,
@@ -426,6 +445,7 @@ class MassageBooking {
     DateTime? bookingDate,
     String? startTime,
     String? clientName,
+    String? clientWhatsappNumber,
     String? guestReference,
     String? treatment,
     double? amount,
@@ -453,6 +473,7 @@ class MassageBooking {
       bookingDate: bookingDate ?? this.bookingDate,
       startTime: startTime ?? this.startTime,
       clientName: clientName ?? this.clientName,
+      clientWhatsappNumber: clientWhatsappNumber ?? this.clientWhatsappNumber,
       guestReference: guestReference ?? this.guestReference,
       treatment: treatment ?? this.treatment,
       amount: amount ?? this.amount,
@@ -514,6 +535,7 @@ class CreateMassageBookingModel {
     required this.bookingDate,
     required this.startTime,
     required this.clientName,
+    this.clientWhatsappNumber,
     required this.guestReference,
     required this.treatment,
     required this.amount,
@@ -528,6 +550,7 @@ class CreateMassageBookingModel {
   final String bookingDate;
   final String startTime;
   final String clientName;
+  final String? clientWhatsappNumber;
   final String guestReference;
   final String treatment;
   final double amount;
@@ -543,6 +566,7 @@ class CreateMassageBookingModel {
       'bookingDate': bookingDate,
       'startTime': startTime,
       'clientName': clientName,
+      'clientWhatsappNumber': _trimOrNull(clientWhatsappNumber),
       'guestReference': guestReference,
       'treatment': treatment,
       'amount': amount,
@@ -581,6 +605,7 @@ class UpdateMassageBookingModel {
     required this.bookingDate,
     required this.startTime,
     required this.clientName,
+    this.clientWhatsappNumber,
     required this.guestReference,
     required this.treatment,
     required this.amount,
@@ -595,6 +620,7 @@ class UpdateMassageBookingModel {
   final String bookingDate;
   final String startTime;
   final String clientName;
+  final String? clientWhatsappNumber;
   final String guestReference;
   final String treatment;
   final double amount;
@@ -610,6 +636,7 @@ class UpdateMassageBookingModel {
       'bookingDate': bookingDate,
       'startTime': startTime,
       'clientName': clientName,
+      'clientWhatsappNumber': _trimOrNull(clientWhatsappNumber),
       'guestReference': guestReference,
       'treatment': treatment,
       'amount': amount,
@@ -640,17 +667,23 @@ class CreateMassageProviderModel {
     required this.name,
     required this.specialty,
     required this.contact,
+    this.whatsappNumber,
+    this.whatsappEnabled = false,
   });
 
   final String name;
   final String specialty;
   final String contact;
+  final String? whatsappNumber;
+  final bool whatsappEnabled;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
       'name': name,
       'specialty': specialty,
       'contact': contact,
+      'whatsappNumber': _trimOrNull(whatsappNumber),
+      'whatsappEnabled': whatsappEnabled,
     };
   }
 }
@@ -661,12 +694,16 @@ class UpdateMassageProviderModel {
     required this.specialty,
     required this.contact,
     required this.active,
+    this.whatsappNumber,
+    this.whatsappEnabled = false,
   });
 
   final String name;
   final String specialty;
   final String contact;
   final bool active;
+  final String? whatsappNumber;
+  final bool whatsappEnabled;
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{
@@ -674,28 +711,52 @@ class UpdateMassageProviderModel {
       'specialty': specialty,
       'contact': contact,
       'active': active,
+      'whatsappNumber': _trimOrNull(whatsappNumber),
+      'whatsappEnabled': whatsappEnabled,
     };
   }
 }
 
 class CreateMassageTherapistModel {
-  const CreateMassageTherapistModel({required this.name});
+  const CreateMassageTherapistModel({
+    required this.name,
+    this.whatsappNumber,
+    this.whatsappEnabled = false,
+  });
 
   final String name;
+  final String? whatsappNumber;
+  final bool whatsappEnabled;
 
   Map<String, dynamic> toJson() {
-    return <String, dynamic>{'name': name};
+    return <String, dynamic>{
+      'name': name,
+      'whatsappNumber': _trimOrNull(whatsappNumber),
+      'whatsappEnabled': whatsappEnabled,
+    };
   }
 }
 
 class UpdateMassageTherapistModel {
-  const UpdateMassageTherapistModel({required this.name, required this.active});
+  const UpdateMassageTherapistModel({
+    required this.name,
+    required this.active,
+    this.whatsappNumber,
+    this.whatsappEnabled = false,
+  });
 
   final String name;
   final bool active;
+  final String? whatsappNumber;
+  final bool whatsappEnabled;
 
   Map<String, dynamic> toJson() {
-    return <String, dynamic>{'name': name, 'active': active};
+    return <String, dynamic>{
+      'name': name,
+      'active': active,
+      'whatsappNumber': _trimOrNull(whatsappNumber),
+      'whatsappEnabled': whatsappEnabled,
+    };
   }
 }
 

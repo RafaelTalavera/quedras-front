@@ -37,6 +37,7 @@ void main() {
 
     await tester.tap(find.text('Internet'));
     await tester.pumpAndSettle();
+    expect(find.text('WhatsApp: 5548988887777'), findsOneWidget);
     await tester.enterText(
       find.widgetWithText(TextFormField, 'Titulo'),
       'Router sem sinal',
@@ -78,6 +79,7 @@ class _FakeMaintenanceService extends Fake implements MaintenanceAppService {
       'specialty': 'INTERNET',
       'name': 'Internet',
       'serviceLabel': 'Internet',
+      'contact': '+55 (48) 98888-7777',
       'whatsappEnabled': false,
       'active': true,
     }),

@@ -34,6 +34,18 @@ enum _MaintenanceQuickLauncher {
   internal,
 }
 
+enum _MaintenanceOrderCreationChoice {
+  general,
+  airConditioning,
+  elevators,
+  doorsAndWindows,
+  internet,
+  cameras,
+  telephones,
+  itSupport,
+  internal,
+}
+
 enum _ExecutiveSummaryFilter {
   allOpen,
   carryOver,
@@ -1161,13 +1173,16 @@ class _MaintenancePageState extends State<MaintenancePage>
     final Color stateColor = _operationalLocationColor(orders);
     final bool hasOrders = orders.isNotEmpty;
     return Semantics(
-      button: hasOrders,
+      button: true,
       label:
-          '${location.label}, ${orders.length} ordem${orders.length == 1 ? '' : 'ns'} aberta${orders.length == 1 ? '' : 's'}',
+          '${location.label}, ${orders.length} ordem${orders.length == 1 ? '' : 'ns'} aberta${orders.length == 1 ? '' : 's'}${hasOrders ? '' : '. Duplo clique para criar uma ordem'}',
       child: Material(
         color: Colors.transparent,
         child: InkWell(
           onTap: hasOrders ? () => _openLocationOrders(location, orders) : null,
+          onDoubleTap: hasOrders
+              ? null
+              : () => _openCreateOrderLauncherForLocation(location),
           borderRadius: BorderRadius.circular(12),
           child: ConstrainedBox(
             constraints: BoxConstraints(
@@ -1718,7 +1733,10 @@ class _MaintenancePageState extends State<MaintenancePage>
     );
   }
 
-  Future<void> _createOrder([_MaintenanceQuickLauncher? launcher]) async {
+  Future<void> _createOrder([
+    _MaintenanceQuickLauncher? launcher,
+    MaintenanceLocation? initialLocation,
+  ]) async {
     await _loadProviders();
     if (!mounted) {
       return;
@@ -1744,12 +1762,100 @@ class _MaintenancePageState extends State<MaintenancePage>
             providers: dialogProviders,
             initialProviderId: initialProviderId,
             launcherLabel: launcher == null ? null : _launcherLabel(launcher),
+            initialLocationId: initialLocation?.id,
           ),
         );
     if (draft == null) {
       return;
     }
     await _saveOrderDraft(draft);
+  }
+
+  Future<void> _openCreateOrderLauncherForLocation(
+    MaintenanceLocation location,
+  ) async {
+    final _MaintenanceOrderCreationChoice? choice =
+        await showDialog<_MaintenanceOrderCreationChoice>(
+          context: context,
+          builder: (BuildContext dialogContext) => AlertDialog(
+            title: Text('Criar ordem - ${location.label}'),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 460),
+              child: Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: _MaintenanceOrderCreationChoice.values
+                    .map(
+                      (_MaintenanceOrderCreationChoice item) =>
+                          OutlinedButton.icon(
+                            onPressed: () =>
+                                Navigator.of(dialogContext).pop(item),
+                            icon: Icon(_creationChoiceIcon(item)),
+                            label: Text(_creationChoiceLabel(item)),
+                          ),
+                    )
+                    .toList(),
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: () => Navigator.of(dialogContext).pop(),
+                child: const Text('Cancelar'),
+              ),
+            ],
+          ),
+        );
+    if (choice == null || !mounted) {
+      return;
+    }
+    await _createOrder(_launcherForCreationChoice(choice), location);
+  }
+
+  _MaintenanceQuickLauncher? _launcherForCreationChoice(
+    _MaintenanceOrderCreationChoice choice,
+  ) {
+    return switch (choice) {
+      _MaintenanceOrderCreationChoice.general => null,
+      _MaintenanceOrderCreationChoice.airConditioning =>
+        _MaintenanceQuickLauncher.airConditioning,
+      _MaintenanceOrderCreationChoice.elevators =>
+        _MaintenanceQuickLauncher.elevators,
+      _MaintenanceOrderCreationChoice.doorsAndWindows =>
+        _MaintenanceQuickLauncher.doorsAndWindows,
+      _MaintenanceOrderCreationChoice.internet =>
+        _MaintenanceQuickLauncher.internet,
+      _MaintenanceOrderCreationChoice.cameras =>
+        _MaintenanceQuickLauncher.cameras,
+      _MaintenanceOrderCreationChoice.telephones =>
+        _MaintenanceQuickLauncher.telephones,
+      _MaintenanceOrderCreationChoice.itSupport =>
+        _MaintenanceQuickLauncher.itSupport,
+      _MaintenanceOrderCreationChoice.internal =>
+        _MaintenanceQuickLauncher.internal,
+    };
+  }
+
+  String _creationChoiceLabel(_MaintenanceOrderCreationChoice choice) {
+    return switch (choice) {
+      _MaintenanceOrderCreationChoice.general => 'General',
+      _MaintenanceOrderCreationChoice.airConditioning => 'AA',
+      _MaintenanceOrderCreationChoice.elevators => 'Elevadores',
+      _MaintenanceOrderCreationChoice.doorsAndWindows => 'Portas e janelas',
+      _MaintenanceOrderCreationChoice.internet => 'Internet',
+      _MaintenanceOrderCreationChoice.cameras => 'Cameras',
+      _MaintenanceOrderCreationChoice.telephones => 'Telefones',
+      _MaintenanceOrderCreationChoice.itSupport => 'TI',
+      _MaintenanceOrderCreationChoice.internal => 'Interno',
+    };
+  }
+
+  IconData _creationChoiceIcon(_MaintenanceOrderCreationChoice choice) {
+    final _MaintenanceQuickLauncher? launcher = _launcherForCreationChoice(
+      choice,
+    );
+    return launcher == null
+        ? Icons.add_circle_outline_rounded
+        : _launcherIcon(launcher);
   }
 
   List<MaintenanceProvider> _prioritizeProviders(
@@ -2349,9 +2455,9 @@ class _MaintenancePageState extends State<MaintenancePage>
       await showManualWhatsappDialog(
         context,
         providerName: provider?.name ?? order.providerLabel,
-        phoneNumber: provider?.whatsappEnabled == true
-            ? provider?.whatsappNumber
-            : null,
+        phoneNumber: provider == null
+            ? null
+            : maintenanceProviderWhatsappNumber(provider),
         message: _buildOrderShareMessage(order),
       );
     } catch (error) {
@@ -2600,6 +2706,7 @@ class _MaintenanceOrderDialog extends StatefulWidget {
     required this.locations,
     required this.providers,
     this.initialOrder,
+    this.initialLocationId,
     this.initialProviderId,
     this.launcherLabel,
   });
@@ -2607,6 +2714,7 @@ class _MaintenanceOrderDialog extends StatefulWidget {
   final List<MaintenanceLocation> locations;
   final List<MaintenanceProvider> providers;
   final MaintenanceOrder? initialOrder;
+  final int? initialLocationId;
   final int? initialProviderId;
   final String? launcherLabel;
 
@@ -2634,7 +2742,10 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
   void initState() {
     super.initState();
     final MaintenanceOrder? order = widget.initialOrder;
-    _locationId = order?.locationId ?? widget.locations.first.id;
+    _locationId =
+        order?.locationId ??
+        widget.initialLocationId ??
+        widget.locations.first.id;
     _providerId = order?.providerId ?? widget.initialProviderId;
     _orderKind = order?.orderKind ?? MaintenanceOrderKind.corrective;
     _requestOrigin =
@@ -2689,10 +2800,12 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
     return null;
   }
 
-  String? get _selectedProviderWhatsapp =>
-      _selectedProvider?.whatsappEnabled == true
-      ? _normalizeWhatsappNumber(_selectedProvider?.whatsappNumber)
-      : null;
+  String? get _selectedProviderWhatsapp {
+    final MaintenanceProvider? provider = _selectedProvider;
+    return provider == null
+        ? null
+        : maintenanceProviderWhatsappNumber(provider);
+  }
 
   String _formatLocationPickerTitle(MaintenanceLocation location) {
     final String code = location.code.trim();
@@ -2850,6 +2963,22 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
                       setState(() => _providerId = value),
                 ),
                 const SizedBox(height: 12),
+              ] else ...<Widget>[
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.person_outline_rounded),
+                  title: Text(
+                    _selectedProvider == null
+                        ? 'Prestador não encontrado'
+                        : _maintenanceProviderDisplayName(_selectedProvider!),
+                  ),
+                  subtitle: Text(
+                    _selectedProviderWhatsapp == null
+                        ? 'WhatsApp não informado'
+                        : 'WhatsApp: $_selectedProviderWhatsapp',
+                  ),
+                ),
+                const SizedBox(height: 4),
               ],
               TextFormField(
                 controller: _titleController,

@@ -96,6 +96,84 @@ void main() {
     expect(Uri.parse(launchedUrls.single).queryParameters['text'], message);
   });
 
+  /* testWidgets('no Windows tenta o aplicativo antes de abrir o WhatsApp Web', (
+    tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    const MethodChannel launcher = MethodChannel(
+      'plugins.flutter.io/url_launcher',
+    );
+    final List<String> launchedUrls = <String>[];
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(
+          SystemChannels.platform,
+          (MethodCall call) async => null,
+        );
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(launcher, (MethodCall call) async {
+          if (call.method == 'launch') {
+            launchedUrls.add(
+              (call.arguments as Map<Object?, Object?>)['url']! as String,
+            );
+            return launchedUrls.length == 2;
+          }
+          return false;
+        });
+    addTearDown(() {
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(SystemChannels.platform, null);
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(launcher, null);
+    });
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Builder(
+          builder: (context) => TextButton(
+            onPressed: () => showManualWhatsappDialog(
+              context,
+              providerName: 'Prestador A',
+              phoneNumber: '5548999998888',
+              message: 'Aviso de teste',
+            ),
+            child: const Text('Preparar'),
+          ),
+        ),
+      ),
+    );
+    await tester.tap(find.text('Preparar'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Abrir WhatsApp'));
+    await tester.pumpAndSettle();
+
+    expect(launchedUrls, hasLength(2));
+    expect(Uri.parse(launchedUrls.first).scheme, 'whatsapp');
+    expect(Uri.parse(launchedUrls.last).host, 'web.whatsapp.com');
+    expect(
+      find.textContaining('Aplicativo Windows indisponível'),
+      findsOneWidget,
+    );
+  });
+
+  ); */
+
+  test('no Windows tenta o aplicativo antes de abrir o WhatsApp Web', () async {
+    final List<Uri> opened = <Uri>[];
+    final result = await openPreferredManualWhatsapp(
+      desktopUri: manualWhatsappWindowsUri('5548999998888', 'Aviso'),
+      webUri: manualWhatsappWebUri('5548999998888', 'Aviso'),
+      open: (Uri uri) async {
+        opened.add(uri);
+        return opened.length == 2;
+      },
+    );
+
+    expect(result, ManualWhatsappLaunchResult.web);
+    expect(opened, hasLength(2));
+    expect(opened.first.scheme, 'whatsapp');
+    expect(opened.last.host, 'web.whatsapp.com');
+  });
+
   testWidgets('mostra WhatsApp Web e copia sem numero configurado', (
     tester,
   ) async {

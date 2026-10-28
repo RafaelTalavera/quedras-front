@@ -43,7 +43,7 @@ void main() {
       await tester.ensureVisible(attendanceField);
       await tester.tap(attendanceField);
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Huesped').last);
+      await tester.tap(find.text('Hospede').last);
       await tester.pumpAndSettle();
 
       await tester.tap(find.text('Salvar atendimento'));
@@ -51,7 +51,7 @@ void main() {
 
       expect(service.createdBookings.length, 1);
       expect(service.createdBookings.single.clientName, 'Maria');
-      expect(service.createdBookings.single.guestReference, 'Huesped');
+      expect(service.createdBookings.single.guestReference, 'Hospede');
       expect(
         service.createdBookings.single.paymentMethod,
         MassagePaymentMethod.card,
@@ -59,7 +59,7 @@ void main() {
       expect(service.createdBookings.single.paymentDate, isNotNull);
       expect(find.text('Maria'), findsOneWidget);
       expect(
-        find.textContaining('Huesped - Relaxante - Danuska'),
+        find.textContaining('Hospede - Relaxante - Danuska'),
         findsOneWidget,
       );
     },
@@ -109,6 +109,44 @@ void main() {
       expect(find.text('Baixar PDF'), findsOneWidget);
       expect(find.text('Maria'), findsWidgets);
       expect(find.text('Ana'), findsWidgets);
+    },
+  );
+
+  testWidgets(
+    'permite editar un atendimento con tratamiento fuera del catalogo',
+    (WidgetTester tester) async {
+      final _FakeMassageAppService service =
+          _FakeMassageAppService.withBookings(<MassageBooking>[
+            _bookingFixture(
+              id: 12,
+              clientName: 'Maria',
+              paid: false,
+              treatment: 'QUIRO',
+            ),
+          ]);
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: MassageBookingPage(
+              massageAppService: service,
+              scheduleSyncService: _scheduleSyncService(),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      final Finder event = find.text('Maria 17:00').first;
+      await tester.ensureVisible(event);
+      await tester.tap(event);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Editar registro'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Editar atendimento'), findsOneWidget);
+      expect(find.text('QUIRO'), findsOneWidget);
+      expect(tester.takeException(), isNull);
     },
   );
 }
@@ -463,6 +501,7 @@ MassageBooking _bookingFixture({
   required int id,
   required String clientName,
   required bool paid,
+  String treatment = 'Relaxante',
 }) {
   final DateTime today = DateTime.now();
   final DateTime bookingDate = DateTime(today.year, today.month, today.day);
@@ -472,7 +511,7 @@ MassageBooking _bookingFixture({
     startTime: '17:00:00',
     clientName: clientName,
     guestReference: 'Apto 202',
-    treatment: 'Relaxante',
+    treatment: treatment,
     amount: 250,
     providerId: 1,
     providerName: 'Danuska',

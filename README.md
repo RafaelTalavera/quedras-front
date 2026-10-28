@@ -28,9 +28,20 @@ Notas de alcance:
 flutter run -d windows --dart-define=COSTANORTE_API_BASE_URL=http://127.0.0.1:8080/api/v1
 ```
 
+`127.0.0.1` solo es correcto cuando frontend y API se ejecutan en el mismo
+equipo. Para una computadora cliente de la red local, indicar la IP o DNS del
+equipo que ejecuta `quadras`:
+
+```powershell
+flutter run -d windows --dart-define=COSTANORTE_API_BASE_URL=http://192.168.1.50:8080/api/v1
+```
+
+El frontend consume solamente HTTP/JSON; no instala ni administra el backend o
+la base de datos.
+
 ## Ejecucion web
 Por defecto:
-- en deploy web, consume el backend productivo `https://quadras-back-production-4973.up.railway.app/api/v1`
+- en deploy web, consume el backend productivo `https://quadras-back-production.up.railway.app/api/v1`
 - en desarrollo local con `flutter run -d chrome`, si detecta servidor Flutter en `localhost`, usa `http://127.0.0.1:8080/api/v1`
 
 ```powershell
@@ -62,7 +73,7 @@ flutter build windows --release --dart-define=COSTANORTE_API_BASE_URL=http://127
 
 ## Build Web
 ```powershell
-flutter build web --release --dart-define=COSTANORTE_API_BASE_URL=https://quadras-back-production-4973.up.railway.app/api/v1
+flutter build web --release --base-href /costanorte/ --dart-define=COSTANORTE_API_BASE_URL=https://quadras-back-production.up.railway.app/api/v1
 ```
 
 Si el backend web no comparte origen con el frontend:
@@ -75,11 +86,11 @@ Compatibilidad temporal:
 - El cliente tambien acepta `QUEDRAS_API_BASE_URL` mientras se completa la migracion de entornos.
 
 ## Publicacion en Hostinger
-- Backend configurado para el frontend publicado: `https://quadras-back-production-4973.up.railway.app/api/v1`
+- Backend configurado para el frontend publicado: `https://quadras-back-production.up.railway.app/api/v1`
 - Generar build web:
 
 ```powershell
-flutter build web --release --dart-define=COSTANORTE_API_BASE_URL=https://quadras-back-production-4973.up.railway.app/api/v1
+flutter build web --release --base-href /costanorte/ --dart-define=COSTANORTE_API_BASE_URL=https://quadras-back-production.up.railway.app/api/v1
 ```
 
 - Subir a Hostinger todo el contenido de `build/web/` dentro de `public_html/`.

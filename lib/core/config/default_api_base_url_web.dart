@@ -1,5 +1,5 @@
 const String _productionApiBaseUrl =
-    'https://quadras-back-production-4973.up.railway.app/api/v1';
+    'https://quadras-back-production.up.railway.app/api/v1';
 
 String get defaultApiBaseUrl {
   if (_looksLikeLocalFlutterDevServer(Uri.base)) {

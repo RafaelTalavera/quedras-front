@@ -14,6 +14,7 @@ import '../../../core/widgets/app_dialog_dimensions.dart';
 import '../../../core/widgets/app_dialog_shell.dart';
 import '../../../core/widgets/brand_section_hero.dart';
 import '../../../core/widgets/horizontal_scrollable_container.dart';
+import '../../../core/widgets/operational_timeline.dart';
 import '../application/tours_app_service.dart';
 import '../domain/tours_models.dart';
 
@@ -42,6 +43,10 @@ const List<String> _months = <String>[
 ];
 
 enum ToursTravelSection { selectedDay, monthlyAgenda, summary }
+
+enum _ToursAgendaView { day, week, month }
+
+enum _ToursTimelineFilter { paid, pending, cancelled }
 
 class ToursTravelPageController {
   _ToursTravelPageState? _state;
@@ -93,9 +98,10 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   String? _agendaError;
   String? _summaryError;
   ToursTravelSection _currentSection = ToursTravelSection.selectedDay;
-  bool _providersLoaded = false;
   String? _loadedAgendaKey;
   String? _loadedSummaryKey;
+  _ToursAgendaView _agendaView = _ToursAgendaView.week;
+  _ToursTimelineFilter? _timelineFilter;
 
   List<ToursProvider> get _activeProviders =>
       _providers.where((ToursProvider p) => p.active).toList()..sort(
@@ -196,17 +202,27 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       _error = null;
     });
     try {
+      final DateTime rangeStart = _agendaView == _ToursAgendaView.week
+          ? _weekStart(_selectedDate)
+          : _agendaView == _ToursAgendaView.month
+          ? _monthStart(_selectedDate)
+          : _selectedDate;
+      final DateTime rangeEnd = _agendaView == _ToursAgendaView.week
+          ? rangeStart.add(const Duration(days: 6))
+          : _agendaView == _ToursAgendaView.month
+          ? _monthEnd(_selectedDate)
+          : _selectedDate;
       final Future<List<ToursBooking>> bookingsFuture = widget.toursAppService
           .listBookings(
-            dateFrom: _formatDate(_selectedDate),
-            dateTo: _formatDate(_selectedDate),
+            dateFrom: _formatDate(rangeStart),
+            dateTo: _formatDate(rangeEnd),
           );
       final List<ToursBooking> bookings = await bookingsFuture;
       if (!mounted) return;
       setState(() {
         _replaceCachedBookings(
-          startDate: _selectedDate,
-          endDate: _selectedDate,
+          startDate: rangeStart,
+          endDate: rangeEnd,
           bookings: bookings,
         );
         _loading = false;
@@ -287,6 +303,12 @@ class _ToursTravelPageState extends State<ToursTravelPage>
 
   DateTime _monthStart(DateTime date) => DateTime(date.year, date.month, 1);
 
+  DateTime _weekStart(DateTime date) => DateTime(
+    date.year,
+    date.month,
+    date.day,
+  ).subtract(Duration(days: date.weekday - 1));
+
   DateTime _monthEnd(DateTime date) => DateTime(date.year, date.month + 1, 0);
 
   String _monthKeyFor(DateTime date) =>
@@ -302,9 +324,6 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       _loadedSummaryKey == _summaryKeyFor(_reportStart, _reportEnd);
 
   Future<void> _loadAgenda({bool force = false}) async {
-    if (!force && _hasAgendaForSelectedMonth) {
-      return;
-    }
     if (!mounted) return;
     setState(() {
       _loadingAgenda = true;
@@ -336,9 +355,6 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   }
 
   Future<void> _reloadSummary({bool force = false}) async {
-    if (!force && _hasSummaryForSelectedRange) {
-      return;
-    }
     setState(() {
       _loadingSummary = true;
       _summaryError = null;
@@ -494,9 +510,6 @@ class _ToursTravelPageState extends State<ToursTravelPage>
   }
 
   Future<bool> _ensureProvidersLoaded({bool force = false}) async {
-    if (!force && _providersLoaded) {
-      return true;
-    }
     if (!mounted) return false;
     setState(() {
       _loadingProviders = true;
@@ -508,7 +521,6 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       if (!mounted) return false;
       setState(() {
         _providers = providers;
-        _providersLoaded = true;
         _loadingProviders = false;
       });
       return true;
@@ -577,7 +589,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
                       ? null
                       : () => _showSection(ToursTravelSection.monthlyAgenda),
                   icon: const Icon(Icons.calendar_month_rounded),
-                  label: const Text('Agenda mensal'),
+                  label: const Text('Agenda'),
                 ),
                 OutlinedButton.icon(
                   onPressed: _loading
@@ -608,8 +620,11 @@ class _ToursTravelPageState extends State<ToursTravelPage>
                 child: CircularProgressIndicator(),
               ),
             )
-          else
+          else ...<Widget>[
+            _buildOperationalAgenda(context),
+            const SizedBox(height: 18),
             _buildDayCard(context),
+          ],
         ],
       ),
     );
@@ -696,6 +711,211 @@ class _ToursTravelPageState extends State<ToursTravelPage>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildOperationalAgenda(BuildContext context) {
+    final DateTime start = _agendaView == _ToursAgendaView.week
+        ? _weekStart(_selectedDate)
+        : _selectedDate;
+    final List<DateTime> days = List<DateTime>.generate(
+      _agendaView == _ToursAgendaView.week ? 7 : 1,
+      (int index) => start.add(Duration(days: index)),
+    );
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            SegmentedButton<_ToursAgendaView>(
+              style: operationalTimelineSegmentStyle(),
+              segments: const <ButtonSegment<_ToursAgendaView>>[
+                ButtonSegment(
+                  value: _ToursAgendaView.day,
+                  label: Text('Diaria'),
+                ),
+                ButtonSegment(
+                  value: _ToursAgendaView.week,
+                  label: Text('Semanal'),
+                ),
+                ButtonSegment(
+                  value: _ToursAgendaView.month,
+                  label: Text('Mensal'),
+                ),
+              ],
+              selected: <_ToursAgendaView>{_agendaView},
+              onSelectionChanged: (Set<_ToursAgendaView> value) {
+                setState(() => _agendaView = value.first);
+                unawaited(_load(showLoading: false));
+              },
+            ),
+            const SizedBox(height: 14),
+            if (_agendaView == _ToursAgendaView.month)
+              _buildAgendaCard(context, asCard: false)
+            else ...<Widget>[
+              Row(
+                children: <Widget>[
+                  IconButton.outlined(
+                    onPressed: () => _moveAgenda(-1),
+                    icon: const Icon(Icons.chevron_left_rounded),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: () => _setAgendaDate(_today()),
+                    child: const Text('Hoje'),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.outlined(
+                    onPressed: () => _moveAgenda(1),
+                    icon: const Icon(Icons.chevron_right_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Expanded(
+                    child: Text('Horario operacional: 06:00 a 23:00'),
+                  ),
+                  Expanded(
+                    child: Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 16,
+                      runSpacing: 8,
+                      children: <Widget>[
+                        OperationalTimelineLegend(
+                          color: CostaNorteBrand.royalBlueDeep,
+                          label: 'Pago',
+                          selected:
+                              _timelineFilter == _ToursTimelineFilter.paid,
+                          onTap: () =>
+                              _toggleTimelineFilter(_ToursTimelineFilter.paid),
+                        ),
+                        OperationalTimelineLegend(
+                          color: CostaNorteBrand.goldDeep,
+                          label: 'Pendente',
+                          selected:
+                              _timelineFilter == _ToursTimelineFilter.pending,
+                          onTap: () => _toggleTimelineFilter(
+                            _ToursTimelineFilter.pending,
+                          ),
+                        ),
+                        OperationalTimelineLegend(
+                          color: CostaNorteBrand.error,
+                          label: 'Cancelado',
+                          selected:
+                              _timelineFilter == _ToursTimelineFilter.cancelled,
+                          onTap: () => _toggleTimelineFilter(
+                            _ToursTimelineFilter.cancelled,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              OperationalTimeline<ToursBooking>(
+                days: days,
+                selectedDate: _selectedDate,
+                events: _bookings
+                    .where(_matchesTimelineFilter)
+                    .map(
+                      (
+                        ToursBooking booking,
+                      ) => OperationalTimelineEvent<ToursBooking>(
+                        value: booking,
+                        date: booking.startAt,
+                        startMinutes:
+                            booking.startAt.hour * 60 + booking.startAt.minute,
+                        endMinutes:
+                            booking.endAt.hour * 60 + booking.endAt.minute,
+                        label:
+                            '${booking.clientName} ${_time(booking.startAt)}-${_time(booking.endAt)}',
+                        color: booking.status == ToursBookingStatus.cancelled
+                            ? CostaNorteBrand.error
+                            : booking.paid
+                            ? CostaNorteBrand.royalBlueDeep
+                            : CostaNorteBrand.goldDeep,
+                        draggable: _isBookingEditable(booking),
+                      ),
+                    )
+                    .toList(),
+                onDayTap: _setAgendaDate,
+                onEventTap: _openBookingActionDialog,
+                onEventMove: _moveBookingFromTimeline,
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _setAgendaDate(DateTime date) async {
+    setState(() => _selectedDate = DateTime(date.year, date.month, date.day));
+    await _load(showLoading: false);
+  }
+
+  void _toggleTimelineFilter(_ToursTimelineFilter filter) {
+    setState(() {
+      _timelineFilter = _timelineFilter == filter ? null : filter;
+    });
+  }
+
+  bool _matchesTimelineFilter(ToursBooking booking) {
+    switch (_timelineFilter) {
+      case _ToursTimelineFilter.paid:
+        return booking.status != ToursBookingStatus.cancelled && booking.paid;
+      case _ToursTimelineFilter.pending:
+        return booking.status != ToursBookingStatus.cancelled && !booking.paid;
+      case _ToursTimelineFilter.cancelled:
+        return booking.status == ToursBookingStatus.cancelled;
+      case null:
+        return true;
+    }
+  }
+
+  Future<void> _moveAgenda(int direction) async {
+    final int days = _agendaView == _ToursAgendaView.week ? 7 : 1;
+    await _setAgendaDate(_selectedDate.add(Duration(days: days * direction)));
+  }
+
+  Future<void> _moveBookingFromTimeline(
+    ToursBooking booking,
+    DateTime date,
+    int startMinutes,
+  ) async {
+    final Duration duration = booking.endAt.difference(booking.startAt);
+    final DateTime proposedStart = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      startMinutes ~/ 60,
+      startMinutes % 60,
+    );
+    final DateTime proposedEnd = proposedStart.add(duration);
+    final bool overlap = _bookings.any(
+      (ToursBooking item) =>
+          item.id != booking.id &&
+          item.status == ToursBookingStatus.scheduled &&
+          proposedStart.isBefore(item.endAt) &&
+          proposedEnd.isAfter(item.startAt),
+    );
+    if (overlap) {
+      await AppAlerts.warning(
+        context,
+        title: 'Horario ocupado',
+        message: 'Solte o agendamento em um horario livre para continuar.',
+      );
+      return;
+    }
+    await _editBooking(
+      booking: booking,
+      proposedStart: proposedStart,
+      proposedEnd: proposedEnd,
     );
   }
 
@@ -1486,7 +1706,11 @@ class _ToursTravelPageState extends State<ToursTravelPage>
     );
   }
 
-  Future<void> _editBooking({ToursBooking? booking}) async {
+  Future<void> _editBooking({
+    ToursBooking? booking,
+    DateTime? proposedStart,
+    DateTime? proposedEnd,
+  }) async {
     final bool providersReady = await _ensureProvidersLoaded();
     if (!providersReady || !mounted) {
       return;
@@ -1508,8 +1732,10 @@ class _ToursTravelPageState extends State<ToursTravelPage>
       context: context,
       builder: (BuildContext context) => _BookingDialog(
         providers: providers,
-        initialDate: selected.startAt,
+        initialDate: proposedStart ?? selected.startAt,
         booking: selected,
+        proposedStart: proposedStart,
+        proposedEnd: proposedEnd,
       ),
     );
     if (draft == null) return;
@@ -1750,6 +1976,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
         'Falha ao salvar fornecedor',
       );
     }
+    await _ensureProvidersLoaded(force: true);
   }
 
   Future<void> _persist(Future<Object?> Function() action, String title) async {
@@ -2205,9 +2432,7 @@ class _ToursBookingActionDialog extends StatelessWidget {
                 icon: Icon(
                   sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
                 ),
-                label: Text(
-                  sharing ? 'Compartilhando...' : 'Compartilhar',
-                ),
+                label: Text(sharing ? 'Compartilhando...' : 'Compartilhar'),
               ),
               OutlinedButton.icon(
                 onPressed: () =>
@@ -2395,10 +2620,14 @@ class _BookingDialog extends StatefulWidget {
     required this.providers,
     required this.initialDate,
     this.booking,
+    this.proposedStart,
+    this.proposedEnd,
   });
   final List<ToursProvider> providers;
   final DateTime initialDate;
   final ToursBooking? booking;
+  final DateTime? proposedStart;
+  final DateTime? proposedEnd;
   @override
   State<_BookingDialog> createState() => _BookingDialogState();
 }
@@ -2443,6 +2672,7 @@ class _BookingDialogState extends State<_BookingDialog> {
       orElse: () => widget.providers.first,
     );
     _startAt =
+        widget.proposedStart ??
         booking?.startAt ??
         DateTime(
           widget.initialDate.year,
@@ -2451,7 +2681,10 @@ class _BookingDialogState extends State<_BookingDialog> {
           9,
           0,
         );
-    _endAt = booking?.endAt ?? _startAt.add(const Duration(hours: 2));
+    _endAt =
+        widget.proposedEnd ??
+        booking?.endAt ??
+        _startAt.add(const Duration(hours: 2));
     _serviceType = booking?.serviceType ?? ToursServiceType.tour;
     _providerId = provider.id;
     _providerOfferingId = booking?.providerOfferingId;
@@ -3031,6 +3264,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   late final TextEditingController _offeringDescription =
       TextEditingController();
   int? _selectedId;
+  bool _showEditor = false;
   bool _active = true;
   ToursServiceType _offeringServiceType = ToursServiceType.tour;
   bool _offeringActive = true;
@@ -3065,296 +3299,351 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       title: const Text('Fornecedores'),
       content: SizedBox(
         width: 560,
-        child: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              if (_historyError != null) ...<Widget>[
-                Text(
-                  _historyError!,
-                  style: const TextStyle(color: CostaNorteBrand.error),
-                ),
-                const SizedBox(height: 12),
-              ],
-              DropdownButtonFormField<int?>(
-                value: _selectedId,
-                decoration: const InputDecoration(
-                  labelText: 'Fornecedor existente',
-                  prefixIcon: Icon(Icons.apartment_rounded),
-                ),
-                items: <DropdownMenuItem<int?>>[
-                  const DropdownMenuItem<int?>(
-                    value: null,
-                    child: Text('Novo fornecedor'),
-                  ),
-                  ...widget.providers.map(
-                    (ToursProvider item) => DropdownMenuItem<int?>(
-                      value: item.id,
-                      child: Text(item.name),
-                    ),
-                  ),
-                ],
-                onChanged: _loadProvider,
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _name,
-                decoration: const InputDecoration(
-                  labelText: 'Nome',
-                  prefixIcon: Icon(Icons.badge_rounded),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _contact,
-                decoration: const InputDecoration(
-                  labelText: 'Contato',
-                  prefixIcon: Icon(Icons.phone_rounded),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _commission,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Comissao padrao %',
-                  prefixIcon: Icon(Icons.percent_rounded),
-                ),
-              ),
-              const SizedBox(height: 12),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _active,
-                onChanged: _selectedId == null
-                    ? null
-                    : (bool value) => setState(() => _active = value),
-                title: const Text('Fornecedor ativo'),
-              ),
-              if (_selectedProvider != null)
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: OutlinedButton.icon(
-                    onPressed:
-                        _historyLoadingKey ==
-                            'provider:${_selectedProvider!.id}'
-                        ? null
-                        : () => _openProviderHistory(_selectedProvider!),
-                    icon: Icon(
-                      _historyLoadingKey == 'provider:${_selectedProvider!.id}'
-                          ? Icons.hourglass_top_rounded
-                          : Icons.history_rounded,
-                    ),
-                    label: Text(
-                      _historyLoadingKey == 'provider:${_selectedProvider!.id}'
-                          ? 'Carregando...'
-                          : 'Historico do fornecedor',
-                    ),
-                  ),
-                ),
-              const SizedBox(height: 18),
-              Text(
-                'Destinos e viagens do fornecedor',
-                style: Theme.of(context).textTheme.titleMedium,
-              ),
-              const SizedBox(height: 10),
-              if (_offerings.isEmpty)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(14),
-                  decoration: BoxDecoration(
-                    color: CostaNorteBrand.mist,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: CostaNorteBrand.line),
-                  ),
-                  child: Text(
-                    'Cadastre pelo menos um destino, passeio ou traslado para este fornecedor.',
-                  ),
-                )
-              else
-                ...List<Widget>.generate(_offerings.length, (int index) {
-                  final _ProviderOfferingDraft item = _offerings[index];
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 10),
-                    child: Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: CostaNorteBrand.foam,
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: CostaNorteBrand.line),
+        child: _showEditor
+            ? SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    if (_historyError != null) ...<Widget>[
+                      Text(
+                        _historyError!,
+                        style: const TextStyle(color: CostaNorteBrand.error),
                       ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: Text(
-                                  item.name,
-                                  style: Theme.of(context).textTheme.titleSmall,
-                                ),
-                              ),
-                              TextButton(
-                                onPressed: () => _editOffering(index),
-                                child: const Text('Editar'),
-                              ),
-                              if (_selectedProvider != null)
-                                TextButton(
-                                  onPressed:
-                                      _historyLoadingKey ==
-                                          'offering:${_selectedProvider!.id}:$index'
-                                      ? null
-                                      : () => _openOfferingHistory(
-                                          _selectedProvider!,
-                                          index,
+                      const SizedBox(height: 12),
+                    ],
+                    Text(
+                      _selectedId == null
+                          ? 'Adicionar fornecedor'
+                          : 'Editar fornecedor',
+                      style: Theme.of(context).textTheme.titleLarge,
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      _selectedId == null
+                          ? 'Cadastre o fornecedor e os serviços oferecidos.'
+                          : 'Atualize os dados de ${_selectedProvider!.name}.',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _name,
+                      decoration: const InputDecoration(
+                        labelText: 'Nome',
+                        prefixIcon: Icon(Icons.badge_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _contact,
+                      decoration: const InputDecoration(
+                        labelText: 'Contato',
+                        prefixIcon: Icon(Icons.phone_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _commission,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Comissao padrao %',
+                        prefixIcon: Icon(Icons.percent_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _active,
+                      onChanged: _selectedId == null
+                          ? null
+                          : (bool value) => setState(() => _active = value),
+                      title: const Text('Fornecedor ativo'),
+                    ),
+                    if (_selectedProvider != null)
+                      Align(
+                        alignment: Alignment.centerRight,
+                        child: OutlinedButton.icon(
+                          onPressed:
+                              _historyLoadingKey ==
+                                  'provider:${_selectedProvider!.id}'
+                              ? null
+                              : () => _openProviderHistory(_selectedProvider!),
+                          icon: Icon(
+                            _historyLoadingKey ==
+                                    'provider:${_selectedProvider!.id}'
+                                ? Icons.hourglass_top_rounded
+                                : Icons.history_rounded,
+                          ),
+                          label: Text(
+                            _historyLoadingKey ==
+                                    'provider:${_selectedProvider!.id}'
+                                ? 'Carregando...'
+                                : 'Historico do fornecedor',
+                          ),
+                        ),
+                      ),
+                    const SizedBox(height: 18),
+                    Text(
+                      'Destinos e viagens do fornecedor',
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    const SizedBox(height: 10),
+                    if (_offerings.isEmpty)
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: CostaNorteBrand.mist,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: CostaNorteBrand.line),
+                        ),
+                        child: Text(
+                          'Cadastre pelo menos um destino, passeio ou traslado para este fornecedor.',
+                        ),
+                      )
+                    else
+                      ...List<Widget>.generate(_offerings.length, (int index) {
+                        final _ProviderOfferingDraft item = _offerings[index];
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: CostaNorteBrand.foam,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: CostaNorteBrand.line),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: <Widget>[
+                                Row(
+                                  children: <Widget>[
+                                    Expanded(
+                                      child: Text(
+                                        item.name,
+                                        style: Theme.of(
+                                          context,
+                                        ).textTheme.titleSmall,
+                                      ),
+                                    ),
+                                    TextButton(
+                                      onPressed: () => _editOffering(index),
+                                      child: const Text('Editar'),
+                                    ),
+                                    if (_selectedProvider != null)
+                                      TextButton(
+                                        onPressed:
+                                            _historyLoadingKey ==
+                                                'offering:${_selectedProvider!.id}:$index'
+                                            ? null
+                                            : () => _openOfferingHistory(
+                                                _selectedProvider!,
+                                                index,
+                                              ),
+                                        child: Text(
+                                          _historyLoadingKey ==
+                                                  'offering:${_selectedProvider!.id}:$index'
+                                              ? 'Carregando...'
+                                              : 'Historico',
                                         ),
-                                  child: Text(
-                                    _historyLoadingKey ==
-                                            'offering:${_selectedProvider!.id}:$index'
-                                        ? 'Carregando...'
-                                        : 'Historico',
-                                  ),
+                                      ),
+                                    TextButton(
+                                      onPressed: () => _removeOffering(index),
+                                      child: const Text('Excluir'),
+                                    ),
+                                  ],
                                 ),
-                              TextButton(
-                                onPressed: () => _removeOffering(index),
-                                child: const Text('Excluir'),
-                              ),
-                            ],
+                                Text(
+                                  '${item.serviceType.label} · ${_money(item.amount)}${item.active ? '' : ' · Inativo'}',
+                                ),
+                                if (item.description.isNotEmpty) ...<Widget>[
+                                  const SizedBox(height: 4),
+                                  Text(item.description),
+                                ],
+                              ],
+                            ),
                           ),
-                          Text(
-                            '${item.serviceType.label} · ${_money(item.amount)}${item.active ? '' : ' · Inativo'}',
-                          ),
-                          if (item.description.isNotEmpty) ...<Widget>[
-                            const SizedBox(height: 4),
-                            Text(item.description),
-                          ],
-                        ],
+                        );
+                      }),
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<ToursServiceType>(
+                      value: _offeringServiceType,
+                      decoration: const InputDecoration(
+                        labelText: 'Tipo do item',
+                        prefixIcon: Icon(Icons.map_rounded),
+                      ),
+                      items: ToursServiceType.values
+                          .map(
+                            (ToursServiceType item) =>
+                                DropdownMenuItem<ToursServiceType>(
+                                  value: item,
+                                  child: Text(item.label),
+                                ),
+                          )
+                          .toList(),
+                      onChanged: (ToursServiceType? value) {
+                        if (value != null) {
+                          setState(() => _offeringServiceType = value);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _offeringName,
+                      decoration: const InputDecoration(
+                        labelText: 'Nome do destino ou traslado',
+                        prefixIcon: Icon(Icons.place_rounded),
                       ),
                     ),
-                  );
-                }),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<ToursServiceType>(
-                value: _offeringServiceType,
-                decoration: const InputDecoration(
-                  labelText: 'Tipo do item',
-                  prefixIcon: Icon(Icons.map_rounded),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _offeringAmount,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Valor base',
+                        prefixIcon: Icon(Icons.attach_money_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _offeringDescription,
+                      minLines: 2,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        labelText: 'Detalhes',
+                        prefixIcon: Icon(Icons.notes_rounded),
+                        alignLabelWithHint: true,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SwitchListTile(
+                      contentPadding: EdgeInsets.zero,
+                      value: _offeringActive,
+                      onChanged: (bool value) =>
+                          setState(() => _offeringActive = value),
+                      title: const Text('Item ativo'),
+                    ),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton.tonalIcon(
+                        onPressed: _upsertOffering,
+                        icon: Icon(
+                          _editingOfferingIndex == null
+                              ? Icons.add_rounded
+                              : Icons.check_rounded,
+                        ),
+                        label: Text(
+                          _editingOfferingIndex == null
+                              ? 'Adicionar item'
+                              : 'Atualizar item',
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                items: ToursServiceType.values
-                    .map(
-                      (ToursServiceType item) =>
-                          DropdownMenuItem<ToursServiceType>(
-                            value: item,
-                            child: Text(item.label),
-                          ),
-                    )
-                    .toList(),
-                onChanged: (ToursServiceType? value) {
-                  if (value != null) {
-                    setState(() => _offeringServiceType = value);
-                  }
-                },
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _offeringName,
-                decoration: const InputDecoration(
-                  labelText: 'Nome do destino ou traslado',
-                  prefixIcon: Icon(Icons.place_rounded),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _offeringAmount,
-                keyboardType: const TextInputType.numberWithOptions(
-                  decimal: true,
-                ),
-                decoration: const InputDecoration(
-                  labelText: 'Valor base',
-                  prefixIcon: Icon(Icons.attach_money_rounded),
-                ),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: _offeringDescription,
-                minLines: 2,
-                maxLines: 4,
-                decoration: const InputDecoration(
-                  labelText: 'Detalhes',
-                  prefixIcon: Icon(Icons.notes_rounded),
-                  alignLabelWithHint: true,
-                ),
-              ),
-              const SizedBox(height: 12),
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                value: _offeringActive,
-                onChanged: (bool value) =>
-                    setState(() => _offeringActive = value),
-                title: const Text('Item ativo'),
-              ),
-              Align(
-                alignment: Alignment.centerRight,
-                child: FilledButton.tonalIcon(
-                  onPressed: _upsertOffering,
-                  icon: Icon(
-                    _editingOfferingIndex == null
-                        ? Icons.add_rounded
-                        : Icons.check_rounded,
-                  ),
-                  label: Text(
-                    _editingOfferingIndex == null
-                        ? 'Adicionar item'
-                        : 'Atualizar item',
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
+              )
+            : _buildProviderList(),
       ),
       actions: <Widget>[
         TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Fechar'),
+          onPressed: _showEditor
+              ? () => setState(() => _showEditor = false)
+              : () => Navigator.of(context).pop(),
+          child: Text(_showEditor ? 'Cancelar' : 'Fechar'),
         ),
-        FilledButton(
-          onPressed: () {
-            final double? commission = _number(_commission.text);
-            if (_name.text.trim().isEmpty ||
-                _contact.text.trim().isEmpty ||
-                commission == null ||
-                commission < 0 ||
-                _offerings.isEmpty) {
-              AppAlerts.warning(
-                context,
-                title: 'Campos obrigatorios',
-                message:
-                    'Informe nome, contato, comissao valida e ao menos um destino ou traslado.',
+        if (_showEditor)
+          FilledButton(
+            onPressed: () {
+              final double? commission = _number(_commission.text);
+              if (_name.text.trim().isEmpty ||
+                  _contact.text.trim().isEmpty ||
+                  commission == null ||
+                  commission < 0 ||
+                  _offerings.isEmpty) {
+                AppAlerts.warning(
+                  context,
+                  title: 'Campos obrigatorios',
+                  message:
+                      'Informe nome, contato, comissao valida e ao menos um destino ou traslado.',
+                );
+                return;
+              }
+              Navigator.of(context).pop(
+                _ProviderDraft(
+                  id: _selectedId,
+                  name: _name.text.trim(),
+                  contact: _contact.text.trim(),
+                  defaultCommission: commission,
+                  active: _selectedId == null ? true : _active,
+                  offerings: List<_ProviderOfferingDraft>.from(_offerings),
+                ),
               );
-              return;
-            }
-            Navigator.of(context).pop(
-              _ProviderDraft(
-                id: _selectedId,
-                name: _name.text.trim(),
-                contact: _contact.text.trim(),
-                defaultCommission: commission,
-                active: _selectedId == null ? true : _active,
-                offerings: List<_ProviderOfferingDraft>.from(_offerings),
+            },
+            child: const Text('Salvar'),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildProviderList() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  Text(
+                    'Fornecedores cadastrados',
+                    style: Theme.of(context).textTheme.titleMedium,
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${widget.providers.length} fornecedores',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
               ),
-            );
-          },
-          child: const Text('Salvar'),
+            ),
+            IconButton.filled(
+              tooltip: 'Adicionar fornecedor',
+              onPressed: () => _loadProvider(null),
+              icon: const Icon(Icons.add_rounded),
+            ),
+          ],
         ),
+        const SizedBox(height: 12),
+        if (widget.providers.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 24),
+            child: Text('Nenhum fornecedor cadastrado.'),
+          )
+        else
+          ...widget.providers.map(
+            (ToursProvider provider) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: const Icon(Icons.apartment_rounded),
+              title: Text(provider.name),
+              subtitle: Text(
+                '${provider.offerings.length} serviços · ${provider.active ? 'Ativo' : 'Inativo'}',
+              ),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () => _loadProvider(provider.id),
+            ),
+          ),
       ],
     );
   }
 
   void _loadProvider(int? value) {
     setState(() {
+      _showEditor = true;
       _selectedId = value;
       final ToursProvider? provider = _selectedProvider;
       if (provider == null) {

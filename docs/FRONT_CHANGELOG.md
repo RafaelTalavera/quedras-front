@@ -8,6 +8,21 @@
 - Contrato backend: sin cambios.
 - Validacion ejecutada: `flutter analyze lib/features/maintenance/presentation/maintenance_page.dart` sin errores; permanecen 10 avisos informativos preexistentes por APIs deprecadas.
 
+## 2026-08-19 | Massagens y Tours | Adopcion de agenda temporal operativa
+- Componentes afectados: Frontend (`Massagens`, `Tours`) y widget compartido de linea temporal.
+- Impacto funcional:
+  - ambos modulos muestran la agenda semanal directamente en la pantalla principal
+  - se puede alternar entre vistas `Diaria`, `Semanal` y `Mensal`
+  - la linea temporal cubre el horario de `06:00` a `23:00`
+  - las barras distinguen estados pagado, pendiente y cancelado
+  - las actividades editables pueden arrastrarse a otro horario o dia visible y abren el formulario antes de guardar
+  - `Tours` conserva la duracion real del agendamento
+  - `Massagens` usa un bloque operativo de una hora porque su contrato actual no expone hora de fin ni duracion
+- Contrato backend: sin cambios; ambos modulos reutilizan consultas por rango y sus operaciones de edicion existentes.
+- Validacion ejecutada:
+  - analisis estatico de los tres archivos modificados sin errores nuevos
+  - pruebas de presentacion de `Massagens` y de infraestructura de `Tours`: 5 pruebas OK
+
 ## 2026-08-19 | Quadras | Agenda temporal semanal visible
 - Componente afectado: Frontend (`Quadras`)
 - Archivos tocados:

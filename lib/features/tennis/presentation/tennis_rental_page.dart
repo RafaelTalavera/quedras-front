@@ -8,6 +8,7 @@ import '../../../core/audit/audit_timeline_dialog.dart';
 import '../../../core/files/file_save_result.dart';
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/feedback/app_share.dart';
+import '../../../core/whatsapp/manual_whatsapp_dialog.dart';
 import '../../../core/sync/schedule_sync_event.dart';
 import '../../../core/sync/schedule_sync_service.dart';
 import '../../../core/theme/costa_norte_brand.dart';
@@ -90,6 +91,8 @@ enum TennisRentalSection { selectedDay, monthlyAgenda, summary }
 
 enum _CourtAgendaView { day, week, month }
 
+enum _CourtTimelineFilter { reserved, pending, cancelled }
+
 class TennisRentalPageController {
   _TennisRentalPageState? _state;
 
@@ -155,6 +158,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
   String? _loadedAgendaKey;
   String? _loadedSummaryKey;
   _CourtAgendaView _agendaView = _CourtAgendaView.week;
+  _CourtTimelineFilter? _timelineFilter;
 
   @override
   void initState() {
@@ -440,9 +444,6 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       _loadedSummaryKey == _summaryKeyFor(_reportStartDate, _reportEndDate);
 
   Future<void> _loadAgenda({bool force = false}) async {
-    if (!force && _hasAgendaForSelectedMonth) {
-      return;
-    }
     if (!mounted) {
       return;
     }
@@ -569,12 +570,11 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     });
 
     try {
-      await AppShare.shareText(
+      await showManualWhatsappDialog(
         context,
-        text: _buildBookingShareMessage(booking),
-        subject: 'Reserva de quadra ${booking.customerName}',
-        failureTitle: 'Falha ao compartilhar reserva',
-        failureMessagePrefix: 'Nao foi possivel preparar os dados da reserva',
+        providerName: booking.customerName,
+        phoneNumber: booking.customerWhatsappNumber,
+        message: _buildBookingShareMessage(booking),
       );
     } finally {
       if (mounted) {
@@ -594,15 +594,12 @@ class _TennisRentalPageState extends State<TennisRentalPage>
         ? 'Pago em ${_formatShortDate(booking.paymentDate ?? booking.bookingDate)} via ${booking.paymentMethod?.label ?? 'meio nao informado'}'
         : 'Pagamento pendente';
     final StringBuffer buffer = StringBuffer()
-      ..writeln('Reserva de quadra Hotel Costa Norte')
+      ..writeln('Reserva de quadra de tenis Hotel Costa Norte')
       ..writeln('Cliente: ${booking.customerName}')
       ..writeln('Data: ${_formatShortDate(booking.bookingDate)}')
       ..writeln(
         'Horario: ${booking.startTime.substring(0, 5)} - ${booking.endTime.substring(0, 5)}',
       )
-      ..writeln('Tipo: ${booking.customerType.label}')
-      ..writeln('Recorrencia: ${booking.isRecurring ? 'Semanal' : 'Nao'}')
-      ..writeln('Referencia: ${booking.customerReference}')
       ..writeln('Quadra: ${_formatCurrency(booking.courtAmount)}')
       ..writeln('Materiais: ${_formatCurrency(booking.materialsAmount)}')
       ..writeln('Total: ${_formatCurrency(booking.totalAmount)}')
@@ -616,9 +613,6 @@ class _TennisRentalPageState extends State<TennisRentalPage>
   }
 
   Future<void> _reloadSummary({bool force = false}) async {
-    if (!force && _hasSummaryForSelectedRange) {
-      return;
-    }
     setState(() {
       _loadingSummary = true;
       _summaryErrorMessage = null;
@@ -1114,7 +1108,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                 style: Theme.of(context).textTheme.bodyMedium,
               ),
             ),
-            const Expanded(
+            Expanded(
               child: Align(
                 alignment: Alignment.topRight,
                 child: Wrap(
@@ -1125,14 +1119,31 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                     _TimelineLegend(
                       color: CostaNorteBrand.royalBlueDeep,
                       label: 'Reservado',
+                      selected:
+                          _timelineFilter == _CourtTimelineFilter.reserved,
+                      onTap: () => _toggleTimelineFilter(
+                        _CourtTimelineFilter.reserved,
+                        onDialogRefresh,
+                      ),
                     ),
                     _TimelineLegend(
                       color: CostaNorteBrand.goldDeep,
                       label: 'Pendente',
+                      selected: _timelineFilter == _CourtTimelineFilter.pending,
+                      onTap: () => _toggleTimelineFilter(
+                        _CourtTimelineFilter.pending,
+                        onDialogRefresh,
+                      ),
                     ),
                     _TimelineLegend(
                       color: CostaNorteBrand.error,
                       label: 'Cancelado',
+                      selected:
+                          _timelineFilter == _CourtTimelineFilter.cancelled,
+                      onTap: () => _toggleTimelineFilter(
+                        _CourtTimelineFilter.cancelled,
+                        onDialogRefresh,
+                      ),
                     ),
                   ],
                 ),
@@ -1158,7 +1169,8 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                     final List<CourtBooking> bookings = _bookings
                         .where(
                           (CourtBooking item) =>
-                              _sameDay(item.bookingDate, day),
+                              _sameDay(item.bookingDate, day) &&
+                              _matchesTimelineFilter(item),
                         )
                         .toList();
                     return _TimelineDayRow(
@@ -1173,6 +1185,22 @@ class _TennisRentalPageState extends State<TennisRentalPage>
                       },
                       onBookingTap: _openBookingActionDialog,
                       onBookingMove: _openDraggedBookingEdit,
+                      onEmptySlotDoubleTap: (int startMinutes) {
+                        final TimeOfDay start = TimeOfDay(
+                          hour: startMinutes ~/ 60,
+                          minute: startMinutes % 60,
+                        );
+                        unawaited(
+                          _openCreateDialog(
+                            proposedDate: day,
+                            proposedStartTime: start,
+                            proposedEndTime: TimeOfDay(
+                              hour: (startMinutes + 60) ~/ 60,
+                              minute: (startMinutes + 60) % 60,
+                            ),
+                          ),
+                        );
+                      },
                     );
                   }),
                 ],
@@ -1181,6 +1209,29 @@ class _TennisRentalPageState extends State<TennisRentalPage>
           ),
       ],
     );
+  }
+
+  void _toggleTimelineFilter(
+    _CourtTimelineFilter filter,
+    VoidCallback onDialogRefresh,
+  ) {
+    setState(() {
+      _timelineFilter = _timelineFilter == filter ? null : filter;
+    });
+    onDialogRefresh();
+  }
+
+  bool _matchesTimelineFilter(CourtBooking booking) {
+    switch (_timelineFilter) {
+      case _CourtTimelineFilter.reserved:
+        return booking.status != CourtBookingStatus.cancelled && booking.paid;
+      case _CourtTimelineFilter.pending:
+        return booking.status != CourtBookingStatus.cancelled && !booking.paid;
+      case _CourtTimelineFilter.cancelled:
+        return booking.status == CourtBookingStatus.cancelled;
+      case null:
+        return true;
+    }
   }
 
   Widget _buildCalendarCard(
@@ -2169,12 +2220,20 @@ class _TennisRentalPageState extends State<TennisRentalPage>
     return 69;
   }
 
-  Future<void> _openCreateDialog() async {
+  Future<void> _openCreateDialog({
+    DateTime? proposedDate,
+    TimeOfDay? proposedStartTime,
+    TimeOfDay? proposedEndTime,
+  }) async {
     final _CourtBookingFormResult? result =
         await showDialog<_CourtBookingFormResult>(
           context: context,
-          builder: (BuildContext context) =>
-              _CourtBookingDialog(service: widget.courtAppService),
+          builder: (BuildContext context) => _CourtBookingDialog(
+            service: widget.courtAppService,
+            proposedDate: proposedDate,
+            proposedStartTime: proposedStartTime,
+            proposedEndTime: proposedEndTime,
+          ),
         );
     if (result == null) {
       return;
@@ -2194,11 +2253,19 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       _saving = true;
     });
     try {
-      await widget.courtAppService.createBooking(result.toCreateModel());
+      final CourtBooking created = await widget.courtAppService.createBooking(
+        result.toCreateModel(),
+      );
       if (!mounted) {
         return;
       }
       await _load();
+      if (!mounted) {
+        return;
+      }
+      if (mounted) {
+        await _shareBookingReceipt(created);
+      }
       if (!mounted) {
         return;
       }
@@ -2430,7 +2497,11 @@ class _TennisRentalPageState extends State<TennisRentalPage>
 
   Future<void> _openCalendarDayActions(DateTime date) async {
     await _setSelectedDate(date);
-    if (!mounted || _dayBookings.isEmpty) {
+    if (!mounted) {
+      return;
+    }
+    if (_dayBookings.isEmpty) {
+      await _openCreateDialog(proposedDate: date);
       return;
     }
     final CourtBooking? booking = await _pickBooking(
@@ -2727,27 +2798,71 @@ class _MetricCard extends StatelessWidget {
 }
 
 class _TimelineLegend extends StatelessWidget {
-  const _TimelineLegend({required this.color, required this.label});
+  const _TimelineLegend({
+    required this.color,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   final Color color;
   final String label;
+  final bool selected;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: <Widget>[
-        Container(
-          width: 12,
-          height: 12,
-          decoration: BoxDecoration(
-            color: color,
-            borderRadius: BorderRadius.circular(4),
+    return Tooltip(
+      message: selected
+          ? 'Clique para mostrar todos'
+          : 'Clique para mostrar somente $label',
+      child: Semantics(
+        button: true,
+        selected: selected,
+        child: Material(
+          color: selected ? color.withValues(alpha: 0.12) : Colors.transparent,
+          borderRadius: BorderRadius.circular(999),
+          child: InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(999),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(
+                  color: selected ? color : Colors.transparent,
+                  width: 1.4,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: color,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    label,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: selected ? color : null,
+                      fontWeight: selected ? FontWeight.w700 : null,
+                    ),
+                  ),
+                  if (selected) ...<Widget>[
+                    const SizedBox(width: 5),
+                    Icon(Icons.check_rounded, size: 15, color: color),
+                  ],
+                ],
+              ),
+            ),
           ),
         ),
-        const SizedBox(width: 6),
-        Text(label, style: Theme.of(context).textTheme.bodySmall),
-      ],
+      ),
     );
   }
 }
@@ -2795,6 +2910,7 @@ class _TimelineDayRow extends StatelessWidget {
     required this.onDayTap,
     required this.onBookingTap,
     required this.onBookingMove,
+    required this.onEmptySlotDoubleTap,
   });
 
   static const double _labelWidth = 108;
@@ -2809,6 +2925,7 @@ class _TimelineDayRow extends StatelessWidget {
   final ValueChanged<CourtBooking> onBookingTap;
   final void Function(CourtBooking booking, DateTime day, int startMinutes)
   onBookingMove;
+  final ValueChanged<int> onEmptySlotDoubleTap;
 
   @override
   Widget build(BuildContext context) {
@@ -2896,6 +3013,36 @@ class _TimelineDayRow extends StatelessWidget {
                           ),
                           child: Stack(
                             children: <Widget>[
+                              Positioned.fill(
+                                child: GestureDetector(
+                                  behavior: HitTestBehavior.translucent,
+                                  onDoubleTapDown: (TapDownDetails details) {
+                                    final int rawMinutes =
+                                        _openingMinutes +
+                                        (details.localPosition.dx /
+                                                _timelineWidth *
+                                                _totalMinutes)
+                                            .round();
+                                    final int snappedMinutes =
+                                        ((rawMinutes / 30).round() * 30).clamp(
+                                          _openingMinutes,
+                                          _openingMinutes + _totalMinutes - 60,
+                                        );
+                                    final bool occupied = bookings.any(
+                                      (CourtBooking booking) =>
+                                          booking.status !=
+                                              CourtBookingStatus.cancelled &&
+                                          snappedMinutes >=
+                                              _minutes(booking.startTime) &&
+                                          snappedMinutes <
+                                              _minutes(booking.endTime),
+                                    );
+                                    if (!occupied) {
+                                      onEmptySlotDoubleTap(snappedMinutes);
+                                    }
+                                  },
+                                ),
+                              ),
                               ...List<Widget>.generate(18, (int index) {
                                 return Positioned(
                                   left: index * (_timelineWidth / 17),
@@ -3231,7 +3378,7 @@ class _CourtBookingTile extends StatelessWidget {
                             : Icons.send_rounded,
                       ),
                       label: Text(
-                        sharing ? 'Compartilhando...' : 'Compartilhar',
+                        sharing ? 'Preparando...' : 'Avisar no WhatsApp',
                       ),
                     ),
                   if (onHistory != null)
@@ -3322,7 +3469,7 @@ class _CourtBookingActionDialog extends StatelessWidget {
                 icon: Icon(
                   sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
                 ),
-                label: Text(sharing ? 'Compartilhando...' : 'Compartilhar'),
+                label: Text(sharing ? 'Preparando...' : 'Avisar no WhatsApp'),
               ),
               OutlinedButton.icon(
                 onPressed: () =>
@@ -3543,6 +3690,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   late final TextEditingController _nameController;
   late final TextEditingController _referenceController;
+  late final TextEditingController _whatsappController;
   late final TextEditingController _racketsController;
   late final TextEditingController _ballsController;
   CourtCustomerType _customerType = CourtCustomerType.guest;
@@ -3558,6 +3706,9 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
   TimeOfDay _endTime = const TimeOfDay(hour: 10, minute: 0);
   DateTime _bookingDate = DateTime.now();
   DateTime? _recurrenceEndDate;
+  List<CourtBooking> _bookingsForSelectedDate = const <CourtBooking>[];
+  bool _loadingBookedSlots = true;
+  bool _bookedSlotsLoadFailed = false;
 
   @override
   void initState() {
@@ -3618,18 +3769,23 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
     _referenceController = TextEditingController(
       text: booking?.customerReference ?? '',
     );
+    _whatsappController = TextEditingController(
+      text: booking?.customerWhatsappNumber ?? '',
+    );
     _racketsController = TextEditingController(text: '$rackets');
     _ballsController = TextEditingController(text: '$balls');
     if (booking == null) {
       _syncEndTimeWithStart();
     }
     _loadPartnerCoaches();
+    _loadBookedSlots();
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _referenceController.dispose();
+    _whatsappController.dispose();
     _racketsController.dispose();
     _ballsController.dispose();
     super.dispose();
@@ -3700,6 +3856,16 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                       : null,
                 ),
                 const SizedBox(height: 12),
+                TextFormField(
+                  controller: _whatsappController,
+                  keyboardType: TextInputType.phone,
+                  decoration: const InputDecoration(
+                    labelText: 'WhatsApp do reservante',
+                    helperText: 'Opcional. Use codigo do pais e DDD.',
+                    prefixIcon: Icon(Icons.phone_rounded),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 if (widget.initialBooking == null &&
                     _customerType ==
                         CourtCustomerType.partnerCoach) ...<Widget>[
@@ -3733,7 +3899,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                   children: <Widget>[
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: _pickDate,
+                        onPressed: _loadingBookedSlots ? null : _pickDate,
                         child: Text(
                           'Fecha: ${_formatBookingDateWithWeekday(_bookingDate)}',
                         ),
@@ -3755,15 +3921,17 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                               ),
                             )
                             .toList(),
-                        onChanged: (String? value) {
-                          if (value == null) {
-                            return;
-                          }
-                          setState(() {
-                            _startTime = _parseTimeOfDay(value);
-                            _syncEndTimeWithStart();
-                          });
-                        },
+                        onChanged: _loadingBookedSlots || _bookedSlotsLoadFailed
+                            ? null
+                            : (String? value) {
+                                if (value == null) {
+                                  return;
+                                }
+                                setState(() {
+                                  _startTime = _parseTimeOfDay(value);
+                                  _syncEndTimeWithStart();
+                                });
+                              },
                       ),
                     ),
                   ],
@@ -3783,7 +3951,10 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                         ),
                       )
                       .toList(),
-                  onChanged: _availableEndSlots.isEmpty
+                  onChanged:
+                      _loadingBookedSlots ||
+                          _bookedSlotsLoadFailed ||
+                          _availableEndSlots.isEmpty
                       ? null
                       : (String? value) {
                           if (value == null) {
@@ -3796,7 +3967,11 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _availableEndSlots.isEmpty
+                  _loadingBookedSlots
+                      ? 'Consultando horarios ocupados...'
+                      : _bookedSlotsLoadFailed
+                      ? 'Nao foi possivel consultar a agenda. Escolha a data novamente para tentar.'
+                      : _availableEndSlots.isEmpty
                       ? 'La ultima franja disponible no admite una hora final posterior. Selecciona un inicio anterior.'
                       : 'Por defecto la reserva dura 1 hora, pero puedes extender el horario final.',
                   style: Theme.of(context).textTheme.bodySmall,
@@ -3871,12 +4046,17 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
         ),
         FilledButton(
           onPressed: () {
-            if (_availableEndSlots.isEmpty) {
+            if (_loadingBookedSlots ||
+                _bookedSlotsLoadFailed ||
+                _availableEndSlots.isEmpty) {
               AppAlerts.error(
                 context,
                 title: 'Horario invalido',
-                message:
-                    'Selecione um horario de inicio que tenha pelo menos um horario de termino disponivel.',
+                message: _loadingBookedSlots
+                    ? 'Aguarde a consulta dos horarios ocupados.'
+                    : _bookedSlotsLoadFailed
+                    ? 'Nao foi possivel consultar os horarios ocupados. Tente selecionar a data novamente.'
+                    : 'Selecione um horario de inicio que tenha pelo menos um horario de termino disponivel.',
               );
               return;
             }
@@ -3899,6 +4079,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                 startTime: _startTime,
                 endTime: _endTime,
                 customerName: _nameController.text.trim(),
+                customerWhatsappNumber: _whatsappController.text.trim(),
                 customerReference: _referenceController.text.trim(),
                 customerType: _customerType,
                 paid: _paid,
@@ -3939,6 +4120,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
         _recurrenceEndDate = _bookingDate;
       }
     });
+    await _loadBookedSlots();
   }
 
   void _setPaidValue(bool value) {
@@ -3968,7 +4150,9 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
   List<String> get _availableEndSlots {
     final int startMinutes = _timeOfDayToMinutes(_startTime);
     return _courtTimeSlots.where((String slot) {
-      return _timeOfDayToMinutes(_parseTimeOfDay(slot)) > startMinutes;
+      final int endMinutes = _timeOfDayToMinutes(_parseTimeOfDay(slot));
+      return endMinutes > startMinutes &&
+          !_overlapsBookedSlot(startMinutes, endMinutes);
     }).toList();
   }
 
@@ -3978,7 +4162,13 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
     for (int index = 0; index < _courtTimeSlots.length; index += 1) {
       final String slot = _courtTimeSlots[index];
       final bool hasLaterSlot = index < _courtTimeSlots.length - 1;
-      if (hasLaterSlot || slot == selectedStartLabel) {
+      final int startMinutes = _timeOfDayToMinutes(_parseTimeOfDay(slot));
+      final bool hasAvailableHour = _courtTimeSlots.any((String endSlot) {
+        final int endMinutes = _timeOfDayToMinutes(_parseTimeOfDay(endSlot));
+        return endMinutes >= startMinutes + 60 &&
+            !_overlapsBookedSlot(startMinutes, endMinutes);
+      });
+      if ((hasLaterSlot || slot == selectedStartLabel) && hasAvailableHour) {
         slots.add(slot);
       }
     }
@@ -4147,6 +4337,50 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
       return;
     }
     _endTime = _parseTimeOfDay(availableEndSlots.first);
+  }
+
+  Future<void> _loadBookedSlots() async {
+    setState(() => _loadingBookedSlots = true);
+    _bookedSlotsLoadFailed = false;
+    try {
+      final List<CourtBooking> bookings = await widget.service.listBookings(
+        bookingDate: _formatDate(_bookingDate),
+      );
+      if (!mounted) return;
+      setState(() {
+        _bookingsForSelectedDate = bookings
+            .where(
+              (CourtBooking booking) =>
+                  booking.status != CourtBookingStatus.cancelled &&
+                  booking.id != widget.initialBooking?.id,
+            )
+            .toList();
+        final List<String> starts = _availableStartSlots;
+        if (starts.isNotEmpty &&
+            !starts.contains(_formatTimeOfDay(_startTime))) {
+          _startTime = _parseTimeOfDay(starts.first);
+        }
+        _syncEndTimeWithStart();
+      });
+    } catch (_) {
+      // The backend remains the final conflict guard if this read fails.
+      if (mounted) {
+        setState(() {
+          _bookingsForSelectedDate = const <CourtBooking>[];
+          _bookedSlotsLoadFailed = true;
+        });
+      }
+    } finally {
+      if (mounted) setState(() => _loadingBookedSlots = false);
+    }
+  }
+
+  bool _overlapsBookedSlot(int startMinutes, int endMinutes) {
+    return _bookingsForSelectedDate.any((CourtBooking booking) {
+      final int bookedStart = _timeStringToMinutes(booking.startTime);
+      final int bookedEnd = _timeStringToMinutes(booking.endTime);
+      return startMinutes < bookedEnd && endMinutes > bookedStart;
+    });
   }
 }
 
@@ -4344,6 +4578,7 @@ class _CourtSettingsDialog extends StatefulWidget {
 class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
   bool _loading = true;
   bool _saving = false;
+  int _selectedCatalog = 0;
   String? _historyError;
   String? _historyLoadingKey;
   List<CourtRateSetting> _rates = <CourtRateSetting>[];
@@ -4368,7 +4603,7 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Tarifas, materiais e parceiros'),
+      title: const Text('Catálogos de tênis'),
       content: SizedBox(
         width: 720,
         child: _loading
@@ -4385,135 +4620,73 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
                       ),
                       const SizedBox(height: 12),
                     ],
-                    Text(
-                      'Tarifas',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    ..._rates.map((CourtRateSetting rate) {
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(
-                          '${rate.customerType.label} · ${rate.pricingPeriod.label}',
+                    SegmentedButton<int>(
+                      segments: <ButtonSegment<int>>[
+                        ButtonSegment<int>(
+                          value: 0,
+                          icon: const Icon(Icons.payments_outlined),
+                          label: Text('Tarifas (${_rates.length})'),
                         ),
-                        subtitle: Text(_formatCurrency(rate.amount)),
-                        trailing: Wrap(
-                          spacing: 4,
-                          children: <Widget>[
-                            IconButton(
-                              onPressed: _historyLoadingKey == 'rate:${rate.id}'
-                                  ? null
-                                  : () => _openRateHistory(rate),
-                              icon: Icon(
-                                _historyLoadingKey == 'rate:${rate.id}'
-                                    ? Icons.hourglass_top_rounded
-                                    : Icons.history_rounded,
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: _saving ? null : () => _editRate(rate),
-                              icon: const Icon(Icons.edit_rounded),
-                            ),
-                          ],
+                        ButtonSegment<int>(
+                          value: 1,
+                          icon: const Icon(Icons.sports_tennis_rounded),
+                          label: Text('Materiais (${_materials.length})'),
                         ),
-                      );
-                    }),
-                    const SizedBox(height: 18),
-                    Text(
-                      'Materiales',
-                      style: Theme.of(context).textTheme.titleMedium,
-                    ),
-                    const SizedBox(height: 12),
-                    ..._materials.map((CourtMaterialSetting material) {
-                      return ListTile(
-                        contentPadding: EdgeInsets.zero,
-                        title: Text(material.label),
-                        subtitle: Text(_formatCurrency(material.unitPrice)),
-                        trailing: Wrap(
-                          spacing: 4,
-                          children: <Widget>[
-                            IconButton(
-                              onPressed:
-                                  _historyLoadingKey ==
-                                      'material:${material.id}'
-                                  ? null
-                                  : () => _openMaterialHistory(material),
-                              icon: Icon(
-                                _historyLoadingKey == 'material:${material.id}'
-                                    ? Icons.hourglass_top_rounded
-                                    : Icons.history_rounded,
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: _saving
-                                  ? null
-                                  : () => _editMaterial(material),
-                              icon: const Icon(Icons.edit_rounded),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                    const SizedBox(height: 18),
-                    Row(
-                      children: <Widget>[
-                        Expanded(
-                          child: Text(
-                            'Professores parceiros',
-                            style: Theme.of(context).textTheme.titleMedium,
-                          ),
-                        ),
-                        FilledButton.icon(
-                          onPressed: _saving ? null : _createPartnerCoach,
-                          icon: const Icon(Icons.person_add_alt_1_rounded),
-                          label: const Text('Novo parceiro'),
+                        ButtonSegment<int>(
+                          value: 2,
+                          icon: const Icon(Icons.groups_outlined),
+                          label: Text('Parceiros (${_partnerCoaches.length})'),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: _partnerCoachSearchController,
-                      onChanged: (String value) {
+                      selected: <int>{_selectedCatalog},
+                      onSelectionChanged: (Set<int> value) {
                         setState(() {
-                          _partnerCoachSearch = value.trim().toLowerCase();
+                          _selectedCatalog = value.first;
+                          _historyError = null;
                         });
                       },
-                      decoration: const InputDecoration(
-                        labelText: 'Buscar professor',
-                        prefixIcon: Icon(Icons.search_rounded),
+                      showSelectedIcon: false,
+                      style: ButtonStyle(
+                        foregroundColor: WidgetStateProperty.resolveWith<Color>(
+                          (states) {
+                            return states.contains(WidgetState.selected)
+                                ? CostaNorteBrand.royalBlueDeep
+                                : CostaNorteBrand.mutedInk;
+                          },
+                        ),
+                        backgroundColor: WidgetStateProperty.resolveWith<Color>(
+                          (states) {
+                            return states.contains(WidgetState.selected)
+                                ? CostaNorteBrand.foam
+                                : Colors.white;
+                          },
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 12),
-                    if (_filteredPartnerCoaches.isEmpty)
+                    const SizedBox(height: 20),
+                    if (_selectedCatalog == 0) ...<Widget>[
                       Text(
-                        _partnerCoaches.isEmpty
-                            ? 'Nenhum professor parceiro cadastrado.'
-                            : 'Nenhum professor parceiro encontrado para a busca.',
-                        style: Theme.of(context).textTheme.bodyMedium,
-                      )
-                    else
-                      ..._filteredPartnerCoaches.map((CourtPartnerCoach coach) {
+                        'Tarifas',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      ..._rates.map((CourtRateSetting rate) {
                         return ListTile(
                           contentPadding: EdgeInsets.zero,
-                          title: Text(coach.name),
-                          subtitle: Text(
-                            coach.active ? 'Ativo' : 'Inativo',
-                            style: TextStyle(
-                              color: coach.active
-                                  ? CostaNorteBrand.success
-                                  : CostaNorteBrand.mutedInk,
-                            ),
+                          title: Text(
+                            '${rate.customerType.label} · ${rate.pricingPeriod.label}',
                           ),
+                          subtitle: Text(_formatCurrency(rate.amount)),
                           trailing: Wrap(
                             spacing: 4,
                             children: <Widget>[
                               IconButton(
                                 onPressed:
-                                    _historyLoadingKey == 'coach:${coach.id}'
+                                    _historyLoadingKey == 'rate:${rate.id}'
                                     ? null
-                                    : () => _openPartnerCoachHistory(coach),
+                                    : () => _openRateHistory(rate),
                                 icon: Icon(
-                                  _historyLoadingKey == 'coach:${coach.id}'
+                                  _historyLoadingKey == 'rate:${rate.id}'
                                       ? Icons.hourglass_top_rounded
                                       : Icons.history_rounded,
                                 ),
@@ -4521,13 +4694,129 @@ class _CourtSettingsDialogState extends State<_CourtSettingsDialog> {
                               IconButton(
                                 onPressed: _saving
                                     ? null
-                                    : () => _editPartnerCoach(coach),
+                                    : () => _editRate(rate),
                                 icon: const Icon(Icons.edit_rounded),
                               ),
                             ],
                           ),
                         );
                       }),
+                    ],
+                    if (_selectedCatalog == 1) ...<Widget>[
+                      Text(
+                        'Materiais',
+                        style: Theme.of(context).textTheme.titleMedium,
+                      ),
+                      const SizedBox(height: 12),
+                      ..._materials.map((CourtMaterialSetting material) {
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          title: Text(material.label),
+                          subtitle: Text(_formatCurrency(material.unitPrice)),
+                          trailing: Wrap(
+                            spacing: 4,
+                            children: <Widget>[
+                              IconButton(
+                                onPressed:
+                                    _historyLoadingKey ==
+                                        'material:${material.id}'
+                                    ? null
+                                    : () => _openMaterialHistory(material),
+                                icon: Icon(
+                                  _historyLoadingKey ==
+                                          'material:${material.id}'
+                                      ? Icons.hourglass_top_rounded
+                                      : Icons.history_rounded,
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: _saving
+                                    ? null
+                                    : () => _editMaterial(material),
+                                icon: const Icon(Icons.edit_rounded),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                    if (_selectedCatalog == 2) ...<Widget>[
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: Text(
+                              'Professores parceiros',
+                              style: Theme.of(context).textTheme.titleMedium,
+                            ),
+                          ),
+                          IconButton.filled(
+                            tooltip: 'Adicionar professor parceiro',
+                            onPressed: _saving ? null : _createPartnerCoach,
+                            icon: const Icon(Icons.add_rounded),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: _partnerCoachSearchController,
+                        onChanged: (String value) {
+                          setState(() {
+                            _partnerCoachSearch = value.trim().toLowerCase();
+                          });
+                        },
+                        decoration: const InputDecoration(
+                          labelText: 'Buscar professor',
+                          prefixIcon: Icon(Icons.search_rounded),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      if (_filteredPartnerCoaches.isEmpty)
+                        Text(
+                          _partnerCoaches.isEmpty
+                              ? 'Nenhum professor parceiro cadastrado.'
+                              : 'Nenhum professor parceiro encontrado para a busca.',
+                          style: Theme.of(context).textTheme.bodyMedium,
+                        )
+                      else
+                        ..._filteredPartnerCoaches.map((
+                          CourtPartnerCoach coach,
+                        ) {
+                          return ListTile(
+                            contentPadding: EdgeInsets.zero,
+                            title: Text(coach.name),
+                            subtitle: Text(
+                              coach.active ? 'Ativo' : 'Inativo',
+                              style: TextStyle(
+                                color: coach.active
+                                    ? CostaNorteBrand.success
+                                    : CostaNorteBrand.mutedInk,
+                              ),
+                            ),
+                            trailing: Wrap(
+                              spacing: 4,
+                              children: <Widget>[
+                                IconButton(
+                                  onPressed:
+                                      _historyLoadingKey == 'coach:${coach.id}'
+                                      ? null
+                                      : () => _openPartnerCoachHistory(coach),
+                                  icon: Icon(
+                                    _historyLoadingKey == 'coach:${coach.id}'
+                                        ? Icons.hourglass_top_rounded
+                                        : Icons.history_rounded,
+                                  ),
+                                ),
+                                IconButton(
+                                  onPressed: _saving
+                                      ? null
+                                      : () => _editPartnerCoach(coach),
+                                  icon: const Icon(Icons.edit_rounded),
+                                ),
+                              ],
+                            ),
+                          );
+                        }),
+                    ],
                   ],
                 ),
               ),
@@ -4981,6 +5270,7 @@ class _CourtBookingFormResult {
     required this.startTime,
     required this.endTime,
     required this.customerName,
+    required this.customerWhatsappNumber,
     required this.customerReference,
     required this.customerType,
     required this.paid,
@@ -4994,6 +5284,7 @@ class _CourtBookingFormResult {
   final TimeOfDay startTime;
   final TimeOfDay endTime;
   final String customerName;
+  final String customerWhatsappNumber;
   final String customerReference;
   final CourtCustomerType customerType;
   final bool paid;
@@ -5008,6 +5299,7 @@ class _CourtBookingFormResult {
       startTime: _formatTimeOfDay(startTime),
       endTime: _formatTimeOfDay(endTime),
       customerName: customerName,
+      customerWhatsappNumber: customerWhatsappNumber,
       customerReference: customerReference,
       customerType: customerType,
       paid: paid,
@@ -5025,6 +5317,7 @@ class _CourtBookingFormResult {
       startTime: _formatTimeOfDay(startTime),
       endTime: _formatTimeOfDay(endTime),
       customerName: customerName,
+      customerWhatsappNumber: customerWhatsappNumber,
       customerReference: customerReference,
       customerType: customerType,
       paid: paid,

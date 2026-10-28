@@ -50,6 +50,28 @@ Uri manualWhatsappWindowsUri(String? number, String message) {
   );
 }
 
+enum ManualWhatsappLaunchResult { desktop, web, unavailable }
+
+/// Opens the desktop protocol first and uses WhatsApp Web only if there is no
+/// registered handler or the protocol cannot be opened.
+Future<ManualWhatsappLaunchResult> openPreferredManualWhatsapp({
+  required Uri desktopUri,
+  required Uri webUri,
+  required Future<bool> Function(Uri uri) open,
+}) async {
+  try {
+    if (await open(desktopUri)) return ManualWhatsappLaunchResult.desktop;
+  } catch (_) {
+    // Try the Web fallback when the protocol handler raises an error.
+  }
+  try {
+    if (await open(webUri)) return ManualWhatsappLaunchResult.web;
+  } catch (_) {
+    // The caller presents the final recovery instructions.
+  }
+  return ManualWhatsappLaunchResult.unavailable;
+}
+
 class _ManualWhatsappDialog extends StatefulWidget {
   const _ManualWhatsappDialog({
     required this.providerName,
@@ -106,6 +128,47 @@ class _ManualWhatsappDialogState extends State<_ManualWhatsappDialog> {
     } finally {
       if (mounted) setState(() => _opening = false);
     }
+  }
+
+  /// On Windows, prefer the installed WhatsApp handler. A `true` response only
+  /// means that Windows accepted the protocol; WhatsApp still owns the final
+  /// handling of the conversation and its contents.
+  Future<void> _openPreferredOnWindows() async {
+    setState(() {
+      _opening = true;
+      _feedback = null;
+    });
+    bool copied = false;
+    try {
+      await Clipboard.setData(ClipboardData(text: widget.message));
+      copied = true;
+    } catch (_) {
+      // The fallback channel can still be opened if clipboard access fails.
+    }
+
+    final ManualWhatsappLaunchResult result = await openPreferredManualWhatsapp(
+      desktopUri: manualWhatsappWindowsUri(widget.number, widget.message),
+      webUri: manualWhatsappWebUri(widget.number, widget.message),
+      open: (Uri uri) => launchUrl(uri, mode: LaunchMode.externalApplication),
+    );
+
+    if (!mounted) return;
+    setState(() {
+      if (result == ManualWhatsappLaunchResult.desktop) {
+        _feedback = copied
+            ? 'WhatsApp para Windows aberto. Texto copiado: se não aparecer na conversa, cole com Ctrl+V.'
+            : 'WhatsApp para Windows aberto. Confira o destinatário antes de enviar.';
+      } else if (result == ManualWhatsappLaunchResult.web) {
+        _feedback = copied
+            ? 'Aplicativo Windows indisponível; WhatsApp Web aberto. Texto copiado: se não aparecer na conversa, cole com Ctrl+V.'
+            : 'Aplicativo Windows indisponível; WhatsApp Web aberto. Confira o destinatário antes de enviar.';
+      } else {
+        _feedback = copied
+            ? 'Não foi possível abrir o aplicativo Windows nem o WhatsApp Web. Texto copiado: abra o WhatsApp e cole com Ctrl+V.'
+            : 'Não foi possível abrir o WhatsApp nem copiar o texto. Tente novamente ou selecione a mensagem para copiá-la.';
+      }
+    });
+    if (mounted) setState(() => _opening = false);
   }
 
   Future<void> _copy() async {
@@ -176,14 +239,9 @@ class _ManualWhatsappDialogState extends State<_ManualWhatsappDialog> {
           child: const Text('Copiar texto'),
         ),
         if (windows)
-          OutlinedButton(
-            onPressed: _opening
-                ? null
-                : () => _open(
-                    manualWhatsappWindowsUri(widget.number, widget.message),
-                    channel: 'WhatsApp para Windows',
-                  ),
-            child: const Text('Aplicativo Windows'),
+          FilledButton(
+            onPressed: _opening ? null : _openPreferredOnWindows,
+            child: const Text('Abrir WhatsApp'),
           ),
         FilledButton(
           onPressed: _opening

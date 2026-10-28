@@ -6,14 +6,15 @@ import '../../../core/audit/audit_models.dart';
 import '../../../core/audit/audit_timeline_dialog.dart';
 import '../../../core/files/file_save_result.dart';
 import '../../../core/feedback/app_alerts.dart';
-import '../../../core/feedback/app_share.dart';
 import '../../../core/sync/schedule_sync_event.dart';
 import '../../../core/sync/schedule_sync_service.dart';
 import '../../../core/theme/costa_norte_brand.dart';
+import '../../../core/whatsapp/manual_whatsapp_dialog.dart';
 import '../../../core/widgets/app_dialog_dimensions.dart';
 import '../../../core/widgets/app_dialog_shell.dart';
 import '../../../core/widgets/brand_section_hero.dart';
 import '../../../core/widgets/horizontal_scrollable_container.dart';
+import '../../../core/widgets/operational_timeline.dart';
 import '../application/massage_app_service.dart';
 import '../application/massage_provider_report_pdf_exporter.dart';
 import '../domain/massage_models.dart';
@@ -55,6 +56,10 @@ const List<String> _treatmentTypes = <String>[
 const List<String> _attendanceTypes = <String>['Hospede', 'Externo', 'VIP'];
 
 enum MassageBookingSection { selectedDay, monthlyAgenda, monthlySummary }
+
+enum _MassageAgendaView { day, week, month }
+
+enum _MassageTimelineFilter { paid, pending, cancelled }
 
 class MassageBookingPageController {
   _MassageBookingPageState? _state;
@@ -116,7 +121,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   bool _loadingReport = false;
   bool _savingBooking = false;
   bool _savingProviders = false;
-  bool _providersLoaded = false;
   int? _processingBookingId;
   int? _sharingBookingId;
   int? _loadingHistoryBookingId;
@@ -128,6 +132,8 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   MassageBookingSection _currentSection = MassageBookingSection.selectedDay;
   String? _loadedAgendaKey;
   String? _loadedReportKey;
+  _MassageAgendaView _agendaView = _MassageAgendaView.week;
+  _MassageTimelineFilter? _timelineFilter;
 
   String _selectedTreatment = _treatmentTypes.first;
   int? _selectedProviderId;
@@ -267,7 +273,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                       ? null
                       : () => _showSection(MassageBookingSection.monthlyAgenda),
                   icon: const Icon(Icons.calendar_month_rounded),
-                  label: const Text('Agenda mensal'),
+                  label: const Text('Agenda'),
                 ),
                 OutlinedButton.icon(
                   onPressed: _loading
@@ -305,8 +311,11 @@ class _MassageBookingPageState extends State<MassageBookingPage>
                 child: CircularProgressIndicator(),
               ),
             )
-          else
+          else ...<Widget>[
+            _buildOperationalAgenda(context),
+            const SizedBox(height: 18),
             _buildDetailPanel(context),
+          ],
         ],
       ),
     );
@@ -361,15 +370,38 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     try {
       final Future<List<MassageBooking>> bookingsFuture = widget
           .massageAppService
-          .listBookings(bookingDate: _formatDateApi(_selectedDate));
+          .listBookings(
+            dateFrom: _formatDateApi(
+              _agendaView == _MassageAgendaView.week
+                  ? _weekStart(_selectedDate)
+                  : _agendaView == _MassageAgendaView.month
+                  ? _monthStart(_selectedDate)
+                  : _selectedDate,
+            ),
+            dateTo: _formatDateApi(
+              _agendaView == _MassageAgendaView.week
+                  ? _weekStart(_selectedDate).add(const Duration(days: 6))
+                  : _agendaView == _MassageAgendaView.month
+                  ? _monthEnd(_selectedDate)
+                  : _selectedDate,
+            ),
+          );
       final List<MassageBooking> bookings = await bookingsFuture;
       if (!mounted) {
         return;
       }
       setState(() {
         _replaceCachedBookings(
-          startDate: _selectedDate,
-          endDate: _selectedDate,
+          startDate: _agendaView == _MassageAgendaView.week
+              ? _weekStart(_selectedDate)
+              : _agendaView == _MassageAgendaView.month
+              ? _monthStart(_selectedDate)
+              : _selectedDate,
+          endDate: _agendaView == _MassageAgendaView.week
+              ? _weekStart(_selectedDate).add(const Duration(days: 6))
+              : _agendaView == _MassageAgendaView.month
+              ? _monthEnd(_selectedDate)
+              : _selectedDate,
           bookings: bookings,
         );
         _selectedTime = _recommendedTimeFor(
@@ -458,6 +490,11 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   }
 
   DateTime _monthStart(DateTime date) => DateTime(date.year, date.month, 1);
+  DateTime _weekStart(DateTime date) => DateTime(
+    date.year,
+    date.month,
+    date.day,
+  ).subtract(Duration(days: date.weekday - 1));
 
   DateTime _monthEnd(DateTime date) => DateTime(date.year, date.month + 1, 0);
 
@@ -474,9 +511,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       _loadedReportKey == _reportKeyFor(_reportStartDate, _reportEndDate);
 
   Future<void> _loadAgenda({bool force = false}) async {
-    if (!force && _hasAgendaForSelectedMonth) {
-      return;
-    }
     if (!mounted) {
       return;
     }
@@ -518,9 +552,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   }
 
   Future<bool> _ensureProvidersLoaded({bool force = false}) async {
-    if (!force && _providersLoaded) {
-      return true;
-    }
     if (!mounted) {
       return false;
     }
@@ -536,7 +567,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       }
       setState(() {
         _providers = providers;
-        _providersLoaded = true;
         _syncSelectedProviderAndTherapist();
         _selectedTime = _recommendedTimeFor(
           _selectedDate,
@@ -1433,7 +1463,226 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     );
   }
 
-  Future<void> _openCreateBookingDialog() async {
+  Widget _buildOperationalAgenda(BuildContext context) {
+    final DateTime start = _agendaView == _MassageAgendaView.week
+        ? _weekStart(_selectedDate)
+        : _selectedDate;
+    final List<DateTime> days = List<DateTime>.generate(
+      _agendaView == _MassageAgendaView.week ? 7 : 1,
+      (int index) => start.add(Duration(days: index)),
+    );
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            SegmentedButton<_MassageAgendaView>(
+              style: operationalTimelineSegmentStyle(),
+              segments: const <ButtonSegment<_MassageAgendaView>>[
+                ButtonSegment(
+                  value: _MassageAgendaView.day,
+                  label: Text('Diaria'),
+                ),
+                ButtonSegment(
+                  value: _MassageAgendaView.week,
+                  label: Text('Semanal'),
+                ),
+                ButtonSegment(
+                  value: _MassageAgendaView.month,
+                  label: Text('Mensal'),
+                ),
+              ],
+              selected: <_MassageAgendaView>{_agendaView},
+              onSelectionChanged: (Set<_MassageAgendaView> value) {
+                setState(() => _agendaView = value.first);
+                unawaited(_load(showLoading: false));
+              },
+            ),
+            const SizedBox(height: 14),
+            if (_agendaView == _MassageAgendaView.month)
+              _buildAgendaPanel(context, asCard: false)
+            else ...<Widget>[
+              Row(
+                children: <Widget>[
+                  IconButton.outlined(
+                    onPressed: () => _moveOperationalAgenda(-1),
+                    icon: const Icon(Icons.chevron_left_rounded),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton(
+                    onPressed: () => _setOperationalDate(DateTime.now()),
+                    child: const Text('Hoje'),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton.outlined(
+                    onPressed: () => _moveOperationalAgenda(1),
+                    icon: const Icon(Icons.chevron_right_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: <Widget>[
+                  const Expanded(
+                    child: Text('Horario operacional: 09:00 a 22:00'),
+                  ),
+                  Expanded(
+                    child: Wrap(
+                      alignment: WrapAlignment.end,
+                      spacing: 16,
+                      runSpacing: 8,
+                      children: <Widget>[
+                        OperationalTimelineLegend(
+                          color: CostaNorteBrand.royalBlueDeep,
+                          label: 'Pago',
+                          selected:
+                              _timelineFilter == _MassageTimelineFilter.paid,
+                          onTap: () => _toggleTimelineFilter(
+                            _MassageTimelineFilter.paid,
+                          ),
+                        ),
+                        OperationalTimelineLegend(
+                          color: CostaNorteBrand.goldDeep,
+                          label: 'Pendente',
+                          selected:
+                              _timelineFilter == _MassageTimelineFilter.pending,
+                          onTap: () => _toggleTimelineFilter(
+                            _MassageTimelineFilter.pending,
+                          ),
+                        ),
+                        OperationalTimelineLegend(
+                          color: CostaNorteBrand.error,
+                          label: 'Cancelado',
+                          selected:
+                              _timelineFilter ==
+                              _MassageTimelineFilter.cancelled,
+                          onTap: () => _toggleTimelineFilter(
+                            _MassageTimelineFilter.cancelled,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              OperationalTimeline<MassageBooking>(
+                days: days,
+                selectedDate: _selectedDate,
+                openingHour: 9,
+                closingHour: 22,
+                events: _bookings.where(_matchesTimelineFilter).map((
+                  MassageBooking booking,
+                ) {
+                  final int startMinutes =
+                      booking.startAt.hour * 60 + booking.startAt.minute;
+                  return OperationalTimelineEvent<MassageBooking>(
+                    value: booking,
+                    date: booking.bookingDate,
+                    startMinutes: startMinutes,
+                    endMinutes: startMinutes + 60,
+                    label:
+                        '${booking.clientName} ${booking.startTime.substring(0, 5)}',
+                    color: booking.status == MassageBookingStatus.cancelled
+                        ? CostaNorteBrand.error
+                        : booking.paid
+                        ? CostaNorteBrand.royalBlueDeep
+                        : CostaNorteBrand.goldDeep,
+                    draggable: _isBookingEditable(booking),
+                  );
+                }).toList(),
+                onDayTap: _setOperationalDate,
+                onEventTap: _openBookingActionDialog,
+                onEventMove: _moveMassageFromTimeline,
+                onEmptySlotDoubleTap: (DateTime date, int startMinutes) {
+                  unawaited(
+                    _openCreateBookingDialog(
+                      initialDate: date,
+                      initialTime:
+                          '${(startMinutes ~/ 60).toString().padLeft(2, '0')}:${(startMinutes % 60).toString().padLeft(2, '0')}',
+                    ),
+                  );
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _setOperationalDate(DateTime date) async {
+    setState(() {
+      _selectedDate = DateTime(date.year, date.month, date.day);
+      _selectedMonth = date.month - 1;
+    });
+    await _load(showLoading: false);
+  }
+
+  void _toggleTimelineFilter(_MassageTimelineFilter filter) {
+    setState(() {
+      _timelineFilter = _timelineFilter == filter ? null : filter;
+    });
+  }
+
+  bool _matchesTimelineFilter(MassageBooking booking) {
+    switch (_timelineFilter) {
+      case _MassageTimelineFilter.paid:
+        return booking.status != MassageBookingStatus.cancelled && booking.paid;
+      case _MassageTimelineFilter.pending:
+        return booking.status != MassageBookingStatus.cancelled &&
+            !booking.paid;
+      case _MassageTimelineFilter.cancelled:
+        return booking.status == MassageBookingStatus.cancelled;
+      case null:
+        return true;
+    }
+  }
+
+  Future<void> _moveOperationalAgenda(int direction) async {
+    final int days = _agendaView == _MassageAgendaView.week ? 7 : 1;
+    await _setOperationalDate(
+      _selectedDate.add(Duration(days: days * direction)),
+    );
+  }
+
+  Future<void> _moveMassageFromTimeline(
+    MassageBooking booking,
+    DateTime date,
+    int startMinutes,
+  ) async {
+    final int proposedEnd = startMinutes + 60;
+    final bool overlap = _bookings.any((MassageBooking item) {
+      if (item.id == booking.id ||
+          item.status == MassageBookingStatus.cancelled ||
+          !_sameDay(item.bookingDate, date)) {
+        return false;
+      }
+      final int itemStart = item.startAt.hour * 60 + item.startAt.minute;
+      return startMinutes < itemStart + 60 && proposedEnd > itemStart;
+    });
+    if (overlap) {
+      await AppAlerts.warning(
+        context,
+        title: 'Horario ocupado',
+        message: 'Solte o atendimento em um horario livre para continuar.',
+      );
+      return;
+    }
+    await _openEditBookingDialog(
+      booking,
+      proposedDate: date,
+      proposedTime:
+          '${(startMinutes ~/ 60).toString().padLeft(2, '0')}:${(startMinutes % 60).toString().padLeft(2, '0')}',
+    );
+  }
+
+  Future<void> _openCreateBookingDialog({
+    DateTime? initialDate,
+    String? initialTime,
+  }) async {
     final bool providersReady = await _ensureProvidersLoaded();
     if (!providersReady || !mounted) {
       return;
@@ -1444,9 +1693,9 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         return _BookingDialog(
           title: 'Lancar atendimento',
           submitLabel: 'Salvar atendimento',
-          initialDate: _selectedDate,
+          initialDate: initialDate ?? _selectedDate,
           providers: _providers,
-          initialTime: _selectedTime,
+          initialTime: initialTime ?? _selectedTime,
           initialClientName: '',
           initialGuestReference: '',
           initialTreatment: _selectedTreatment,
@@ -1455,7 +1704,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
           initialAmount: _draftAmount,
           initialPaid: _paid,
           initialPaymentMethod: _paid ? MassagePaymentMethod.card : null,
-          initialPaymentDate: _paid ? _selectedDate : null,
+          initialPaymentDate: _paid ? (initialDate ?? _selectedDate) : null,
           initialPaymentNotes: '',
         );
       },
@@ -1468,7 +1717,11 @@ class _MassageBookingPageState extends State<MassageBookingPage>
     await _createBooking(bookingDraft);
   }
 
-  Future<void> _openEditBookingDialog(MassageBooking booking) async {
+  Future<void> _openEditBookingDialog(
+    MassageBooking booking, {
+    DateTime? proposedDate,
+    String? proposedTime,
+  }) async {
     if (booking.status == MassageBookingStatus.cancelled) {
       await AppAlerts.info(
         context,
@@ -1489,10 +1742,11 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         return _BookingDialog(
           title: 'Editar atendimento',
           submitLabel: 'Salvar alteracoes',
-          initialDate: booking.bookingDate,
+          initialDate: proposedDate ?? booking.bookingDate,
           providers: _providers,
-          initialTime: _timeLabel(booking.startAt),
+          initialTime: proposedTime ?? _timeLabel(booking.startAt),
           initialClientName: booking.clientName,
+          initialClientWhatsappNumber: booking.clientWhatsappNumber ?? '',
           initialGuestReference: booking.guestReference,
           initialTreatment: booking.treatment,
           initialProviderId: booking.providerId,
@@ -1543,12 +1797,14 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       return;
     }
 
-    setState(() {
-      _providers = updatedProviders;
-      _providersLoaded = true;
-      _syncSelectedProviderAndTherapist();
-      _savingProviders = false;
-    });
+    final bool refreshed = await _ensureProvidersLoaded(force: true);
+    if (!mounted) {
+      return;
+    }
+    setState(() => _savingProviders = false);
+    if (!refreshed) {
+      return;
+    }
     if (_hasReportForSelectedRange) {
       await _reloadProviderReport(force: true);
     }
@@ -1583,6 +1839,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
               bookingDate: _formatDateApi(bookingDraft.date),
               startTime: _formatTimeApi(bookingDraft.time),
               clientName: bookingDraft.clientName,
+              clientWhatsappNumber: bookingDraft.clientWhatsappNumber,
               guestReference: bookingDraft.guestOrExternal,
               treatment: bookingDraft.treatment,
               amount: bookingDraft.amount,
@@ -1626,6 +1883,9 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         title: 'Atendimento salvo',
         message: 'Atendimento salvo para ${bookingDraft.clientName}.',
       );
+      if (mounted) {
+        await _shareBooking(created);
+      }
       if (monthChanged) {
         _loadedAgendaKey = null;
       }
@@ -1680,6 +1940,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
               bookingDate: _formatDateApi(bookingDraft.date),
               startTime: _formatTimeApi(bookingDraft.time),
               clientName: bookingDraft.clientName,
+              clientWhatsappNumber: bookingDraft.clientWhatsappNumber,
               guestReference: bookingDraft.guestOrExternal,
               treatment: bookingDraft.treatment,
               amount: bookingDraft.amount,
@@ -1724,6 +1985,9 @@ class _MassageBookingPageState extends State<MassageBookingPage>
         title: 'Atendimento atualizado',
         message: 'Atendimento atualizado para ${bookingDraft.clientName}.',
       );
+      if (mounted) {
+        await _shareBooking(updated);
+      }
       if (monthChanged) {
         _loadedAgendaKey = null;
       }
@@ -1815,6 +2079,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   Future<void> _openCalendarDayActions(DateTime date) async {
     final List<MassageBooking> bookings = _bookingsFor(date);
     if (bookings.isEmpty) {
+      await _openCreateBookingDialog(initialDate: date);
       return;
     }
 
@@ -1848,14 +2113,54 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       _sharingBookingId = booking.id;
     });
     try {
-      await AppShare.shareText(
-        context,
-        text: _buildBookingShareMessage(booking),
-        subject: 'Atendimento de massagem ${booking.clientName}',
-        failureTitle: 'Falha ao compartilhar atendimento',
-        failureMessagePrefix:
-            'Nao foi possivel preparar os dados do atendimento',
+      final MassageProvider? provider = _providerById(booking.providerId);
+      final MassageTherapist? therapist = provider?.therapists
+          .where((MassageTherapist item) => item.id == booking.therapistId)
+          .cast<MassageTherapist?>()
+          .firstOrNull;
+      final bool? sendToClient = await showDialog<bool>(
+        context: context,
+        builder: (BuildContext context) => AlertDialog(
+          title: const Text('Preparar aviso por WhatsApp'),
+          content: const Text('Escolha o destinatario do atendimento.'),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Agora nao'),
+            ),
+            OutlinedButton(
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('Cliente'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('Massagista'),
+            ),
+          ],
+        ),
       );
+      if (sendToClient == null || !mounted) return;
+      await showManualWhatsappDialog(
+        context,
+        providerName: sendToClient
+            ? booking.clientName
+            : (therapist?.name ?? booking.therapistName),
+        phoneNumber: sendToClient
+            ? booking.clientWhatsappNumber
+            : therapist?.whatsappEnabled == true
+            ? therapist?.whatsappNumber
+            : null,
+        message: _buildBookingShareMessage(booking),
+      );
+    } catch (error) {
+      if (mounted) {
+        await AppAlerts.warning(
+          context,
+          title: 'Aviso não preparado',
+          message:
+              'O atendimento foi salvo, mas o aviso não pôde ser preparado: $error',
+        );
+      }
     } finally {
       if (mounted) {
         setState(() {
@@ -2046,9 +2351,6 @@ class _MassageBookingPageState extends State<MassageBookingPage>
   }
 
   Future<void> _reloadProviderReport({bool force = false}) async {
-    if (!force && _hasReportForSelectedRange) {
-      return;
-    }
     setState(() {
       _loadingReport = true;
       _reportErrorMessage = null;
@@ -2866,7 +3168,7 @@ class _BookingTile extends StatelessWidget {
                           : Icons.send_rounded,
                     ),
                     label: Text(
-                      sharing ? 'Compartilhando...' : 'Compartilhar',
+                      sharing ? 'Preparando...' : 'Avisar no WhatsApp',
                     ),
                   ),
                 if (onHistory != null)
@@ -2899,6 +3201,7 @@ class _BookingDraft {
     required this.date,
     required this.time,
     required this.clientName,
+    required this.clientWhatsappNumber,
     required this.guestOrExternal,
     required this.treatment,
     required this.amount,
@@ -2913,6 +3216,7 @@ class _BookingDraft {
   final DateTime date;
   final String time;
   final String clientName;
+  final String? clientWhatsappNumber;
   final String guestOrExternal;
   final String treatment;
   final double amount;
@@ -2932,6 +3236,7 @@ class _BookingDialog extends StatefulWidget {
     required this.providers,
     required this.initialTime,
     required this.initialClientName,
+    this.initialClientWhatsappNumber = '',
     required this.initialGuestReference,
     required this.initialTreatment,
     required this.initialProviderId,
@@ -2949,6 +3254,7 @@ class _BookingDialog extends StatefulWidget {
   final List<MassageProvider> providers;
   final String initialTime;
   final String initialClientName;
+  final String initialClientWhatsappNumber;
   final String initialGuestReference;
   final String initialTreatment;
   final int? initialProviderId;
@@ -2966,6 +3272,7 @@ class _BookingDialog extends StatefulWidget {
 class _BookingDialogState extends State<_BookingDialog> {
   final GlobalKey<FormState> _formKey = GlobalKey<FormState>();
   late final TextEditingController _clientController;
+  late final TextEditingController _clientWhatsappController;
   late final TextEditingController _amountController;
   late final TextEditingController _paymentNotesController;
 
@@ -2983,6 +3290,9 @@ class _BookingDialogState extends State<_BookingDialog> {
   void initState() {
     super.initState();
     _clientController = TextEditingController(text: widget.initialClientName);
+    _clientWhatsappController = TextEditingController(
+      text: widget.initialClientWhatsappNumber,
+    );
     _amountController = TextEditingController(text: widget.initialAmount);
     _paymentNotesController = TextEditingController(
       text: widget.initialPaymentNotes,
@@ -3007,6 +3317,7 @@ class _BookingDialogState extends State<_BookingDialog> {
   @override
   void dispose() {
     _clientController.dispose();
+    _clientWhatsappController.dispose();
     _amountController.dispose();
     _paymentNotesController.dispose();
     super.dispose();
@@ -3017,6 +3328,8 @@ class _BookingDialogState extends State<_BookingDialog> {
     final List<MassageProvider> selectableProviders = _selectableProviders;
     final List<MassageTherapist> selectableTherapists = _selectableTherapists;
     final List<String> attendanceTypeOptions = _attendanceTypeOptions;
+    final List<String> treatmentOptions = _treatmentOptions;
+    final List<String> timeOptions = _timeOptions;
     return AppDialogShell(
       maxWidth: AppDialogDimensions.standardFormWidth,
       maxHeight: 760,
@@ -3049,13 +3362,23 @@ class _BookingDialogState extends State<_BookingDialog> {
                       ),
                     ),
                     const SizedBox(height: 12),
+                    TextFormField(
+                      controller: _clientWhatsappController,
+                      keyboardType: TextInputType.phone,
+                      decoration: const InputDecoration(
+                        labelText: 'WhatsApp do cliente',
+                        helperText: 'Opcional. Use codigo do pais e DDD.',
+                        prefixIcon: Icon(Icons.phone_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       value: _selectedTime,
                       decoration: const InputDecoration(
                         labelText: 'Horario',
                         prefixIcon: Icon(Icons.schedule_rounded),
                       ),
-                      items: _timeSlots
+                      items: timeOptions
                           .map(
                             (String value) => DropdownMenuItem<String>(
                               value: value,
@@ -3117,7 +3440,7 @@ class _BookingDialogState extends State<_BookingDialog> {
                         labelText: 'Tipo de massagem',
                         prefixIcon: Icon(Icons.spa_outlined),
                       ),
-                      items: _treatmentTypes
+                      items: treatmentOptions
                           .map(
                             (String value) => DropdownMenuItem<String>(
                               value: value,
@@ -3331,6 +3654,9 @@ class _BookingDialogState extends State<_BookingDialog> {
         date: _selectedDate,
         time: _selectedTime,
         clientName: _clientController.text.trim(),
+        clientWhatsappNumber: _clientWhatsappController.text.trim().isEmpty
+            ? null
+            : _clientWhatsappController.text.trim(),
         guestOrExternal: attendanceType,
         treatment: _selectedTreatment,
         amount: amount,
@@ -3413,6 +3739,25 @@ class _BookingDialogState extends State<_BookingDialog> {
     final String currentValue = widget.initialGuestReference.trim();
     if (currentValue.isNotEmpty && !options.contains(currentValue)) {
       options.add(currentValue);
+    }
+    return options;
+  }
+
+  List<String> get _treatmentOptions {
+    final List<String> options = <String>[..._treatmentTypes];
+    final String currentValue = widget.initialTreatment.trim();
+    if (currentValue.isNotEmpty && !options.contains(currentValue)) {
+      options.add(currentValue);
+    }
+    return options;
+  }
+
+  List<String> get _timeOptions {
+    final List<String> options = <String>[..._timeSlots];
+    final String currentValue = widget.initialTime.trim();
+    if (currentValue.isNotEmpty && !options.contains(currentValue)) {
+      options.add(currentValue);
+      options.sort();
     }
     return options;
   }
@@ -3617,9 +3962,7 @@ class _BookingActionDialog extends StatelessWidget {
                 icon: Icon(
                   sharing ? Icons.hourglass_top_rounded : Icons.send_rounded,
                 ),
-                label: Text(
-                  sharing ? 'Compartilhando...' : 'Compartilhar',
-                ),
+                label: Text(sharing ? 'Preparando...' : 'Avisar no WhatsApp'),
               ),
               OutlinedButton.icon(
                 onPressed: () =>
@@ -4019,9 +4362,12 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   final TextEditingController _nameController = TextEditingController();
   final TextEditingController _specialtyController = TextEditingController();
   final TextEditingController _contactController = TextEditingController();
+  final TextEditingController _whatsappController = TextEditingController();
   final TextEditingController _providerFilterController =
       TextEditingController();
   final TextEditingController _therapistNameController =
+      TextEditingController();
+  final TextEditingController _therapistWhatsappController =
       TextEditingController();
   final FocusNode _therapistNameFocusNode = FocusNode();
 
@@ -4029,6 +4375,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
   int? _selectedProviderId;
   bool _creatingProvider = false;
   bool _saving = false;
+  bool _whatsappEnabled = false;
+  bool _therapistWhatsappEnabled = false;
   String? _historyError;
   String? _historyLoadingKey;
 
@@ -4042,6 +4390,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
             name: provider.name,
             specialty: provider.specialty,
             contact: provider.contact,
+            whatsappNumber: provider.whatsappNumber,
+            whatsappEnabled: provider.whatsappEnabled,
             active: provider.active,
             therapists: provider.therapists
                 .map(
@@ -4049,6 +4399,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                     id: therapist.id,
                     name: therapist.name,
                     active: therapist.active,
+                    whatsappNumber: therapist.whatsappNumber,
+                    whatsappEnabled: therapist.whatsappEnabled,
                   ),
                 )
                 .toList(),
@@ -4064,8 +4416,10 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     _nameController.dispose();
     _specialtyController.dispose();
     _contactController.dispose();
+    _whatsappController.dispose();
     _providerFilterController.dispose();
     _therapistNameController.dispose();
+    _therapistWhatsappController.dispose();
     _therapistNameFocusNode.dispose();
     super.dispose();
   }
@@ -4097,239 +4451,245 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                 style: const TextStyle(color: CostaNorteBrand.error),
               ),
             ],
-            const SizedBox(height: 14),
-            _buildProviderSummary(context),
-            const SizedBox(height: 12),
-            Row(
-              children: <Widget>[
-                OutlinedButton.icon(
-                  onPressed: _saving ? null : _prepareNewProvider,
-                  icon: const Icon(Icons.add_circle_outline_rounded),
-                  label: const Text('Adicionar novo prestador'),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: TextField(
-                    controller: _providerFilterController,
-                    onChanged: (_) => setState(() {}),
-                    decoration: InputDecoration(
-                      labelText: 'Filtrar por nome',
-                      hintText: 'Digite letras do nome do prestador',
-                      prefixIcon: const Icon(Icons.search_rounded),
-                      suffixIcon: _providerFilterController.text.isEmpty
-                          ? null
-                          : IconButton(
-                              onPressed: () {
-                                setState(() {
-                                  _providerFilterController.clear();
-                                });
-                              },
-                              icon: const Icon(Icons.close_rounded),
-                            ),
+            if (!_isEditingProvider) ...<Widget>[
+              const SizedBox(height: 14),
+              _buildProviderSummary(context),
+              const SizedBox(height: 12),
+              Row(
+                children: <Widget>[
+                  IconButton.filled(
+                    tooltip: 'Adicionar prestador',
+                    onPressed: _saving ? null : _prepareNewProvider,
+                    icon: const Icon(Icons.add_rounded),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: TextField(
+                      controller: _providerFilterController,
+                      onChanged: (_) => setState(() {}),
+                      decoration: InputDecoration(
+                        labelText: 'Filtrar por nome',
+                        hintText: 'Digite letras do nome do prestador',
+                        prefixIcon: const Icon(Icons.search_rounded),
+                        suffixIcon: _providerFilterController.text.isEmpty
+                            ? null
+                            : IconButton(
+                                onPressed: () {
+                                  setState(() {
+                                    _providerFilterController.clear();
+                                  });
+                                },
+                                icon: const Icon(Icons.close_rounded),
+                              ),
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 18),
+                ],
+              ),
+              const SizedBox(height: 18),
+            ] else
+              const SizedBox(height: 14),
             Expanded(
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
-                  Expanded(
-                    flex: 5,
-                    child: _filteredProviders.isEmpty
-                        ? Container(
-                            padding: const EdgeInsets.all(18),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(18),
-                              color: Colors.white,
-                              border: Border.all(color: CostaNorteBrand.line),
-                            ),
-                            child: Text(
-                              'Nenhum prestador coincide com a busca informada.',
-                              style: Theme.of(context).textTheme.bodyMedium,
-                            ),
-                          )
-                        : ListView.separated(
-                            itemCount: _filteredProviders.length,
-                            separatorBuilder: (_, _) =>
-                                const SizedBox(height: 10),
-                            itemBuilder: (BuildContext context, int index) {
-                              final MassageProvider provider =
-                                  _filteredProviders[index];
-                              final bool selected =
-                                  provider.id == _selectedProviderId;
-                              final int activeTherapists = provider.therapists
-                                  .where(
-                                    (MassageTherapist therapist) =>
-                                        therapist.active,
-                                  )
-                                  .length;
-                              return Container(
-                                padding: const EdgeInsets.all(12),
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(
+                  if (!_isEditingProvider)
+                    Expanded(
+                      flex: 5,
+                      child: _filteredProviders.isEmpty
+                          ? Container(
+                              padding: const EdgeInsets.all(18),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(18),
+                                color: Colors.white,
+                                border: Border.all(color: CostaNorteBrand.line),
+                              ),
+                              child: Text(
+                                'Nenhum prestador coincide com a busca informada.',
+                                style: Theme.of(context).textTheme.bodyMedium,
+                              ),
+                            )
+                          : ListView.separated(
+                              itemCount: _filteredProviders.length,
+                              separatorBuilder: (_, _) =>
+                                  const SizedBox(height: 10),
+                              itemBuilder: (BuildContext context, int index) {
+                                final MassageProvider provider =
+                                    _filteredProviders[index];
+                                final bool selected =
+                                    provider.id == _selectedProviderId;
+                                final int activeTherapists = provider.therapists
+                                    .where(
+                                      (MassageTherapist therapist) =>
+                                          therapist.active,
+                                    )
+                                    .length;
+                                return Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(
+                                      color: selected
+                                          ? CostaNorteBrand.royalBlueDeep
+                                          : CostaNorteBrand.line,
+                                    ),
                                     color: selected
-                                        ? CostaNorteBrand.royalBlueDeep
-                                        : CostaNorteBrand.line,
+                                        ? CostaNorteBrand.mist
+                                        : Colors.white,
                                   ),
-                                  color: selected
-                                      ? CostaNorteBrand.mist
-                                      : Colors.white,
-                                ),
-                                child: InkWell(
-                                  borderRadius: BorderRadius.circular(14),
-                                  onTap: () {
-                                    setState(() {
-                                      _selectProvider(provider);
-                                    });
-                                  },
-                                  child: Row(
-                                    children: <Widget>[
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment:
-                                              CrossAxisAlignment.start,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(14),
+                                    onTap: () {
+                                      setState(() {
+                                        _selectProvider(provider);
+                                      });
+                                    },
+                                    child: Row(
+                                      children: <Widget>[
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.start,
+                                            children: <Widget>[
+                                              Text(
+                                                provider.name,
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .titleMedium
+                                                    ?.copyWith(
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                              ),
+                                              const SizedBox(height: 2),
+                                              Text(
+                                                provider.specialty,
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.bodyMedium,
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                provider.contact,
+                                                style: Theme.of(
+                                                  context,
+                                                ).textTheme.bodySmall,
+                                              ),
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                '$activeTherapists masajistas ativos',
+                                                style: Theme.of(context)
+                                                    .textTheme
+                                                    .bodySmall
+                                                    ?.copyWith(
+                                                      color: CostaNorteBrand
+                                                          .mutedInk,
+                                                    ),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Column(
+                                          mainAxisSize: MainAxisSize.min,
                                           children: <Widget>[
+                                            IconButton(
+                                              onPressed:
+                                                  _historyLoadingKey ==
+                                                      'provider:${provider.id}'
+                                                  ? null
+                                                  : () => _openProviderHistory(
+                                                      provider,
+                                                    ),
+                                              icon: Icon(
+                                                _historyLoadingKey ==
+                                                        'provider:${provider.id}'
+                                                    ? Icons
+                                                          .hourglass_top_rounded
+                                                    : Icons.history_rounded,
+                                              ),
+                                            ),
                                             Text(
-                                              provider.name,
+                                              provider.active ? 'ON' : 'OFF',
                                               style: Theme.of(context)
                                                   .textTheme
-                                                  .titleMedium
+                                                  .labelMedium
                                                   ?.copyWith(
                                                     fontWeight: FontWeight.w700,
+                                                    color: provider.active
+                                                        ? CostaNorteBrand
+                                                              .royalBlueDeep
+                                                        : CostaNorteBrand.error,
                                                   ),
                                             ),
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              provider.specialty,
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.bodyMedium,
-                                            ),
                                             const SizedBox(height: 4),
-                                            Text(
-                                              provider.contact,
-                                              style: Theme.of(
-                                                context,
-                                              ).textTheme.bodySmall,
-                                            ),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              '$activeTherapists masajistas ativos',
-                                              style: Theme.of(context)
-                                                  .textTheme
-                                                  .bodySmall
-                                                  ?.copyWith(
-                                                    color: CostaNorteBrand
-                                                        .mutedInk,
-                                                  ),
+                                            Switch(
+                                              value: provider.active,
+                                              onChanged: _saving
+                                                  ? null
+                                                  : (bool value) =>
+                                                        _toggleProvider(
+                                                          provider.id,
+                                                          value,
+                                                        ),
                                             ),
                                           ],
                                         ),
-                                      ),
-                                      const SizedBox(width: 12),
-                                      Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: <Widget>[
-                                          IconButton(
-                                            onPressed:
-                                                _historyLoadingKey ==
-                                                    'provider:${provider.id}'
-                                                ? null
-                                                : () => _openProviderHistory(
-                                                    provider,
-                                                  ),
-                                            icon: Icon(
-                                              _historyLoadingKey ==
-                                                      'provider:${provider.id}'
-                                                  ? Icons.hourglass_top_rounded
-                                                  : Icons.history_rounded,
-                                            ),
-                                          ),
-                                          Text(
-                                            provider.active ? 'ON' : 'OFF',
-                                            style: Theme.of(context)
-                                                .textTheme
-                                                .labelMedium
-                                                ?.copyWith(
-                                                  fontWeight: FontWeight.w700,
-                                                  color: provider.active
-                                                      ? CostaNorteBrand
-                                                            .royalBlueDeep
-                                                      : CostaNorteBrand.error,
-                                                ),
-                                          ),
-                                          const SizedBox(height: 4),
-                                          Switch(
-                                            value: provider.active,
-                                            onChanged: _saving
-                                                ? null
-                                                : (bool value) =>
-                                                      _toggleProvider(
-                                                        provider.id,
-                                                        value,
-                                                      ),
-                                          ),
-                                        ],
-                                      ),
-                                    ],
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                    ),
+                  if (_isEditingProvider)
+                    Expanded(
+                      flex: 6,
+                      child: Container(
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(20),
+                          color: CostaNorteBrand.mist,
+                          border: Border.all(color: CostaNorteBrand.line),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: <Widget>[
+                            Expanded(
+                              child: SingleChildScrollView(
+                                child: _buildProviderEditor(context),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: <Widget>[
+                                Expanded(
+                                  child: OutlinedButton(
+                                    onPressed: _closeProviderEditor,
+                                    child: const Text('Cancelar'),
                                   ),
                                 ),
-                              );
-                            },
-                          ),
-                  ),
-                  const SizedBox(width: 20),
-                  Expanded(
-                    flex: 6,
-                    child: Container(
-                      padding: const EdgeInsets.all(18),
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        color: CostaNorteBrand.mist,
-                        border: Border.all(color: CostaNorteBrand.line),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: <Widget>[
-                          Expanded(
-                            child: SingleChildScrollView(
-                              child: _buildProviderEditor(context),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: FilledButton(
+                                    onPressed: _saving
+                                        ? null
+                                        : () {
+                                            Navigator.of(
+                                              context,
+                                            ).pop<List<MassageProvider>>(
+                                              _providers,
+                                            );
+                                          },
+                                    child: const Text('Aplicar'),
+                                  ),
+                                ),
+                              ],
                             ),
-                          ),
-                          const SizedBox(height: 16),
-                          Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: OutlinedButton(
-                                  onPressed: () => Navigator.of(context).pop(),
-                                  child: const Text('Cancelar'),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: FilledButton(
-                                  onPressed: _saving
-                                      ? null
-                                      : () {
-                                          Navigator.of(
-                                            context,
-                                          ).pop<List<MassageProvider>>(
-                                            _providers,
-                                          );
-                                        },
-                                  child: const Text('Aplicar'),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
                     ),
-                  ),
                 ],
               ),
             ),
@@ -4475,6 +4835,22 @@ class _ProviderDialogState extends State<_ProviderDialog> {
           controller: _contactController,
           decoration: const InputDecoration(labelText: 'Contato'),
         ),
+        const SizedBox(height: 12),
+        TextField(
+          controller: _whatsappController,
+          keyboardType: TextInputType.phone,
+          decoration: const InputDecoration(
+            labelText: 'WhatsApp',
+            hintText: '5511999998888',
+            helperText: 'Numero internacional, somente digitos.',
+          ),
+        ),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          value: _whatsappEnabled,
+          onChanged: (value) => setState(() => _whatsappEnabled = value),
+          title: const Text('Disponível para contato por WhatsApp'),
+        ),
         const SizedBox(height: 16),
         FilledButton.icon(
           onPressed: _saving ? null : _saveProvider,
@@ -4596,6 +4972,21 @@ class _ProviderDialogState extends State<_ProviderDialog> {
             decoration: const InputDecoration(labelText: 'Novo masajista'),
           ),
           const SizedBox(height: 12),
+          TextField(
+            controller: _therapistWhatsappController,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              labelText: 'WhatsApp do massagista',
+            ),
+          ),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            value: _therapistWhatsappEnabled,
+            onChanged: (bool value) =>
+                setState(() => _therapistWhatsappEnabled = value),
+            title: const Text('Disponível para contato por WhatsApp'),
+          ),
+          const SizedBox(height: 12),
           FilledButton.icon(
             onPressed: _saving ? null : _addTherapist,
             icon: const Icon(Icons.person_add_alt_1_rounded),
@@ -4620,6 +5011,10 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     final String name = _nameController.text.trim();
     final String specialty = _specialtyController.text.trim();
     final String contact = _contactController.text.trim();
+    final String whatsapp = _whatsappController.text.replaceAll(
+      RegExp(r'[^0-9]'),
+      '',
+    );
     if (name.isEmpty || specialty.isEmpty || contact.isEmpty) {
       await AppAlerts.warning(
         context,
@@ -4654,6 +5049,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
               name: name,
               specialty: specialty,
               contact: contact,
+              whatsappNumber: whatsapp.isEmpty ? null : whatsapp,
+              whatsappEnabled: _whatsappEnabled && whatsapp.isNotEmpty,
             ),
           );
       if (!mounted) {
@@ -4833,6 +5230,14 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     });
   }
 
+  void _closeProviderEditor() {
+    setState(() {
+      _selectedProviderId = null;
+      _creatingProvider = false;
+      _clearProviderForm();
+    });
+  }
+
   void _selectProvider(MassageProvider provider) {
     _selectedProviderId = provider.id;
     _creatingProvider = false;
@@ -4843,14 +5248,22 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     _nameController.clear();
     _specialtyController.clear();
     _contactController.clear();
+    _whatsappController.clear();
+    _whatsappEnabled = false;
     _therapistNameController.clear();
+    _therapistWhatsappController.clear();
+    _therapistWhatsappEnabled = false;
   }
 
   void _loadProviderForm(MassageProvider provider) {
     _nameController.text = provider.name;
     _specialtyController.text = provider.specialty;
     _contactController.text = provider.contact;
+    _whatsappController.text = provider.whatsappNumber ?? '';
+    _whatsappEnabled = provider.whatsappEnabled;
     _therapistNameController.clear();
+    _therapistWhatsappController.clear();
+    _therapistWhatsappEnabled = false;
   }
 
   Future<void> _updateSelectedProvider() async {
@@ -4858,6 +5271,10 @@ class _ProviderDialogState extends State<_ProviderDialog> {
     final String name = _nameController.text.trim();
     final String specialty = _specialtyController.text.trim();
     final String contact = _contactController.text.trim();
+    final String whatsapp = _whatsappController.text.replaceAll(
+      RegExp(r'[^0-9]'),
+      '',
+    );
     if (provider == null) {
       return;
     }
@@ -4894,6 +5311,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         name: name,
         specialty: specialty,
         contact: contact,
+        whatsappNumber: whatsapp.isEmpty ? null : whatsapp,
+        whatsappEnabled: _whatsappEnabled && whatsapp.isNotEmpty,
       );
     });
 
@@ -4906,6 +5325,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
               specialty: specialty,
               contact: contact,
               active: provider.active,
+              whatsappNumber: whatsapp.isEmpty ? null : whatsapp,
+              whatsappEnabled: _whatsappEnabled && whatsapp.isNotEmpty,
             ),
           );
       if (!mounted) {
@@ -4986,7 +5407,13 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       final MassageTherapist created = await widget.massageAppService
           .createTherapist(
             provider.id,
-            CreateMassageTherapistModel(name: name),
+            CreateMassageTherapistModel(
+              name: name,
+              whatsappNumber: _therapistWhatsappController.text.trim().isEmpty
+                  ? null
+                  : _therapistWhatsappController.text.trim(),
+              whatsappEnabled: _therapistWhatsappEnabled,
+            ),
           );
       if (!mounted) {
         return;
@@ -5004,6 +5431,8 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         _saving = false;
       });
       _therapistNameController.clear();
+      _therapistWhatsappController.clear();
+      _therapistWhatsappEnabled = false;
       await AppAlerts.success(
         context,
         title: 'Massagista salvo',

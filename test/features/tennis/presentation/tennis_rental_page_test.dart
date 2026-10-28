@@ -73,6 +73,42 @@ void main() {
   );
 
   testWidgets(
+    'TennisRentalPage filtra la agenda al seleccionar una referencia de estado',
+    (WidgetTester tester) async {
+      final _FakeCourtAppService service = _FakeCourtAppService(
+        bookingDate: DateTime.now(),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: TennisRentalPage(
+              courtAppService: service,
+              scheduleSyncService: ScheduleSyncService(
+                baseUrl: 'http://localhost/api/v1/',
+                authorizationHeaderProvider: () => null,
+              ),
+            ),
+          ),
+        ),
+      );
+      await tester.pumpAndSettle();
+
+      expect(find.text('08:00-09:00'), findsOneWidget);
+
+      await tester.tap(find.text('Pendente').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('08:00-09:00'), findsNothing);
+
+      await tester.tap(find.text('Pendente').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('08:00-09:00'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
     'TennisRentalPage muestra detalle de profesor parceiro con acciones de PDF',
     (WidgetTester tester) async {
       final _FakeCourtAppService service = _FakeCourtAppService();

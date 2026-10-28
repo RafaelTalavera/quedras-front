@@ -262,7 +262,10 @@ void main() {
     expect(created.id, 101);
     expect(created.name, 'Bruna');
     expect(client.calls.single.path, 'massages/providers/1/therapists');
-    expect(client.calls.single.body, '{"name":"Bruna"}');
+    expect(
+      client.calls.single.body,
+      '{"name":"Bruna","whatsappNumber":null,"whatsappEnabled":false}',
+    );
   });
 
   test(

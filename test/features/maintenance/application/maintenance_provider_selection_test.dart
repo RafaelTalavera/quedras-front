@@ -55,12 +55,34 @@ void main() {
         ]);
     expect(selected.single.id, 2);
   });
+
+  test('recupera telefone legado persistido no contato geral', () {
+    final MaintenanceProvider provider = _provider(
+      1,
+      MaintenanceProviderSpecialty.internet,
+      contact: '+55 (48) 99999-8888',
+    );
+
+    expect(maintenanceProviderWhatsappNumber(provider), '5548999998888');
+  });
+
+  test('respeita WhatsApp explicitamente desabilitado', () {
+    final MaintenanceProvider provider = _provider(
+      1,
+      MaintenanceProviderSpecialty.internet,
+      contact: '5548999998888',
+      whatsappNumber: '5548999997777',
+    );
+
+    expect(maintenanceProviderWhatsappNumber(provider), isNull);
+  });
 }
 
 MaintenanceProvider _provider(
   int id,
   MaintenanceProviderSpecialty specialty, {
   MaintenanceProviderType type = MaintenanceProviderType.external,
+  String? contact,
   String? whatsappNumber,
   bool whatsappEnabled = false,
 }) => MaintenanceProvider(
@@ -70,7 +92,7 @@ MaintenanceProvider _provider(
   name: 'Prestador $id',
   serviceLabel: specialty.label,
   scopeDescription: null,
-  contact: null,
+  contact: contact,
   whatsappNumber: whatsappNumber,
   whatsappEnabled: whatsappEnabled,
   active: true,

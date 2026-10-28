@@ -60,8 +60,8 @@
 - La agenda temporal implementada en `Quadras` queda aprobada como referencia visual y funcional para `Quadras`, `Massagens` y `Tours`.
 - Estado actual:
   - `Quadras`: implementado.
-  - `Massagens`: adopcion pendiente cuando se intervenga su agenda.
-  - `Tours`: adopcion pendiente cuando se intervenga su agenda.
+  - `Massagens`: implementado; cada atendimento ocupa un bloque visual operativo de una hora porque el contrato actual solo informa hora de inicio.
+  - `Tours`: implementado con la duracion real entre inicio y fin.
 - La vista semanal debe ser la opcion predeterminada y permanecer visible en la pantalla principal.
 - Deben existir selectores para alternar entre vista `Diaria`, `Semanal` y `Mensal`.
 - La vista diaria y semanal debe representar el horario operativo como una linea horizontal con barras proporcionales a la hora de inicio y fin.

@@ -66,9 +66,6 @@ class _ShellPageState extends State<ShellPage> {
   ToursTravelSection _selectedToursSection = ToursTravelSection.selectedDay;
   MaintenanceSection _selectedMaintenanceSection =
       MaintenanceSection.operationalSummary;
-  bool _changingSection = false;
-  AppSection? _loadingSection;
-  int _sectionTransitionId = 0;
 
   @override
   void initState() {
@@ -185,12 +182,6 @@ class _ShellPageState extends State<ShellPage> {
                       content: content,
                     ),
             ),
-            Positioned.fill(
-              child: _SectionLoadingOverlay(
-                visible: _changingSection,
-                section: _loadingSection,
-              ),
-            ),
           ],
         ),
       ),
@@ -237,6 +228,7 @@ class _ShellPageState extends State<ShellPage> {
         return MaintenancePage(
           maintenanceAppService: widget.maintenanceAppService,
           scheduleSyncService: widget.scheduleSyncService,
+          isSupervisor: widget.sessionController.session?.isSupervisor ?? false,
           controller: _maintenancePageController,
           onSectionChanged: _handleMaintenanceSectionChanged,
         );
@@ -256,36 +248,13 @@ class _ShellPageState extends State<ShellPage> {
   }
 
   Future<void> _goToSection(AppSection section) async {
-    if (_changingSection ||
-        _selectedSection == section ||
-        !_availableSections.contains(section)) {
-      return;
-    }
-
-    final int transitionId = ++_sectionTransitionId;
-    setState(() {
-      _changingSection = true;
-      _loadingSection = section;
-    });
-
-    await Future<void>.delayed(const Duration(milliseconds: 140));
-    if (!mounted || transitionId != _sectionTransitionId) {
+    if (_selectedSection == section || !_availableSections.contains(section)) {
       return;
     }
 
     setState(() {
       _ensureSectionLoaded(section);
       _selectedSection = section;
-    });
-    await WidgetsBinding.instance.endOfFrame;
-    await Future<void>.delayed(const Duration(milliseconds: 320));
-    if (!mounted || transitionId != _sectionTransitionId) {
-      return;
-    }
-
-    setState(() {
-      _changingSection = false;
-      _loadingSection = null;
     });
   }
 
@@ -1549,90 +1518,6 @@ class _BrandHeader extends StatelessWidget {
           ),
         ),
       ],
-    );
-  }
-}
-
-class _SectionLoadingOverlay extends StatelessWidget {
-  const _SectionLoadingOverlay({required this.visible, required this.section});
-
-  final bool visible;
-  final AppSection? section;
-
-  @override
-  Widget build(BuildContext context) {
-    final String sectionLabel = section == null
-        ? 'seção'
-        : _labelForSection(section!);
-    return IgnorePointer(
-      ignoring: !visible,
-      child: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 180),
-        reverseDuration: const Duration(milliseconds: 220),
-        child: visible
-            ? Semantics(
-                key: const ValueKey<String>('section-loading'),
-                container: true,
-                liveRegion: true,
-                label: 'Carregando $sectionLabel',
-                child: ClipRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 3, sigmaY: 3),
-                    child: ColoredBox(
-                      color: CostaNorteBrand.royalBlueNight.withValues(
-                        alpha: 0.18,
-                      ),
-                      child: Center(
-                        child: Container(
-                          constraints: const BoxConstraints(minWidth: 220),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 30,
-                            vertical: 24,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.96),
-                            borderRadius: BorderRadius.circular(24),
-                            border: Border.all(color: CostaNorteBrand.line),
-                            boxShadow: const <BoxShadow>[
-                              BoxShadow(
-                                color: Color(0x29000000),
-                                blurRadius: 30,
-                                offset: Offset(0, 14),
-                              ),
-                            ],
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: <Widget>[
-                              const SizedBox(
-                                width: 42,
-                                height: 42,
-                                child: CircularProgressIndicator(
-                                  color: CostaNorteBrand.royalBlueDeep,
-                                  backgroundColor: CostaNorteBrand.gold,
-                                  strokeWidth: 4,
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Carregando $sectionLabel...',
-                                style: Theme.of(context).textTheme.titleMedium
-                                    ?.copyWith(
-                                      color: CostaNorteBrand.royalBlueNight,
-                                    ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              )
-            : const SizedBox.shrink(
-                key: ValueKey<String>('section-loading-hidden'),
-              ),
-      ),
     );
   }
 }
