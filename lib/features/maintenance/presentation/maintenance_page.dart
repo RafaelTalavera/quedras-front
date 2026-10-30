@@ -9,6 +9,7 @@ import '../../../core/audit/audit_models.dart';
 import '../../../core/audit/audit_timeline_dialog.dart';
 import '../../../core/feedback/app_alerts.dart';
 import '../../../core/files/file_save_result.dart';
+import '../../../core/network/api_exception.dart';
 import '../../../core/sync/schedule_sync_event.dart';
 import '../../../core/sync/schedule_sync_service.dart';
 import '../../../core/theme/costa_norte_brand.dart';
@@ -16,12 +17,29 @@ import '../../../core/whatsapp/manual_whatsapp_dialog.dart';
 import '../../../core/widgets/app_dialog_dimensions.dart';
 import '../../../core/widgets/app_dialog_shell.dart';
 import '../../../core/widgets/brand_section_hero.dart';
+import '../../../core/widgets/operational_timeline.dart';
 import '../application/maintenance_app_service.dart';
 import '../application/maintenance_daily_report_pdf_exporter.dart';
 import '../application/maintenance_provider_selection.dart';
 import '../domain/maintenance_models.dart';
 
 enum MaintenanceSection { operationalSummary }
+
+enum _MaintenanceAgendaMode { day, week, month }
+
+extension on _MaintenanceAgendaMode {
+  String get label => switch (this) {
+    _MaintenanceAgendaMode.day => 'diaria',
+    _MaintenanceAgendaMode.week => 'semanal',
+    _MaintenanceAgendaMode.month => 'mensal',
+  };
+
+  String get buttonLabel => switch (this) {
+    _MaintenanceAgendaMode.day => 'Dia',
+    _MaintenanceAgendaMode.week => 'Semana',
+    _MaintenanceAgendaMode.month => 'Mes',
+  };
+}
 
 enum _MaintenanceQuickLauncher {
   airConditioning,
@@ -60,6 +78,19 @@ class MaintenancePageController {
 
   Future<void> scrollToSection(MaintenanceSection section) async {
     await _state?._scrollToSection(section);
+  }
+
+  Future<bool> openOrderFromNotification(
+    int orderId,
+    DateTime referenceDate, {
+    MaintenanceNotificationType? notificationType,
+  }) async {
+    return await _state?._openOrderFromNotification(
+          orderId,
+          referenceDate,
+          notificationType: notificationType,
+        ) ??
+        false;
   }
 
   void _attach(_MaintenancePageState state) {
@@ -101,6 +132,7 @@ class _MaintenancePageState extends State<MaintenancePage>
   List<MaintenanceLocation> _locations = const <MaintenanceLocation>[];
   List<MaintenanceProvider> _providers = const <MaintenanceProvider>[];
   List<MaintenanceOrder> _orders = const <MaintenanceOrder>[];
+  MaintenanceCalendar? _calendar;
   MaintenanceDailyExecutiveReport? _executiveReport;
   late DateTime _selectedDate;
   bool _loading = true;
@@ -115,6 +147,11 @@ class _MaintenancePageState extends State<MaintenancePage>
   int? _loadingHistoryOrderId;
   String? _errorMessage;
   int? _selectedOrderId;
+  _MaintenanceAgendaMode _agendaMode = _MaintenanceAgendaMode.week;
+  int _agendaLocationId = 0;
+  int _agendaProviderId = 0;
+  String _agendaStatus = '';
+  String _agendaPriority = '';
   _ExecutiveSummaryFilter _executiveSummaryFilter =
       _ExecutiveSummaryFilter.allOpen;
   MaintenanceSection _currentSection = MaintenanceSection.operationalSummary;
@@ -284,7 +321,11 @@ class _MaintenancePageState extends State<MaintenancePage>
           else
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: <Widget>[_buildOperationalMapCard()],
+              children: <Widget>[
+                _buildMaintenanceAgendaCard(),
+                const SizedBox(height: 16),
+                _buildOperationalMapCard(),
+              ],
             ),
         ],
       ),
@@ -305,6 +346,432 @@ class _MaintenancePageState extends State<MaintenancePage>
         const SizedBox(height: 8),
         Wrap(spacing: 12, runSpacing: 8, children: buttons),
       ],
+    );
+  }
+
+  Widget _buildMaintenanceAgendaCard() {
+    final (DateTime rangeStart, DateTime rangeEndExclusive) = _agendaRange(
+      _selectedDate,
+    );
+    final List<DateTime> days = List<DateTime>.generate(
+      rangeEndExclusive.difference(rangeStart).inDays,
+      (int index) => rangeStart.add(Duration(days: index)),
+    );
+    final MaintenanceCalendar? calendar = _calendar;
+    final List<MaintenanceOrder> scheduled =
+        (calendar?.scheduledOrders ?? const <MaintenanceOrder>[])
+            .where(
+              (MaintenanceOrder order) =>
+                  order.scheduledStartAt != null &&
+                  order.scheduledEndAt != null,
+            )
+            .toList();
+    final List<MaintenanceOrder> backlog =
+        calendar?.backlogOrders ?? const <MaintenanceOrder>[];
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Row(
+              children: <Widget>[
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(
+                        'Agenda ${_agendaMode.label} de manutencao',
+                        style: Theme.of(context).textTheme.titleLarge,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '${_shortDate(days.first)} a ${_shortDate(days.last)} · Horario operacional 06:00-23:00',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    ],
+                  ),
+                ),
+                IconButton.outlined(
+                  tooltip: 'Periodo anterior',
+                  onPressed: _refreshingData
+                      ? null
+                      : () => _moveAgendaPeriod(-1),
+                  icon: const Icon(Icons.chevron_left_rounded),
+                ),
+                const SizedBox(width: 8),
+                OutlinedButton(
+                  onPressed: _refreshingData
+                      ? null
+                      : () => _setAgendaDate(_today()),
+                  child: const Text('Hoje'),
+                ),
+                const SizedBox(width: 8),
+                IconButton.outlined(
+                  tooltip: 'Proximo periodo',
+                  onPressed: _refreshingData
+                      ? null
+                      : () => _moveAgendaPeriod(1),
+                  icon: const Icon(Icons.chevron_right_rounded),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            SegmentedButton<_MaintenanceAgendaMode>(
+              segments: _MaintenanceAgendaMode.values
+                  .map(
+                    (_MaintenanceAgendaMode mode) => ButtonSegment(
+                      value: mode,
+                      label: Text(mode.buttonLabel),
+                    ),
+                  )
+                  .toList(),
+              selected: <_MaintenanceAgendaMode>{_agendaMode},
+              onSelectionChanged: _refreshingData
+                  ? null
+                  : (Set<_MaintenanceAgendaMode> selection) {
+                      _changeAgendaMode(selection.single);
+                    },
+            ),
+            const SizedBox(height: 14),
+            _buildAgendaFilters(),
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 14,
+              runSpacing: 8,
+              children: const <Widget>[
+                OperationalTimelineLegend(
+                  color: CostaNorteBrand.royalBlueDeep,
+                  label: 'Agendada',
+                ),
+                OperationalTimelineLegend(
+                  color: CostaNorteBrand.success,
+                  label: 'Em andamento / concluida',
+                ),
+                OperationalTimelineLegend(
+                  color: CostaNorteBrand.error,
+                  label: 'Cancelada',
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (scheduled.isEmpty)
+              _emptyBox('Nao ha ordens agendadas neste periodo.')
+            else if (_agendaMode == _MaintenanceAgendaMode.month)
+              _buildMonthlyMaintenanceAgenda(scheduled)
+            else
+              OperationalTimeline<MaintenanceOrder>(
+                days: days,
+                selectedDate: _selectedDate,
+                events: scheduled.expand(_maintenanceTimelineEvents).toList(),
+                onDayTap: _setAgendaDate,
+                onEventTap: _openOrderActionDialog,
+                onEventMove: _moveMaintenanceTimelineEvent,
+              ),
+            const SizedBox(height: 18),
+            Text(
+              'Backlog sem agenda (${backlog.length}${calendar?.backlogHasMore == true ? '+' : ''})',
+              style: Theme.of(context).textTheme.titleMedium,
+            ),
+            const SizedBox(height: 8),
+            if (backlog.isEmpty)
+              Text(
+                'Nenhuma ordem aberta aguarda agendamento.',
+                style: Theme.of(context).textTheme.bodySmall,
+              )
+            else
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: backlog
+                    .map(
+                      (MaintenanceOrder order) => ActionChip(
+                        avatar: Icon(
+                          order.priority == MaintenancePriority.urgent
+                              ? Icons.priority_high_rounded
+                              : Icons.build_outlined,
+                          size: 18,
+                        ),
+                        label: Text(
+                          '${order.locationDisplayLabel} · ${order.title}',
+                        ),
+                        onPressed: () => _openOrderActionDialog(order),
+                      ),
+                    )
+                    .toList(),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAgendaFilters() {
+    return Wrap(
+      spacing: 10,
+      runSpacing: 10,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: <Widget>[
+        _agendaDropdown<int>(
+          label: 'Local',
+          value: _agendaLocationId,
+          items: <DropdownMenuItem<int>>[
+            const DropdownMenuItem<int>(value: 0, child: Text('Todos')),
+            ..._locations.map(
+              (MaintenanceLocation location) => DropdownMenuItem<int>(
+                value: location.id,
+                child: Text('${location.code} - ${location.label}'),
+              ),
+            ),
+          ],
+          onChanged: (int value) =>
+              _changeAgendaFilter(() => _agendaLocationId = value),
+        ),
+        _agendaDropdown<int>(
+          label: 'Prestador',
+          value: _agendaProviderId,
+          items: <DropdownMenuItem<int>>[
+            const DropdownMenuItem<int>(value: 0, child: Text('Todos')),
+            ..._providers.map(
+              (MaintenanceProvider provider) => DropdownMenuItem<int>(
+                value: provider.id,
+                child: Text(provider.name),
+              ),
+            ),
+          ],
+          onChanged: (int value) =>
+              _changeAgendaFilter(() => _agendaProviderId = value),
+        ),
+        _agendaDropdown<String>(
+          label: 'Estado',
+          value: _agendaStatus,
+          items: <DropdownMenuItem<String>>[
+            const DropdownMenuItem<String>(value: '', child: Text('Todos')),
+            ...MaintenanceOrderStatus.values.map(
+              (MaintenanceOrderStatus status) => DropdownMenuItem<String>(
+                value: status.apiValue,
+                child: Text(status.label),
+              ),
+            ),
+          ],
+          onChanged: (String value) =>
+              _changeAgendaFilter(() => _agendaStatus = value),
+        ),
+        _agendaDropdown<String>(
+          label: 'Prioridade',
+          value: _agendaPriority,
+          items: <DropdownMenuItem<String>>[
+            const DropdownMenuItem<String>(value: '', child: Text('Todas')),
+            ...MaintenancePriority.values.map(
+              (MaintenancePriority priority) => DropdownMenuItem<String>(
+                value: priority.apiValue,
+                child: Text(priority.label),
+              ),
+            ),
+          ],
+          onChanged: (String value) =>
+              _changeAgendaFilter(() => _agendaPriority = value),
+        ),
+        TextButton.icon(
+          onPressed: _hasAgendaFilters && !_refreshingData
+              ? _clearAgendaFilters
+              : null,
+          icon: const Icon(Icons.filter_alt_off_rounded),
+          label: const Text('Limpar filtros'),
+        ),
+      ],
+    );
+  }
+
+  Widget _agendaDropdown<T>({
+    required String label,
+    required T value,
+    required List<DropdownMenuItem<T>> items,
+    required ValueChanged<T> onChanged,
+  }) {
+    return SizedBox(
+      width: 190,
+      child: InputDecorator(
+        decoration: InputDecoration(
+          labelText: label,
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+        ),
+        child: DropdownButtonHideUnderline(
+          child: DropdownButton<T>(
+            value: value,
+            isExpanded: true,
+            items: items,
+            onChanged: _refreshingData
+                ? null
+                : (T? next) {
+                    if (next != null) {
+                      onChanged(next);
+                    }
+                  },
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMonthlyMaintenanceAgenda(List<MaintenanceOrder> orders) {
+    final List<MaintenanceOrder> sorted = List<MaintenanceOrder>.of(orders)
+      ..sort(
+        (MaintenanceOrder left, MaintenanceOrder right) =>
+            left.scheduledStartAt!.compareTo(right.scheduledStartAt!),
+      );
+    return Column(
+      children: sorted
+          .map(
+            (MaintenanceOrder order) => ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: SizedBox(
+                width: 64,
+                child: Text(
+                  _shortDate(order.scheduledStartAt!),
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ),
+              title: Text(order.title),
+              subtitle: Text(
+                '${order.locationDisplayLabel} · ${_formatTime(order.scheduledStartAt!)}-${_formatTime(order.scheduledEndAt!)}',
+              ),
+              trailing: _statusPill(order),
+              onTap: () => _openOrderActionDialog(order),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Iterable<OperationalTimelineEvent<MaintenanceOrder>>
+  _maintenanceTimelineEvents(MaintenanceOrder order) sync* {
+    final DateTime start = order.scheduledStartAt!;
+    final DateTime end = order.scheduledEndAt!;
+    DateTime day = DateTime(start.year, start.month, start.day);
+    final DateTime lastDay = DateTime(end.year, end.month, end.day);
+    while (!day.isAfter(lastDay)) {
+      final DateTime operationalStart = day.add(const Duration(hours: 6));
+      final DateTime operationalEnd = day.add(const Duration(hours: 23));
+      final DateTime segmentStart = start.isAfter(operationalStart)
+          ? start
+          : operationalStart;
+      final DateTime segmentEnd = end.isBefore(operationalEnd)
+          ? end
+          : operationalEnd;
+      if (segmentEnd.isAfter(segmentStart)) {
+        yield OperationalTimelineEvent<MaintenanceOrder>(
+          value: order,
+          date: day,
+          startMinutes: segmentStart.hour * 60 + segmentStart.minute,
+          endMinutes: segmentEnd.hour * 60 + segmentEnd.minute,
+          label:
+              '${order.locationDisplayLabel} · ${order.title} ${_formatTime(start)}-${_formatTime(end)}',
+          color: switch (order.status) {
+            MaintenanceOrderStatus.inProgress ||
+            MaintenanceOrderStatus.completed => CostaNorteBrand.success,
+            MaintenanceOrderStatus.cancelled => CostaNorteBrand.error,
+            MaintenanceOrderStatus.open ||
+            MaintenanceOrderStatus.assigned ||
+            MaintenanceOrderStatus.scheduled => CostaNorteBrand.royalBlueDeep,
+          },
+          draggable:
+              order.status == MaintenanceOrderStatus.open ||
+              order.status == MaintenanceOrderStatus.assigned ||
+              order.status == MaintenanceOrderStatus.scheduled,
+        );
+      }
+      day = day.add(const Duration(days: 1));
+    }
+  }
+
+  (DateTime, DateTime) _agendaRange(DateTime selectedDate) {
+    final DateTime day = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+    );
+    return switch (_agendaMode) {
+      _MaintenanceAgendaMode.day => (day, day.add(const Duration(days: 1))),
+      _MaintenanceAgendaMode.week => (
+        _startOfWeek(day),
+        _startOfWeek(day).add(const Duration(days: 7)),
+      ),
+      _MaintenanceAgendaMode.month => (
+        DateTime(day.year, day.month),
+        DateTime(day.year, day.month + 1),
+      ),
+    };
+  }
+
+  bool get _hasAgendaFilters =>
+      _agendaLocationId != 0 ||
+      _agendaProviderId != 0 ||
+      _agendaStatus.isNotEmpty ||
+      _agendaPriority.isNotEmpty;
+
+  Future<void> _moveAgendaPeriod(int offset) async {
+    final DateTime next = switch (_agendaMode) {
+      _MaintenanceAgendaMode.day => _selectedDate.add(Duration(days: offset)),
+      _MaintenanceAgendaMode.week => _selectedDate.add(
+        Duration(days: offset * 7),
+      ),
+      _MaintenanceAgendaMode.month => DateTime(
+        _selectedDate.year,
+        _selectedDate.month + offset,
+        1,
+      ),
+    };
+    await _setAgendaDate(next);
+  }
+
+  Future<void> _changeAgendaMode(_MaintenanceAgendaMode mode) async {
+    setState(() => _agendaMode = mode);
+    await _load(showLoading: false);
+  }
+
+  Future<void> _changeAgendaFilter(VoidCallback update) async {
+    setState(update);
+    await _load(showLoading: false);
+  }
+
+  Future<void> _clearAgendaFilters() async {
+    setState(() {
+      _agendaLocationId = 0;
+      _agendaProviderId = 0;
+      _agendaStatus = '';
+      _agendaPriority = '';
+    });
+    await _load(showLoading: false);
+  }
+
+  Future<void> _setAgendaDate(DateTime date) async {
+    setState(() => _selectedDate = DateTime(date.year, date.month, date.day));
+    await _load(showLoading: false);
+  }
+
+  Future<void> _moveMaintenanceTimelineEvent(
+    MaintenanceOrder order,
+    DateTime date,
+    int startMinutes,
+  ) async {
+    final DateTime? currentStart = order.scheduledStartAt;
+    final DateTime? currentEnd = order.scheduledEndAt;
+    if (currentStart == null || currentEnd == null) {
+      return;
+    }
+    final DateTime proposedStart = DateTime(
+      date.year,
+      date.month,
+      date.day,
+      startMinutes ~/ 60,
+      startMinutes % 60,
+    );
+    await _rescheduleOrder(
+      order,
+      initialStart: proposedStart,
+      initialEnd: proposedStart.add(currentEnd.difference(currentStart)),
     );
   }
 
@@ -345,6 +812,51 @@ class _MaintenancePageState extends State<MaintenancePage>
     }
   }
 
+  Future<bool> _openOrderFromNotification(
+    int orderId,
+    DateTime referenceDate, {
+    MaintenanceNotificationType? notificationType,
+  }) async {
+    if (!mounted) return false;
+    setState(() {
+      _selectedDate = DateTime(
+        referenceDate.year,
+        referenceDate.month,
+        referenceDate.day,
+      );
+      _agendaMode = _MaintenanceAgendaMode.day;
+      _agendaLocationId = 0;
+      _agendaProviderId = 0;
+      _agendaStatus = '';
+      _agendaPriority = '';
+    });
+    _setCurrentSection(MaintenanceSection.operationalSummary);
+    await _load(showLoading: false);
+    if (!mounted) return false;
+    final List<MaintenanceOrder> candidates = <MaintenanceOrder>[
+      ..._orders,
+      ...?_executiveReport?.allOpenOrders,
+    ];
+    MaintenanceOrder? selected;
+    for (final MaintenanceOrder order in candidates) {
+      if (order.id == orderId) {
+        selected = order;
+        break;
+      }
+    }
+    if (selected == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('A ordem vinculada ao aviso nao esta mais disponivel.'),
+        ),
+      );
+      return false;
+    }
+    setState(() => _selectedOrderId = selected!.id);
+    await _openOrderActionDialog(selected, notificationType: notificationType);
+    return true;
+  }
+
   void _setCurrentSection(MaintenanceSection section) {
     if (_currentSection == section) {
       return;
@@ -369,11 +881,18 @@ class _MaintenancePageState extends State<MaintenancePage>
       final Future<List<MaintenanceLocation>> locationsFuture = widget
           .maintenanceAppService
           .listLocations();
-      final Future<List<MaintenanceOrder>> ordersFuture = widget
+      final (DateTime rangeStart, DateTime rangeEndExclusive) = _agendaRange(
+        _selectedDate,
+      );
+      final Future<MaintenanceCalendar> calendarFuture = widget
           .maintenanceAppService
-          .listOrders(
-            dateFrom: _formatDateApi(_selectedDate),
-            dateTo: _formatDateApi(_selectedDate),
+          .getCalendar(
+            rangeStart: _formatLocalDateTimeApi(rangeStart),
+            rangeEndExclusive: _formatLocalDateTimeApi(rangeEndExclusive),
+            locationId: _agendaLocationId == 0 ? null : _agendaLocationId,
+            providerId: _agendaProviderId == 0 ? null : _agendaProviderId,
+            status: _maintenanceStatusOrNull(_agendaStatus),
+            priority: _maintenancePriorityOrNull(_agendaPriority),
           );
       final Future<MaintenanceDailyExecutiveReport> executiveReportFuture =
           widget.maintenanceAppService.getDailyExecutiveReport(
@@ -383,7 +902,7 @@ class _MaintenancePageState extends State<MaintenancePage>
           .maintenanceAppService
           .listProviders();
       final List<MaintenanceLocation> locations = await locationsFuture;
-      final List<MaintenanceOrder> orders = await ordersFuture;
+      final MaintenanceCalendar calendar = await calendarFuture;
       final MaintenanceDailyExecutiveReport executiveReport =
           await executiveReportFuture;
       final List<MaintenanceProvider> providers = await providersFuture;
@@ -394,7 +913,11 @@ class _MaintenancePageState extends State<MaintenancePage>
         _locations = List<MaintenanceLocation>.of(locations)
           ..sort(_compareLocationCatalogOrder);
         _providers = providers;
-        _orders = orders;
+        _calendar = calendar;
+        _orders = <MaintenanceOrder>[
+          ...calendar.scheduledOrders,
+          ...calendar.backlogOrders,
+        ];
         _executiveReport = executiveReport;
         _loading = false;
         _refreshingData = false;
@@ -550,14 +1073,31 @@ class _MaintenancePageState extends State<MaintenancePage>
   }
 
   Widget _buildOperationalMapCard() {
-    final List<MaintenanceOrder> openOrders =
-        _executiveReport?.allOpenOrders ?? _openDayOrders;
+    final List<MaintenanceOrder> openOrders = _operationalOpenOrders;
     return Card(
       child: Padding(
         padding: const EdgeInsets.all(17),
         child: _buildOperationalLocationMap(openOrders),
       ),
     );
+  }
+
+  List<MaintenanceOrder> get _operationalOpenOrders {
+    final Map<int, MaintenanceOrder> ordersById = <int, MaintenanceOrder>{};
+    for (final MaintenanceOrder order in <MaintenanceOrder>[
+      ...?_executiveReport?.allOpenOrders,
+      ...?_calendar?.scheduledOrders,
+      ...?_calendar?.backlogOrders,
+    ]) {
+      if (_isOrderOpenForExecutiveSummary(order)) {
+        ordersById[order.id] = order;
+      }
+    }
+    return ordersById.values.toList()
+      ..sort((MaintenanceOrder a, MaintenanceOrder b) {
+        final int byReference = a.referenceDate.compareTo(b.referenceDate);
+        return byReference != 0 ? byReference : a.id.compareTo(b.id);
+      });
   }
 
   Widget _buildExecutiveSummaryCard({
@@ -2303,7 +2843,10 @@ class _MaintenancePageState extends State<MaintenancePage>
     await _load(showLoading: false);
   }
 
-  Future<void> _openOrderActionDialog(MaintenanceOrder order) async {
+  Future<void> _openOrderActionDialog(
+    MaintenanceOrder order, {
+    MaintenanceNotificationType? notificationType,
+  }) async {
     final _MaintenanceOrderAction? action =
         await showDialog<_MaintenanceOrderAction>(
           context: context,
@@ -2311,6 +2854,7 @@ class _MaintenancePageState extends State<MaintenancePage>
             order: order,
             sharing: _sharingOrderId == order.id,
             loadingHistory: _loadingHistoryOrderId == order.id,
+            notificationType: notificationType,
           ),
         );
     if (action == null || !mounted) {
@@ -2323,6 +2867,9 @@ class _MaintenancePageState extends State<MaintenancePage>
     switch (action) {
       case _MaintenanceOrderAction.edit:
         await _editOrder(order: order);
+        return;
+      case _MaintenanceOrderAction.reschedule:
+        await _rescheduleOrder(order);
         return;
       case _MaintenanceOrderAction.share:
         await _shareOrderToWhatsApp(order: order);
@@ -2342,6 +2889,87 @@ class _MaintenancePageState extends State<MaintenancePage>
       case _MaintenanceOrderAction.history:
         await _openOrderHistory(order);
         return;
+    }
+  }
+
+  Future<void> _rescheduleOrder(
+    MaintenanceOrder order, {
+    DateTime? initialStart,
+    DateTime? initialEnd,
+  }) async {
+    final DateTime defaultStart =
+        initialStart ??
+        order.scheduledStartAt ??
+        DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day, 9);
+    final _MaintenanceRescheduleDraft? draft =
+        await showDialog<_MaintenanceRescheduleDraft>(
+          context: context,
+          builder: (BuildContext context) => _MaintenanceRescheduleDialog(
+            order: order,
+            initialStart: defaultStart,
+            initialEnd:
+                initialEnd ??
+                order.scheduledEndAt ??
+                defaultStart.add(const Duration(hours: 1)),
+          ),
+        );
+    if (draft == null || !mounted) {
+      return;
+    }
+    try {
+      final MaintenanceOrder updated = await widget.maintenanceAppService
+          .rescheduleOrder(
+            order.id,
+            RescheduleMaintenanceOrderModel(
+              scheduledStartAt: _formatLocalDateTimeApi(draft.start),
+              scheduledEndAt: _formatLocalDateTimeApi(draft.end),
+              reason: draft.reason,
+              expectedScheduleVersion: order.scheduleVersion,
+            ),
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() => _selectedOrderId = updated.id);
+      await _load(showLoading: false);
+      if (!mounted) {
+        return;
+      }
+      await AppAlerts.success(
+        context,
+        title: 'Agenda atualizada',
+        message: 'A ordem foi reagendada com sucesso.',
+      );
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      if (error.statusCode == 409) {
+        await _load(showLoading: false);
+        if (!mounted) {
+          return;
+        }
+        await AppAlerts.warning(
+          context,
+          title: 'Agenda alterada por outro usuario',
+          message:
+              'A agenda foi recarregada. Revise o horario atual antes de tentar novamente.',
+        );
+        return;
+      }
+      await AppAlerts.error(
+        context,
+        title: 'Nao foi possivel reagendar',
+        message: error.message,
+      );
+    } catch (error) {
+      if (mounted) {
+        await AppAlerts.error(
+          context,
+          title: 'Nao foi possivel reagendar',
+          message: error.toString().replaceFirst('Bad state: ', ''),
+        );
+      }
     }
   }
 
@@ -2484,8 +3112,194 @@ class _MaintenancePageState extends State<MaintenancePage>
   }
 }
 
+class _MaintenanceRescheduleDraft {
+  const _MaintenanceRescheduleDraft({
+    required this.start,
+    required this.end,
+    required this.reason,
+  });
+
+  final DateTime start;
+  final DateTime end;
+  final String reason;
+}
+
+class _MaintenanceRescheduleDialog extends StatefulWidget {
+  const _MaintenanceRescheduleDialog({
+    required this.order,
+    required this.initialStart,
+    required this.initialEnd,
+  });
+
+  final MaintenanceOrder order;
+  final DateTime initialStart;
+  final DateTime initialEnd;
+
+  @override
+  State<_MaintenanceRescheduleDialog> createState() =>
+      _MaintenanceRescheduleDialogState();
+}
+
+class _MaintenanceRescheduleDialogState
+    extends State<_MaintenanceRescheduleDialog> {
+  late DateTime _start;
+  late DateTime _end;
+  late final TextEditingController _reasonController;
+  String? _validationMessage;
+
+  @override
+  void initState() {
+    super.initState();
+    _start = widget.initialStart;
+    _end = widget.initialEnd;
+    _reasonController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _reasonController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: Text(
+        widget.order.scheduledStartAt == null
+            ? 'Agendar ordem'
+            : 'Reagendar ordem',
+      ),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: <Widget>[
+              Text(
+                '${widget.order.locationDisplayLabel} · ${widget.order.title}',
+                style: Theme.of(context).textTheme.titleSmall,
+              ),
+              const SizedBox(height: 16),
+              _dateTimeTile(
+                label: 'Inicio',
+                value: _start,
+                onChanged: (DateTime value) => setState(() => _start = value),
+              ),
+              const SizedBox(height: 8),
+              _dateTimeTile(
+                label: 'Fim',
+                value: _end,
+                onChanged: (DateTime value) => setState(() => _end = value),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: _reasonController,
+                minLines: 2,
+                maxLines: 4,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Motivo da alteracao',
+                  hintText: 'Informe por que o horario esta sendo alterado',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              if (_validationMessage != null) ...<Widget>[
+                const SizedBox(height: 10),
+                Text(
+                  _validationMessage!,
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: CostaNorteBrand.error),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton.icon(
+          onPressed: _submit,
+          icon: const Icon(Icons.event_available_rounded),
+          label: const Text('Confirmar reagendamento'),
+        ),
+      ],
+    );
+  }
+
+  Widget _dateTimeTile({
+    required String label,
+    required DateTime value,
+    required ValueChanged<DateTime> onChanged,
+  }) {
+    return OutlinedButton(
+      onPressed: () => _pickDateTime(value, onChanged),
+      child: SizedBox(
+        width: double.infinity,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          child: Row(
+            children: <Widget>[
+              const Icon(Icons.schedule_rounded),
+              const SizedBox(width: 12),
+              Expanded(child: Text('$label: ${_dateTimeLabel(value)}')),
+              const Icon(Icons.edit_calendar_rounded),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickDateTime(
+    DateTime current,
+    ValueChanged<DateTime> onChanged,
+  ) async {
+    final DateTime? date = await showDatePicker(
+      context: context,
+      initialDate: current,
+      firstDate: DateTime(current.year - 1),
+      lastDate: DateTime(current.year + 3),
+    );
+    if (date == null || !mounted) {
+      return;
+    }
+    final TimeOfDay? time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(current),
+    );
+    if (time == null || !mounted) {
+      return;
+    }
+    onChanged(
+      DateTime(date.year, date.month, date.day, time.hour, time.minute),
+    );
+  }
+
+  void _submit() {
+    final String reason = _reasonController.text.trim();
+    final String? validationMessage = reason.isEmpty
+        ? 'Informe o motivo do reagendamento.'
+        : !_end.isAfter(_start)
+        ? 'O fim deve ser posterior ao inicio.'
+        : null;
+    if (validationMessage != null) {
+      setState(() => _validationMessage = validationMessage);
+      return;
+    }
+    Navigator.of(context).pop(
+      _MaintenanceRescheduleDraft(start: _start, end: _end, reason: reason),
+    );
+  }
+}
+
 enum _MaintenanceOrderAction {
   edit,
+  reschedule,
   share,
   start,
   complete,
@@ -2499,11 +3313,13 @@ class _MaintenanceOrderActionDialog extends StatelessWidget {
     required this.order,
     required this.sharing,
     required this.loadingHistory,
+    this.notificationType,
   });
 
   final MaintenanceOrder order;
   final bool sharing;
   final bool loadingHistory;
+  final MaintenanceNotificationType? notificationType;
 
   @override
   Widget build(BuildContext context) {
@@ -2515,12 +3331,25 @@ class _MaintenanceOrderActionDialog extends StatelessWidget {
         order.status == MaintenanceOrderStatus.open ||
         order.status == MaintenanceOrderStatus.assigned ||
         order.status == MaintenanceOrderStatus.scheduled;
-    final bool canComplete = order.status == MaintenanceOrderStatus.inProgress;
+    final DateTime? scheduledEndAt = order.scheduledEndAt;
+    final bool scheduledWindowEnded =
+        order.status == MaintenanceOrderStatus.scheduled &&
+        scheduledEndAt != null &&
+        !DateTime.now().isBefore(scheduledEndAt);
+    final bool canComplete =
+        order.status == MaintenanceOrderStatus.inProgress ||
+        scheduledWindowEnded;
     final bool canCancel =
         order.status != MaintenanceOrderStatus.completed &&
         order.status != MaintenanceOrderStatus.cancelled;
     return AlertDialog(
-      title: const Text('Ordem do dia'),
+      title: Text(
+        notificationType == MaintenanceNotificationType.dueToStart
+            ? 'Hora de iniciar a ordem'
+            : notificationType == MaintenanceNotificationType.overdue
+            ? 'Horario previsto encerrado'
+            : 'Ordem do dia',
+      ),
       content: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2531,6 +3360,15 @@ class _MaintenanceOrderActionDialog extends StatelessWidget {
             '${order.locationDisplayLabel} - ${order.providerLabel}',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
+          if (notificationType != null) ...<Widget>[
+            const SizedBox(height: 8),
+            Text(
+              notificationType == MaintenanceNotificationType.dueToStart
+                  ? 'Confirme o inicio, edite ou reagende se necessario.'
+                  : 'Conclua a ordem se o servico terminou ou reagende se precisar de mais tempo.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+          ],
           const SizedBox(height: 16),
           Wrap(
             spacing: 10,
@@ -2544,6 +3382,17 @@ class _MaintenanceOrderActionDialog extends StatelessWidget {
                     : null,
                 icon: const Icon(Icons.edit_rounded),
                 label: const Text('Editar'),
+              ),
+              OutlinedButton.icon(
+                onPressed: canEdit
+                    ? () => Navigator.of(
+                        context,
+                      ).pop(_MaintenanceOrderAction.reschedule)
+                    : null,
+                icon: const Icon(Icons.event_repeat_rounded),
+                label: Text(
+                  order.scheduledStartAt == null ? 'Agendar' : 'Reagendar',
+                ),
               ),
               OutlinedButton.icon(
                 onPressed: sharing
@@ -6118,6 +6967,29 @@ String _formatTimeOfDay(TimeOfDay value) =>
 
 bool _sameDay(DateTime a, DateTime b) =>
     a.year == b.year && a.month == b.month && a.day == b.day;
+
+DateTime _startOfWeek(DateTime value) {
+  final DateTime date = DateTime(value.year, value.month, value.day);
+  return date.subtract(Duration(days: date.weekday - DateTime.monday));
+}
+
+MaintenanceOrderStatus? _maintenanceStatusOrNull(String apiValue) {
+  for (final MaintenanceOrderStatus status in MaintenanceOrderStatus.values) {
+    if (status.apiValue == apiValue) {
+      return status;
+    }
+  }
+  return null;
+}
+
+MaintenancePriority? _maintenancePriorityOrNull(String apiValue) {
+  for (final MaintenancePriority priority in MaintenancePriority.values) {
+    if (priority.apiValue == apiValue) {
+      return priority;
+    }
+  }
+  return null;
+}
 
 DateTime _today() {
   final DateTime now = DateTime.now();

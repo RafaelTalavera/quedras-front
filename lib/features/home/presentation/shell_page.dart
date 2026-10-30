@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
@@ -5,6 +6,7 @@ import 'package:flutter/material.dart';
 import '../../../app/router/app_routes.dart';
 import '../../../core/theme/costa_norte_brand.dart';
 import '../../../core/sync/schedule_sync_service.dart';
+import '../../../core/push/push_notification_service.dart';
 import '../../../core/widgets/costa_norte_logo.dart';
 import '../../auth/application/session_controller.dart';
 import '../../auth/domain/auth_session.dart';
@@ -13,6 +15,8 @@ import '../../massages/application/massage_app_service.dart';
 import '../../massages/presentation/massage_booking_page.dart';
 import '../../maintenance/application/maintenance_app_service.dart';
 import 'package:costanorte/features/maintenance/presentation/maintenance_page.dart';
+import '../../maintenance/domain/maintenance_models.dart';
+import '../../maintenance/presentation/maintenance_notification_bell.dart';
 import '../../reservations/application/reservation_app_service.dart';
 import '../../settings/application/user_management_app_service.dart';
 import '../../settings/presentation/settings_page.dart';
@@ -35,6 +39,7 @@ class ShellPage extends StatefulWidget {
     required this.maintenanceAppService,
     required this.userManagementAppService,
     required this.scheduleSyncService,
+    required this.pushNotificationService,
     super.key,
   });
 
@@ -47,6 +52,7 @@ class ShellPage extends StatefulWidget {
   final MaintenanceAppService maintenanceAppService;
   final UserManagementAppService userManagementAppService;
   final ScheduleSyncService scheduleSyncService;
+  final PushNotificationService pushNotificationService;
 
   @override
   State<ShellPage> createState() => _ShellPageState();
@@ -60,6 +66,7 @@ class _ShellPageState extends State<ShellPage> {
   late final ToursTravelPageController _toursTravelPageController;
   late final MaintenancePageController _maintenancePageController;
   bool _redirectingToLogin = false;
+  StreamSubscription<PushMaintenanceOpenRequest>? _pushOpenSubscription;
   MassageBookingSection _selectedMassageSection =
       MassageBookingSection.selectedDay;
   TennisRentalSection _selectedTennisSection = TennisRentalSection.selectedDay;
@@ -77,6 +84,17 @@ class _ShellPageState extends State<ShellPage> {
     _maintenancePageController = MaintenancePageController();
     _ensureSectionLoaded(_selectedSection);
     widget.sessionController.addListener(_handleSessionChanged);
+    _pushOpenSubscription = widget
+        .pushNotificationService
+        .openedMaintenanceOrders
+        .listen(_openMaintenanceFromPush);
+    final PushMaintenanceOpenRequest? pending = widget.pushNotificationService
+        .takePendingMaintenanceOrder();
+    if (pending != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _openMaintenanceFromPush(pending);
+      });
+    }
   }
 
   @override
@@ -96,6 +114,7 @@ class _ShellPageState extends State<ShellPage> {
   @override
   void dispose() {
     widget.sessionController.removeListener(_handleSessionChanged);
+    unawaited(_pushOpenSubscription?.cancel());
     super.dispose();
   }
 
@@ -181,6 +200,24 @@ class _ShellPageState extends State<ShellPage> {
                       onLogout: _logout,
                       content: content,
                     ),
+            ),
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topRight,
+                child: Padding(
+                  padding: EdgeInsets.only(
+                    top: compactLayout ? 17 : 25,
+                    right: compactLayout ? 20 : 27,
+                  ),
+                  child: MaintenanceNotificationBell(
+                    service: widget.maintenanceAppService,
+                    syncEvents: widget.scheduleSyncService.events,
+                    refreshEvents:
+                        widget.pushNotificationService.notificationsChanged,
+                    onOpenNotification: _openMaintenanceNotification,
+                  ),
+                ),
+              ),
             ),
           ],
         ),
@@ -332,6 +369,36 @@ class _ShellPageState extends State<ShellPage> {
       _selectedMaintenanceSection = section;
     });
     await _maintenancePageController.scrollToSection(section);
+  }
+
+  void _openMaintenanceNotification(MaintenanceNotificationModel notification) {
+    setState(() {
+      _ensureSectionLoaded(AppSection.maintenance);
+      _selectedSection = AppSection.maintenance;
+      _selectedMaintenanceSection = MaintenanceSection.operationalSummary;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maintenancePageController.openOrderFromNotification(
+        notification.orderId,
+        notification.dueAt.toLocal(),
+        notificationType: notification.notificationType,
+      );
+    });
+  }
+
+  void _openMaintenanceFromPush(PushMaintenanceOpenRequest request) {
+    if (!mounted) return;
+    setState(() {
+      _ensureSectionLoaded(AppSection.maintenance);
+      _selectedSection = AppSection.maintenance;
+      _selectedMaintenanceSection = MaintenanceSection.operationalSummary;
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _maintenancePageController.openOrderFromNotification(
+        request.orderId,
+        (request.dueAt ?? DateTime.now()).toLocal(),
+      );
+    });
   }
 
   void _logout() {

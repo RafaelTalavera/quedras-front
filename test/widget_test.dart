@@ -3,6 +3,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:costanorte/app/costanorte_app.dart';
 import 'package:costanorte/core/network/api_client.dart';
+import 'package:costanorte/core/push/push_notification_service.dart';
 import 'package:costanorte/features/auth/application/auth_app_service.dart';
 import 'package:costanorte/features/auth/domain/auth_session.dart';
 import 'package:costanorte/features/reservations/application/reservation_app_service.dart';
@@ -12,6 +13,8 @@ void main() {
     WidgetTester tester,
   ) async {
     final _FakeAuthAppService authAppService = _FakeAuthAppService();
+    final _FakePushNotificationService pushService =
+        _FakePushNotificationService();
     await tester.binding.setSurfaceSize(const Size(800, 1400));
     addTearDown(() => tester.binding.setSurfaceSize(null));
 
@@ -20,6 +23,7 @@ void main() {
         apiClient: _FakeApiClient(),
         authAppService: authAppService,
         reservationAppService: InMemoryReservationAppService(),
+        pushNotificationService: pushService,
       ),
     );
     await tester.pumpAndSettle();
@@ -32,13 +36,49 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(authAppService.lastUsername, 'operador.demo');
+    expect(pushService.startedWithAuthorization, 'Bearer test-jwt');
     expect(find.text('Quadras de tenis'), findsOneWidget);
 
     await tester.tap(find.text('Sair'));
     await tester.pumpAndSettle();
 
     expect(find.text('Entrar'), findsOneWidget);
+    expect(pushService.stopCalls, 1);
   });
+}
+
+final class _FakePushNotificationService implements PushNotificationService {
+  String? startedWithAuthorization;
+  int stopCalls = 0;
+
+  @override
+  Stream<void> get notificationsChanged => const Stream<void>.empty();
+
+  @override
+  Stream<PushMaintenanceOpenRequest> get openedMaintenanceOrders =>
+      const Stream<PushMaintenanceOpenRequest>.empty();
+
+  @override
+  void dispose() {}
+
+  @override
+  Future<void> heartbeat() async {}
+
+  @override
+  Future<void> startSession(
+    String authorizationHeader,
+    ApiClient apiClient,
+  ) async {
+    startedWithAuthorization = authorizationHeader;
+  }
+
+  @override
+  Future<void> stopSession() async {
+    stopCalls++;
+  }
+
+  @override
+  PushMaintenanceOpenRequest? takePendingMaintenanceOrder() => null;
 }
 
 final class _FakeAuthAppService implements AuthAppService {

@@ -110,6 +110,24 @@ class _FakeMaintenanceService extends Fake implements MaintenanceAppService {
   }) async => const <MaintenanceOrder>[];
 
   @override
+  Future<MaintenanceCalendar> getCalendar({
+    required String rangeStart,
+    required String rangeEndExclusive,
+    int? locationId,
+    int? providerId,
+    MaintenanceProviderType? providerType,
+    MaintenanceOrderStatus? status,
+    MaintenancePriority? priority,
+    int? backlogSize,
+  }) async => MaintenanceCalendar(
+    rangeStart: DateTime.parse(rangeStart),
+    rangeEndExclusive: DateTime.parse(rangeEndExclusive),
+    scheduledOrders: const <MaintenanceOrder>[],
+    backlogOrders: const <MaintenanceOrder>[],
+    backlogHasMore: false,
+  );
+
+  @override
   Future<List<MaintenanceProvider>> listProviders() async => providers;
 
   @override

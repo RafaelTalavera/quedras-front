@@ -55,6 +55,75 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
   }
 
   @override
+  Future<MaintenanceNotificationPage> listNotifications({
+    MaintenanceNotificationStatus? status,
+    int page = 0,
+    int size = 20,
+  }) async {
+    final String query = Uri(
+      queryParameters: <String, String>{
+        'module': 'maintenance',
+        if (status != null) 'status': status.apiValue,
+        'page': '$page',
+        'size': '$size',
+      },
+    ).query;
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get('notifications?$query', headers: _jsonHeaders),
+    );
+    return MaintenanceNotificationPage.fromJson(
+      _expectSuccessObject(
+        response,
+        invalidMessage: 'Bandeja de notificacoes invalida.',
+      ),
+    );
+  }
+
+  @override
+  Future<int> getUnreadNotificationCount() async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get(
+        'notifications/unread-count?module=maintenance',
+        headers: _jsonHeaders,
+      ),
+    );
+    final Map<String, dynamic> payload = _expectSuccessObject(
+      response,
+      invalidMessage: 'Contador de notificacoes invalido.',
+    );
+    final Object? count = payload['count'];
+    if (count is int) return count;
+    if (count is num) return count.toInt();
+    throw const ApiException(
+      'Contador de notificacoes invalido.',
+      kind: ApiErrorKind.invalidResponse,
+    );
+  }
+
+  @override
+  Future<void> markNotificationRead(int notificationId) async {
+    await _notificationAction('notifications/$notificationId/read');
+  }
+
+  @override
+  Future<void> dismissNotification(int notificationId) async {
+    await _notificationAction('notifications/$notificationId/dismiss');
+  }
+
+  Future<void> _notificationAction(String path) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.patch(path, headers: _jsonHeaders),
+    );
+    if (!response.isSuccess) {
+      throw ApiException(
+        _extractApiErrorMessage(response),
+        kind: ApiErrorKind.http,
+        statusCode: response.statusCode,
+      );
+    }
+  }
+
+  @override
   Future<MaintenanceLocation> updateLocation(
     int locationId,
     UpdateMaintenanceLocationModel input,
@@ -352,6 +421,41 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
   }
 
   @override
+  Future<MaintenanceCalendar> getCalendar({
+    required String rangeStart,
+    required String rangeEndExclusive,
+    int? locationId,
+    int? providerId,
+    MaintenanceProviderType? providerType,
+    MaintenanceOrderStatus? status,
+    MaintenancePriority? priority,
+    int? backlogSize,
+  }) async {
+    final Map<String, String> query = <String, String>{
+      'rangeStart': rangeStart,
+      'rangeEndExclusive': rangeEndExclusive,
+      if (locationId != null) 'locationId': '$locationId',
+      if (providerId != null) 'providerId': '$providerId',
+      if (providerType != null) 'providerType': providerType.apiValue,
+      if (status != null) 'status': status.apiValue,
+      if (priority != null) 'priority': priority.apiValue,
+      if (backlogSize != null) 'backlogSize': '$backlogSize',
+    };
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.get(
+        'maintenance/orders/calendar?${Uri(queryParameters: query).query}',
+        headers: _jsonHeaders,
+      ),
+    );
+    return MaintenanceCalendar.fromJson(
+      _expectSuccessObject(
+        response,
+        invalidMessage: 'Resposta invalida da agenda de manutencao.',
+      ),
+    );
+  }
+
+  @override
   Future<MaintenanceOrder> createOrder(
     CreateMaintenanceOrderModel input,
   ) async {
@@ -438,6 +542,26 @@ final class HttpMaintenanceAppService implements MaintenanceAppService {
       _expectSuccessObject(
         response,
         invalidMessage: 'Resposta invalida da ordem.',
+      ),
+    );
+  }
+
+  @override
+  Future<MaintenanceOrder> rescheduleOrder(
+    int orderId,
+    RescheduleMaintenanceOrderModel input,
+  ) async {
+    final ApiResponse response = await _runRequest(
+      () => _apiClient.patch(
+        'maintenance/orders/$orderId/reschedule',
+        headers: _jsonHeaders,
+        body: jsonEncode(input.toJson()),
+      ),
+    );
+    return MaintenanceOrder.fromJson(
+      _expectSuccessObject(
+        response,
+        invalidMessage: 'Resposta invalida da ordem reagendada.',
       ),
     );
   }

@@ -58,6 +58,29 @@ abstract interface class MaintenanceAppService {
     MaintenancePriority? priority,
   });
 
+  Future<MaintenanceCalendar> getCalendar({
+    required String rangeStart,
+    required String rangeEndExclusive,
+    int? locationId,
+    int? providerId,
+    MaintenanceProviderType? providerType,
+    MaintenanceOrderStatus? status,
+    MaintenancePriority? priority,
+    int? backlogSize,
+  });
+
+  Future<MaintenanceNotificationPage> listNotifications({
+    MaintenanceNotificationStatus? status,
+    int page = 0,
+    int size = 20,
+  });
+
+  Future<int> getUnreadNotificationCount();
+
+  Future<void> markNotificationRead(int notificationId);
+
+  Future<void> dismissNotification(int notificationId);
+
   Future<MaintenanceOrder> createOrder(CreateMaintenanceOrderModel input);
 
   Future<MaintenanceOrder> updateOrder(
@@ -80,6 +103,11 @@ abstract interface class MaintenanceAppService {
   Future<MaintenanceOrder> completeOrder(
     int orderId,
     CompleteMaintenanceOrderModel input,
+  );
+
+  Future<MaintenanceOrder> rescheduleOrder(
+    int orderId,
+    RescheduleMaintenanceOrderModel input,
   );
 
   Future<MaintenanceOrder> cancelOrder(

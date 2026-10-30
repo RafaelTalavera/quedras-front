@@ -11,6 +11,7 @@ import '../../features/reservations/application/reservation_app_service.dart';
 import '../../features/settings/application/user_management_app_service.dart';
 import '../../features/tours/application/tours_app_service.dart';
 import '../../core/sync/schedule_sync_service.dart';
+import '../../core/push/push_notification_service.dart';
 import 'app_routes.dart';
 
 final class AppRouter {
@@ -25,6 +26,7 @@ final class AppRouter {
     required MaintenanceAppService maintenanceAppService,
     required UserManagementAppService userManagementAppService,
     required ScheduleSyncService scheduleSyncService,
+    required PushNotificationService pushNotificationService,
   }) {
     final String routeName = settings.name ?? AppRoutes.login;
     if (!sessionController.isAuthenticated) {
@@ -41,11 +43,11 @@ final class AppRouter {
     final String requestedRoute = routeName == AppRoutes.login
         ? AppRoutes.defaultRouteForRole(sessionRole)
         : routeName;
-    final AppSection requestedSection = AppRoutes.sectionByRoute(requestedRoute);
-    final AppSection section = AppRoutes.canAccessSection(
-      sessionRole,
-      requestedSection,
-    )
+    final AppSection requestedSection = AppRoutes.sectionByRoute(
+      requestedRoute,
+    );
+    final AppSection section =
+        AppRoutes.canAccessSection(sessionRole, requestedSection)
         ? requestedSection
         : AppRoutes.sectionsForRole(sessionRole).first;
 
@@ -60,6 +62,7 @@ final class AppRouter {
         maintenanceAppService: maintenanceAppService,
         userManagementAppService: userManagementAppService,
         scheduleSyncService: scheduleSyncService,
+        pushNotificationService: pushNotificationService,
       ),
       settings: RouteSettings(name: AppRoutes.routeBySection(section)),
     );

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
@@ -5,6 +7,7 @@ import '../core/config/backend_config.dart';
 import '../core/network/api_client.dart';
 import '../core/network/api_client_factory.dart';
 import '../core/network/authorized_api_client.dart';
+import '../core/push/push_notification_service.dart';
 import '../core/sync/schedule_sync_service.dart';
 import '../core/theme/costa_norte_brand.dart';
 import '../features/auth/application/auth_app_service.dart';
@@ -37,6 +40,7 @@ class CostaNorteApp extends StatefulWidget {
     ToursAppService? toursAppService,
     MaintenanceAppService? maintenanceAppService,
     UserManagementAppService? userManagementAppService,
+    PushNotificationService? pushNotificationService,
   }) : _apiClient = apiClient,
        _authAppService = authAppService,
        _sessionController = sessionController,
@@ -45,7 +49,8 @@ class CostaNorteApp extends StatefulWidget {
        _courtAppService = courtAppService,
        _toursAppService = toursAppService,
        _maintenanceAppService = maintenanceAppService,
-       _userManagementAppService = userManagementAppService;
+       _userManagementAppService = userManagementAppService,
+       _pushNotificationService = pushNotificationService;
 
   final ApiClient? _apiClient;
   final AuthAppService? _authAppService;
@@ -56,12 +61,14 @@ class CostaNorteApp extends StatefulWidget {
   final ToursAppService? _toursAppService;
   final MaintenanceAppService? _maintenanceAppService;
   final UserManagementAppService? _userManagementAppService;
+  final PushNotificationService? _pushNotificationService;
 
   @override
   State<CostaNorteApp> createState() => _CostaNorteAppState();
 }
 
-class _CostaNorteAppState extends State<CostaNorteApp> {
+class _CostaNorteAppState extends State<CostaNorteApp>
+    with WidgetsBindingObserver {
   late final ApiClient _rawApiClient;
   late final ApiClient _authorizedApiClient;
   late final AuthAppService _authAppService;
@@ -73,10 +80,13 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
   late final MaintenanceAppService _maintenanceAppService;
   late final UserManagementAppService _userManagementAppService;
   late final ScheduleSyncService _scheduleSyncService;
+  late final PushNotificationService _pushNotificationService;
+  bool _pushSessionActive = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _sessionController = widget._sessionController ?? SessionController();
     _rawApiClient =
         widget._apiClient ?? createApiClient(baseUrl: BackendConfig.apiBaseUrl);
@@ -110,23 +120,50 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
     _userManagementAppService =
         widget._userManagementAppService ??
         HttpUserManagementAppService(apiClient: _authorizedApiClient);
+    _pushNotificationService =
+        widget._pushNotificationService ??
+        const DisabledPushNotificationService();
     _sessionController.addListener(_handleSessionChanged);
     _handleSessionChanged();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sessionController.removeListener(_handleSessionChanged);
     _scheduleSyncService.dispose();
+    _pushNotificationService.dispose();
     super.dispose();
   }
 
   void _handleSessionChanged() {
     if (_sessionController.isAuthenticated) {
       _scheduleSyncService.start();
+      final String? authorization = _sessionController.authorizationHeader;
+      if (authorization != null) {
+        _pushSessionActive = true;
+        unawaited(
+          _pushNotificationService
+              .startSession(authorization, _rawApiClient)
+              .catchError((Object _) {}),
+        );
+      }
       return;
     }
     _scheduleSyncService.stop();
+    if (!_pushSessionActive) {
+      return;
+    }
+    _pushSessionActive = false;
+    unawaited(_pushNotificationService.stopSession().catchError((Object _) {}));
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed &&
+        _sessionController.isAuthenticated) {
+      unawaited(_pushNotificationService.heartbeat().catchError((Object _) {}));
+    }
   }
 
   @override
@@ -150,6 +187,7 @@ class _CostaNorteAppState extends State<CostaNorteApp> {
         maintenanceAppService: _maintenanceAppService,
         userManagementAppService: _userManagementAppService,
         scheduleSyncService: _scheduleSyncService,
+        pushNotificationService: _pushNotificationService,
       ),
     );
   }

@@ -413,6 +413,7 @@ class MaintenanceOrder {
     required this.expectedCompletionAt,
     required this.scheduledStartAt,
     required this.scheduledEndAt,
+    this.scheduleVersion = 0,
     required this.startedAt,
     required this.completedAt,
     required this.resolutionNotes,
@@ -453,6 +454,7 @@ class MaintenanceOrder {
   final DateTime? expectedCompletionAt;
   final DateTime? scheduledStartAt;
   final DateTime? scheduledEndAt;
+  final int scheduleVersion;
   final DateTime? startedAt;
   final DateTime? completedAt;
   final String? resolutionNotes;
@@ -512,6 +514,7 @@ class MaintenanceOrder {
         _readString(json, 'scheduledStartAt'),
       ),
       scheduledEndAt: _tryParseDateTime(_readString(json, 'scheduledEndAt')),
+      scheduleVersion: _readInt(json, 'scheduleVersion') ?? 0,
       startedAt: _tryParseDateTime(_readString(json, 'startedAt')),
       completedAt: _tryParseDateTime(_readString(json, 'completedAt')),
       resolutionNotes: _trimOrNull(_readString(json, 'resolutionNotes')),
@@ -572,6 +575,163 @@ class MaintenanceOrder {
       requestOrigin == MaintenanceRequestOrigin.guestRequest;
 
   String? get guestLabel => _trimOrNull(guestName);
+}
+
+class MaintenanceCalendar {
+  const MaintenanceCalendar({
+    required this.rangeStart,
+    required this.rangeEndExclusive,
+    required this.scheduledOrders,
+    required this.backlogOrders,
+    required this.backlogHasMore,
+  });
+
+  final DateTime rangeStart;
+  final DateTime rangeEndExclusive;
+  final List<MaintenanceOrder> scheduledOrders;
+  final List<MaintenanceOrder> backlogOrders;
+  final bool backlogHasMore;
+
+  factory MaintenanceCalendar.fromJson(Map<String, dynamic> json) {
+    final Object? scheduledRaw = json['scheduledOrders'];
+    final Object? backlogRaw = json['backlogOrders'];
+    return MaintenanceCalendar(
+      rangeStart:
+          _tryParseDateTime(_readString(json, 'rangeStart')) ?? DateTime(1970),
+      rangeEndExclusive:
+          _tryParseDateTime(_readString(json, 'rangeEndExclusive')) ??
+          DateTime(1970),
+      scheduledOrders: scheduledRaw is List
+          ? scheduledRaw
+                .map<MaintenanceOrder>(
+                  (Object? item) => MaintenanceOrder.fromJson(_asMap(item)),
+                )
+                .toList()
+          : const <MaintenanceOrder>[],
+      backlogOrders: backlogRaw is List
+          ? backlogRaw
+                .map<MaintenanceOrder>(
+                  (Object? item) => MaintenanceOrder.fromJson(_asMap(item)),
+                )
+                .toList()
+          : const <MaintenanceOrder>[],
+      backlogHasMore: json['backlogHasMore'] as bool? ?? false,
+    );
+  }
+}
+
+enum MaintenanceNotificationStatus {
+  unread('UNREAD'),
+  read('READ'),
+  dismissed('DISMISSED'),
+  resolved('RESOLVED');
+
+  const MaintenanceNotificationStatus(this.apiValue);
+
+  final String apiValue;
+
+  static MaintenanceNotificationStatus tryParse(String? rawValue) {
+    return MaintenanceNotificationStatus.values.firstWhere(
+      (MaintenanceNotificationStatus value) => value.apiValue == rawValue,
+      orElse: () => MaintenanceNotificationStatus.unread,
+    );
+  }
+}
+
+enum MaintenanceNotificationType {
+  dueToStart('DUE_TO_START'),
+  overdue('OVERDUE');
+
+  const MaintenanceNotificationType(this.apiValue);
+
+  final String apiValue;
+
+  static MaintenanceNotificationType tryParse(String? rawValue) {
+    return MaintenanceNotificationType.values.firstWhere(
+      (MaintenanceNotificationType value) => value.apiValue == rawValue,
+      orElse: () => MaintenanceNotificationType.dueToStart,
+    );
+  }
+}
+
+class MaintenanceNotificationModel {
+  const MaintenanceNotificationModel({
+    required this.id,
+    required this.orderId,
+    required this.notificationType,
+    required this.status,
+    required this.title,
+    required this.body,
+    required this.dueAt,
+    required this.readAt,
+    required this.resolvedAt,
+    required this.dismissedAt,
+    required this.createdAt,
+  });
+
+  final int id;
+  final int orderId;
+  final MaintenanceNotificationType notificationType;
+  final MaintenanceNotificationStatus status;
+  final String title;
+  final String body;
+  final DateTime dueAt;
+  final DateTime? readAt;
+  final DateTime? resolvedAt;
+  final DateTime? dismissedAt;
+  final DateTime createdAt;
+
+  factory MaintenanceNotificationModel.fromJson(Map<String, dynamic> json) {
+    return MaintenanceNotificationModel(
+      id: _readInt(json, 'id') ?? 0,
+      orderId: _readInt(json, 'orderId') ?? 0,
+      notificationType: MaintenanceNotificationType.tryParse(
+        _readString(json, 'notificationType'),
+      ),
+      status: MaintenanceNotificationStatus.tryParse(
+        _readString(json, 'status'),
+      ),
+      title: _readString(json, 'title') ?? '',
+      body: _readString(json, 'body') ?? '',
+      dueAt: _tryParseDateTime(_readString(json, 'dueAt')) ?? DateTime(1970),
+      readAt: _tryParseDateTime(_readString(json, 'readAt')),
+      resolvedAt: _tryParseDateTime(_readString(json, 'resolvedAt')),
+      dismissedAt: _tryParseDateTime(_readString(json, 'dismissedAt')),
+      createdAt:
+          _tryParseDateTime(_readString(json, 'createdAt')) ?? DateTime(1970),
+    );
+  }
+}
+
+class MaintenanceNotificationPage {
+  const MaintenanceNotificationPage({
+    required this.page,
+    required this.size,
+    required this.hasNext,
+    required this.items,
+  });
+
+  final int page;
+  final int size;
+  final bool hasNext;
+  final List<MaintenanceNotificationModel> items;
+
+  factory MaintenanceNotificationPage.fromJson(Map<String, dynamic> json) {
+    final Object? itemsRaw = json['items'];
+    return MaintenanceNotificationPage(
+      page: _readInt(json, 'page') ?? 0,
+      size: _readInt(json, 'size') ?? 20,
+      hasNext: json['hasNext'] as bool? ?? false,
+      items: itemsRaw is List
+          ? itemsRaw
+                .map<MaintenanceNotificationModel>(
+                  (Object? item) =>
+                      MaintenanceNotificationModel.fromJson(_asMap(item)),
+                )
+                .toList()
+          : const <MaintenanceNotificationModel>[],
+    );
+  }
 }
 
 class MaintenancePlan {
@@ -1203,6 +1363,29 @@ class StartMaintenanceOrderModel {
 
   Map<String, dynamic> toJson() {
     return <String, dynamic>{'startedAt': _trimOrNull(startedAt)};
+  }
+}
+
+class RescheduleMaintenanceOrderModel {
+  const RescheduleMaintenanceOrderModel({
+    required this.scheduledStartAt,
+    required this.scheduledEndAt,
+    required this.reason,
+    required this.expectedScheduleVersion,
+  });
+
+  final String scheduledStartAt;
+  final String scheduledEndAt;
+  final String reason;
+  final int expectedScheduleVersion;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'scheduledStartAt': scheduledStartAt.trim(),
+      'scheduledEndAt': scheduledEndAt.trim(),
+      'reason': reason.trim(),
+      'expectedScheduleVersion': expectedScheduleVersion,
+    };
   }
 }
 

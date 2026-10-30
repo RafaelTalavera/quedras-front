@@ -298,6 +298,112 @@ void main() {
     expect(client.calls[1].method, 'DELETE');
     expect(client.calls[1].path, 'maintenance/providers/34');
   });
+
+  test('HttpMaintenanceAppService reagenda con version de agenda', () async {
+    final _FakeApiClient client = _FakeApiClient()
+      ..enqueue(
+        const ApiResponse(
+          statusCode: 200,
+          body:
+              '{"id":10,"locationId":1,"locationTypeSnapshot":"ROOM","locationCodeSnapshot":"208","locationLabelSnapshot":"Habitacion 208","providerId":2,"providerTypeSnapshot":"INTERNAL","providerNameSnapshot":"Equipo interno","serviceLabelSnapshot":"Mantenimiento general","orderKind":"CORRECTIVE","title":"Revisar cerradura","description":null,"priority":"MEDIUM","requestOrigin":"INTERNAL_ROLE","requestedForGuest":false,"status":"SCHEDULED","reportedAt":"2026-04-10T09:00:00Z","scheduledStartAt":"2026-04-10T12:00:00","scheduledEndAt":"2026-04-10T13:30:00","scheduleVersion":2,"attachments":[]}',
+        ),
+      );
+    final HttpMaintenanceAppService service = HttpMaintenanceAppService(
+      apiClient: client,
+    );
+
+    final MaintenanceOrder order = await service.rescheduleOrder(
+      10,
+      const RescheduleMaintenanceOrderModel(
+        scheduledStartAt: '2026-04-10T12:00:00',
+        scheduledEndAt: '2026-04-10T13:30:00',
+        reason: ' Cambio de disponibilidad ',
+        expectedScheduleVersion: 1,
+      ),
+    );
+
+    expect(order.scheduleVersion, 2);
+    expect(client.calls.single.method, 'PATCH');
+    expect(client.calls.single.path, 'maintenance/orders/10/reschedule');
+    expect(
+      client.calls.single.body,
+      '{"scheduledStartAt":"2026-04-10T12:00:00","scheduledEndAt":"2026-04-10T13:30:00","reason":"Cambio de disponibilidad","expectedScheduleVersion":1}',
+    );
+  });
+
+  test('HttpMaintenanceAppService consulta agenda e backlog por rango', () async {
+    final _FakeApiClient client = _FakeApiClient()
+      ..enqueue(
+        const ApiResponse(
+          statusCode: 200,
+          body:
+              '{"rangeStart":"2026-05-01T00:00:00","rangeEndExclusive":"2026-05-08T00:00:00","scheduledOrders":[{"id":10,"locationId":1,"locationTypeSnapshot":"ROOM","locationCodeSnapshot":"209","locationLabelSnapshot":"Habitacion 209","orderKind":"CORRECTIVE","title":"Revision nocturna","priority":"MEDIUM","requestOrigin":"INTERNAL_ROLE","requestedForGuest":false,"status":"SCHEDULED","reportedAt":"2026-04-30T20:00:00Z","scheduledStartAt":"2026-04-30T23:00:00","scheduledEndAt":"2026-05-01T02:00:00","scheduleVersion":1,"attachments":[]}],"backlogOrders":[{"id":11,"locationId":1,"locationTypeSnapshot":"ROOM","locationCodeSnapshot":"209","locationLabelSnapshot":"Habitacion 209","orderKind":"CORRECTIVE","title":"Reparacion pendiente","priority":"HIGH","requestOrigin":"INTERNAL_ROLE","requestedForGuest":false,"status":"OPEN","reportedAt":"2026-04-30T21:00:00Z","scheduleVersion":0,"attachments":[]}],"backlogHasMore":true}',
+        ),
+      );
+    final HttpMaintenanceAppService service = HttpMaintenanceAppService(
+      apiClient: client,
+    );
+
+    final MaintenanceCalendar calendar = await service.getCalendar(
+      rangeStart: '2026-05-01T00:00:00',
+      rangeEndExclusive: '2026-05-08T00:00:00',
+      priority: MaintenancePriority.high,
+      backlogSize: 25,
+    );
+
+    expect(calendar.scheduledOrders.single.id, 10);
+    expect(calendar.backlogOrders.single.id, 11);
+    expect(calendar.backlogHasMore, isTrue);
+    expect(
+      client.calls.single.path,
+      'maintenance/orders/calendar?rangeStart=2026-05-01T00%3A00%3A00&rangeEndExclusive=2026-05-08T00%3A00%3A00&priority=HIGH&backlogSize=25',
+    );
+  });
+
+  test(
+    'HttpMaintenanceAppService consume bandeja e acoes de notificacao',
+    () async {
+      final _FakeApiClient client = _FakeApiClient()
+        ..enqueue(
+          const ApiResponse(
+            statusCode: 200,
+            body:
+                '{"page":0,"size":20,"hasNext":false,"items":[{"id":7,"orderId":10,"notificationType":"OVERDUE","status":"UNREAD","title":"Manutencao atrasada","body":"Habitacion 209 - Revision nocturna","dueAt":"2026-05-01T02:00:00-03:00","readAt":null,"resolvedAt":null,"dismissedAt":null,"createdAt":"2026-05-01T02:01:00-03:00"}]}',
+          ),
+        )
+        ..enqueue(const ApiResponse(statusCode: 200, body: '{"count":1}'))
+        ..enqueue(const ApiResponse(statusCode: 204, body: ''))
+        ..enqueue(const ApiResponse(statusCode: 204, body: ''));
+      final HttpMaintenanceAppService service = HttpMaintenanceAppService(
+        apiClient: client,
+      );
+
+      final MaintenanceNotificationPage page = await service.listNotifications(
+        status: MaintenanceNotificationStatus.unread,
+      );
+      final int count = await service.getUnreadNotificationCount();
+      await service.markNotificationRead(7);
+      await service.dismissNotification(7);
+
+      expect(page.items.single.orderId, 10);
+      expect(
+        page.items.single.notificationType,
+        MaintenanceNotificationType.overdue,
+      );
+      expect(count, 1);
+      expect(
+        client.calls[0].path,
+        'notifications?module=maintenance&status=UNREAD&page=0&size=20',
+      );
+      expect(
+        client.calls[1].path,
+        'notifications/unread-count?module=maintenance',
+      );
+      expect(client.calls[2].method, 'PATCH');
+      expect(client.calls[2].path, 'notifications/7/read');
+      expect(client.calls[3].path, 'notifications/7/dismiss');
+    },
+  );
 }
 
 final class _FakeApiClient implements ApiClient {
