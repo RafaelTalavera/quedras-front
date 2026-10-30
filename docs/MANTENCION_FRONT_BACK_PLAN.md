@@ -3,6 +3,12 @@
 Fecha: 2026-03-30
 Modulo propuesto: `maintenance`
 Estado: `Implementado`
+
+> Correccion de alcance (2026-10-28): el CRUD y el agendamiento basico fueron
+> implementados, pero la agenda temporal diaria, semanal y mensual de
+> mantenimiento no estaba presente en la interfaz. Su implementacion se sigue
+> en `docs/MAINTENANCE_ALERTS_FRONTEND_PLAN.md`; las menciones historicas de
+> calendario implementado no constituyen evidencia de cierre de esa agenda.
 Backend relacionado: `C:/Users/Public/Documents/Proyectos/quadras`
 
 ## Actualizacion 2026-05-21
