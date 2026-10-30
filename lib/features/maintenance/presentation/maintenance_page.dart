@@ -2378,7 +2378,7 @@ class _MaintenancePageState extends State<MaintenancePage>
   String _creationChoiceLabel(_MaintenanceOrderCreationChoice choice) {
     return switch (choice) {
       _MaintenanceOrderCreationChoice.general => 'General',
-      _MaintenanceOrderCreationChoice.airConditioning => 'AA',
+      _MaintenanceOrderCreationChoice.airConditioning => 'Ar-condicionado',
       _MaintenanceOrderCreationChoice.elevators => 'Elevadores',
       _MaintenanceOrderCreationChoice.doorsAndWindows => 'Portas e janelas',
       _MaintenanceOrderCreationChoice.internet => 'Internet',
@@ -2461,7 +2461,7 @@ class _MaintenancePageState extends State<MaintenancePage>
   String _launcherLabel(_MaintenanceQuickLauncher launcher) {
     return switch (launcher) {
       _MaintenanceQuickLauncher.elevators => 'Elevadores',
-      _MaintenanceQuickLauncher.airConditioning => 'AA',
+      _MaintenanceQuickLauncher.airConditioning => 'Ar-condicionado',
       _MaintenanceQuickLauncher.doorsAndWindows => 'Portas e janelas',
       _MaintenanceQuickLauncher.internet => 'Internet',
       _MaintenanceQuickLauncher.cameras => 'Câmeras',
@@ -6857,6 +6857,18 @@ Widget _emptyScrollableBox(String message) {
 
 String _normalizeMaintenanceServiceLabel(String value) {
   final String normalized = value.trim();
+  if (RegExp(
+    r'^(?:servi(?:cio|ço)\s+(?:de\s+)?)?(?:mantenimiento|manteniento|manuten[cç][aã]o)\s+de\s+aires?(?:\s+acondicionados?)?$',
+    caseSensitive: false,
+  ).hasMatch(normalized)) {
+    return MaintenanceProviderSpecialty.airConditioning.label;
+  }
+  if (RegExp(
+    r'^(?:AA|ar[ -]?condicionado|aires?[ -]?acondicionados?)$',
+    caseSensitive: false,
+  ).hasMatch(normalized)) {
+    return MaintenanceProviderSpecialty.airConditioning.label;
+  }
   if (RegExp(r'^internet$', caseSensitive: false).hasMatch(normalized)) {
     return MaintenanceProviderSpecialty.internet.label;
   }
@@ -6867,6 +6879,12 @@ String _normalizeMaintenanceProviderName(String? value) {
   final String normalized = value?.trim() ?? '';
   if (normalized.isEmpty) {
     return 'Sem prestador';
+  }
+  if (RegExp(
+    r'^(?:servi(?:cio|ço)\s+(?:de\s+)?)?(?:mantenimiento|manteniento|manuten[cç][aã]o)\s+de\s+aires?(?:\s+acondicionados?)?$',
+    caseSensitive: false,
+  ).hasMatch(normalized)) {
+    return 'Manutenção de ar-condicionado';
   }
   if (RegExp(r'\binternet\b', caseSensitive: false).hasMatch(normalized)) {
     return MaintenanceProviderSpecialty.internet.label;

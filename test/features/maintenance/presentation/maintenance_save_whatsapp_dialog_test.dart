@@ -35,6 +35,15 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    expect(find.text('Ar-condicionado'), findsOneWidget);
+    expect(find.text('AA'), findsNothing);
+
+    await tester.tap(find.text('Ar-condicionado'));
+    await tester.pumpAndSettle();
+    expect(find.text('Manutenção de ar-condicionado'), findsOneWidget);
+    await tester.tap(find.text('Cancelar'));
+    await tester.pumpAndSettle();
+
     await tester.tap(find.text('Internet'));
     await tester.pumpAndSettle();
     expect(find.text('WhatsApp: 5548988887777'), findsOneWidget);
@@ -67,8 +76,8 @@ class _FakeMaintenanceService extends Fake implements MaintenanceAppService {
       'id': 1,
       'providerType': 'EXTERNAL',
       'specialty': 'AIR_CONDITIONING',
-      'name': 'AA',
-      'serviceLabel': 'AA',
+      'name': 'servicio manteniento de aires',
+      'serviceLabel': 'servicio manteniento de aires',
       'whatsappNumber': '5548999998888',
       'whatsappEnabled': true,
       'active': true,

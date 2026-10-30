@@ -81,7 +81,7 @@ enum MaintenanceProviderType {
 enum MaintenanceProviderSpecialty {
   generalMaintenance('GENERAL_MAINTENANCE', 'Interno'),
   elevators('ELEVATORS', 'Elevadores'),
-  airConditioning('AIR_CONDITIONING', 'AA'),
+  airConditioning('AIR_CONDITIONING', 'Ar-condicionado'),
   internet('INTERNET', 'Internet'),
   doorsAndWindows('DOORS_AND_WINDOWS', 'Portas e janelas'),
   cameras('CAMERAS', 'Câmeras'),
