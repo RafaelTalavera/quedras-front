@@ -3,6 +3,7 @@ enum AppSection {
   tennisRental,
   toursTravel,
   maintenance,
+  laundry,
   settings,
 }
 
@@ -12,6 +13,7 @@ final class AppRoutes {
     AppSection.massageBooking,
     AppSection.toursTravel,
     AppSection.maintenance,
+    AppSection.laundry,
     AppSection.settings,
   ];
 
@@ -20,6 +22,7 @@ final class AppRoutes {
   static const String massageBooking = '/massagens';
   static const String toursTravel = '/tours';
   static const String maintenance = '/manutencao';
+  static const String laundry = '/lavanderia';
   static const String settings = '/configuracoes';
 
   static AppSection sectionByRoute(String route) {
@@ -30,6 +33,8 @@ final class AppRoutes {
         return AppSection.toursTravel;
       case maintenance:
         return AppSection.maintenance;
+      case laundry:
+        return AppSection.laundry;
       case settings:
         return AppSection.settings;
       case tennisRental:
@@ -48,6 +53,8 @@ final class AppRoutes {
         return toursTravel;
       case AppSection.maintenance:
         return maintenance;
+      case AppSection.laundry:
+        return laundry;
       case AppSection.settings:
         return settings;
     }

@@ -14,6 +14,8 @@ import '../../courts/application/court_app_service.dart';
 import '../../massages/application/massage_app_service.dart';
 import '../../massages/presentation/massage_booking_page.dart';
 import '../../maintenance/application/maintenance_app_service.dart';
+import '../../laundry/application/laundry_app_service.dart';
+import '../../laundry/presentation/laundry_page.dart';
 import 'package:costanorte/features/maintenance/presentation/maintenance_page.dart';
 import '../../maintenance/domain/maintenance_models.dart';
 import '../../maintenance/presentation/maintenance_notification_bell.dart';
@@ -37,6 +39,7 @@ class ShellPage extends StatefulWidget {
     required this.courtAppService,
     required this.toursAppService,
     required this.maintenanceAppService,
+    required this.laundryAppService,
     required this.userManagementAppService,
     required this.scheduleSyncService,
     required this.pushNotificationService,
@@ -50,6 +53,7 @@ class ShellPage extends StatefulWidget {
   final CourtAppService courtAppService;
   final ToursAppService toursAppService;
   final MaintenanceAppService maintenanceAppService;
+  final LaundryAppService laundryAppService;
   final UserManagementAppService userManagementAppService;
   final ScheduleSyncService scheduleSyncService;
   final PushNotificationService pushNotificationService;
@@ -269,6 +273,8 @@ class _ShellPageState extends State<ShellPage> {
           controller: _maintenancePageController,
           onSectionChanged: _handleMaintenanceSectionChanged,
         );
+      case AppSection.laundry:
+        return LaundryPage(service: widget.laundryAppService);
       case AppSection.settings:
         return SingleChildScrollView(
           child: SettingsPage(
@@ -1622,6 +1628,8 @@ String _labelForSection(AppSection section) {
       return 'Tours';
     case AppSection.maintenance:
       return 'Manutencao';
+    case AppSection.laundry:
+      return 'Lavandería';
     case AppSection.settings:
       return 'Config.';
   }
@@ -1648,6 +1656,8 @@ IconData _iconForSection(AppSection section) {
       return Icons.explore_rounded;
     case AppSection.maintenance:
       return Icons.build_circle_rounded;
+    case AppSection.laundry:
+      return Icons.local_laundry_service_rounded;
     case AppSection.settings:
       return Icons.tune_rounded;
   }

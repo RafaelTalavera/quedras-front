@@ -10,6 +10,7 @@ void main() {
         AppSection.massageBooking,
         AppSection.toursTravel,
         AppSection.maintenance,
+        AppSection.laundry,
         AppSection.settings,
       ],
     );

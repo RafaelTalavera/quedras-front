@@ -7,6 +7,7 @@ import '../../features/courts/application/court_app_service.dart';
 import '../../features/home/presentation/shell_page.dart';
 import '../../features/massages/application/massage_app_service.dart';
 import '../../features/maintenance/application/maintenance_app_service.dart';
+import '../../features/laundry/application/laundry_app_service.dart';
 import '../../features/reservations/application/reservation_app_service.dart';
 import '../../features/settings/application/user_management_app_service.dart';
 import '../../features/tours/application/tours_app_service.dart';
@@ -24,6 +25,7 @@ final class AppRouter {
     required CourtAppService courtAppService,
     required ToursAppService toursAppService,
     required MaintenanceAppService maintenanceAppService,
+    required LaundryAppService laundryAppService,
     required UserManagementAppService userManagementAppService,
     required ScheduleSyncService scheduleSyncService,
     required PushNotificationService pushNotificationService,
@@ -60,6 +62,7 @@ final class AppRouter {
         courtAppService: courtAppService,
         toursAppService: toursAppService,
         maintenanceAppService: maintenanceAppService,
+        laundryAppService: laundryAppService,
         userManagementAppService: userManagementAppService,
         scheduleSyncService: scheduleSyncService,
         pushNotificationService: pushNotificationService,

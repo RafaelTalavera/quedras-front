@@ -19,6 +19,8 @@ import '../features/massages/application/massage_app_service.dart';
 import '../features/massages/infrastructure/http_massage_app_service.dart';
 import '../features/maintenance/application/maintenance_app_service.dart';
 import '../features/maintenance/infrastructure/http_maintenance_app_service.dart';
+import '../features/laundry/application/laundry_app_service.dart';
+import '../features/laundry/infrastructure/http_laundry_app_service.dart';
 import '../features/reservations/application/reservation_app_service.dart';
 import '../features/reservations/infrastructure/http_reservation_app_service.dart';
 import '../features/settings/application/user_management_app_service.dart';
@@ -39,6 +41,7 @@ class CostaNorteApp extends StatefulWidget {
     CourtAppService? courtAppService,
     ToursAppService? toursAppService,
     MaintenanceAppService? maintenanceAppService,
+    LaundryAppService? laundryAppService,
     UserManagementAppService? userManagementAppService,
     PushNotificationService? pushNotificationService,
   }) : _apiClient = apiClient,
@@ -49,6 +52,7 @@ class CostaNorteApp extends StatefulWidget {
        _courtAppService = courtAppService,
        _toursAppService = toursAppService,
        _maintenanceAppService = maintenanceAppService,
+       _laundryAppService = laundryAppService,
        _userManagementAppService = userManagementAppService,
        _pushNotificationService = pushNotificationService;
 
@@ -60,6 +64,7 @@ class CostaNorteApp extends StatefulWidget {
   final CourtAppService? _courtAppService;
   final ToursAppService? _toursAppService;
   final MaintenanceAppService? _maintenanceAppService;
+  final LaundryAppService? _laundryAppService;
   final UserManagementAppService? _userManagementAppService;
   final PushNotificationService? _pushNotificationService;
 
@@ -78,6 +83,7 @@ class _CostaNorteAppState extends State<CostaNorteApp>
   late final CourtAppService _courtAppService;
   late final ToursAppService _toursAppService;
   late final MaintenanceAppService _maintenanceAppService;
+  late final LaundryAppService _laundryAppService;
   late final UserManagementAppService _userManagementAppService;
   late final ScheduleSyncService _scheduleSyncService;
   late final PushNotificationService _pushNotificationService;
@@ -117,6 +123,9 @@ class _CostaNorteAppState extends State<CostaNorteApp>
     _maintenanceAppService =
         widget._maintenanceAppService ??
         HttpMaintenanceAppService(apiClient: _authorizedApiClient);
+    _laundryAppService =
+        widget._laundryAppService ??
+        HttpLaundryAppService(apiClient: _authorizedApiClient);
     _userManagementAppService =
         widget._userManagementAppService ??
         HttpUserManagementAppService(apiClient: _authorizedApiClient);
@@ -185,6 +194,7 @@ class _CostaNorteAppState extends State<CostaNorteApp>
         courtAppService: _courtAppService,
         toursAppService: _toursAppService,
         maintenanceAppService: _maintenanceAppService,
+        laundryAppService: _laundryAppService,
         userManagementAppService: _userManagementAppService,
         scheduleSyncService: _scheduleSyncService,
         pushNotificationService: _pushNotificationService,

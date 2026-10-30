@@ -1,0 +1,637 @@
+import 'dart:async';
+
+import 'package:costanorte/core/audit/audit_models.dart';
+import 'package:costanorte/core/network/api_exception.dart';
+import 'package:costanorte/features/laundry/application/laundry_app_service.dart';
+import 'package:costanorte/features/laundry/domain/laundry_models.dart';
+import 'package:costanorte/features/laundry/presentation/laundry_page.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  testWidgets('muestra estado de carga y luego vacío', (
+    WidgetTester tester,
+  ) async {
+    final Completer<List<LaundryShipment>> shipments =
+        Completer<List<LaundryShipment>>();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LaundryPage(
+            service: _FakeLaundryService(shipments: shipments.future),
+          ),
+        ),
+      ),
+    );
+    expect(find.byType(CircularProgressIndicator), findsOneWidget);
+    shipments.complete(<LaundryShipment>[]);
+    await tester.pumpAndSettle();
+    expect(find.text('Registrar recibido'), findsOneWidget);
+  });
+
+  testWidgets('presenta las tres operaciones independientes en la cabecera', (
+    WidgetTester tester,
+  ) async {
+    await _pumpLaundry(tester, _FakeLaundryService());
+
+    expect(
+      find.byKey(const ValueKey<String>('laundry-action-new-shipment')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('laundry-action-rewash')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('laundry-action-receive')),
+      findsOneWidget,
+    );
+    expect(find.text('Pendientes'), findsNothing);
+    expect(find.text('Para relavado'), findsNothing);
+  });
+
+  testWidgets('muestra error y acción de reintento', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LaundryPage(
+            service: _FakeLaundryService(error: Exception('fallo')),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(find.text('No se pudo completar la operación.'), findsOneWidget);
+    expect(find.text('Reintentar'), findsOneWidget);
+  });
+
+  testWidgets('identifica relavado como sin costo', (
+    WidgetTester tester,
+  ) async {
+    final LaundryShipment rewash = _shipment(
+      kind: LaundryShipmentKind.rewash,
+      billableAmount: 50,
+      status: LaundryShipmentStatus.sent,
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: LaundryPage(
+            service: _FakeLaundryService(
+              shipments: Future<List<LaundryShipment>>.value(<LaundryShipment>[
+                rewash,
+              ]),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Relavados registrados'));
+    await tester.pumpAndSettle();
+    expect(find.text('RELAVADO · SIN COSTO'), findsOneWidget);
+    expect(find.text('Facturable: R\$ 0,00'), findsOneWidget);
+  });
+
+  testWidgets(
+    'Recibido usa el mismo formulario y crea una transacción propia',
+    (WidgetTester tester) async {
+      final _FakeLaundryService service = _FakeLaundryService(
+        items: <LaundryItem>[_activeItem],
+        providers: const <LaundryProvider>[
+          LaundryProvider(id: 7, name: 'Aguas Claras', active: true),
+        ],
+      );
+      await _pumpLaundry(tester, service);
+
+      expect(find.text('Registrar recibido'), findsOneWidget);
+      tester
+          .widget<DropdownButtonFormField<int>>(
+            find.byKey(const ValueKey<String>('laundry-shipment-provider')),
+          )
+          .onChanged!(7);
+      await tester.enterText(
+        find.byKey(const ValueKey<String>('laundry-item-1')),
+        '2',
+      );
+      await tester.pump();
+      await tester.tap(
+        find.byKey(const ValueKey<String>('laundry-shipment-save')),
+      );
+      await tester.pumpAndSettle();
+
+      expect(service.lastShipmentRequest?.kind, LaundryShipmentKind.receipt);
+      expect(find.text('Recibido guardado.'), findsOneWidget);
+      expect(service.receiveCalls, 0);
+    },
+  );
+
+  testWidgets('Historial aplica filtros de proveedor y estado al servicio', (
+    WidgetTester tester,
+  ) async {
+    final _FakeLaundryService service = _FakeLaundryService(
+      shipments: Future<List<LaundryShipment>>.value(<LaundryShipment>[]),
+      providers: const <LaundryProvider>[
+        LaundryProvider(id: 7, name: 'Aguas Claras', active: true),
+      ],
+    );
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: LaundryPage(service: service)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await _openTab(tester, 'Historial');
+    final Finder providerFilter = find.byKey(
+      const ValueKey<String>('laundry-history-provider'),
+    );
+    tester.widget<DropdownButtonFormField<int>>(providerFilter).onChanged!(7);
+    final Finder statusFilter = find.byKey(
+      const ValueKey<String>('laundry-history-status'),
+    );
+    tester
+        .widget<DropdownButtonFormField<LaundryShipmentStatus>>(statusFilter)
+        .onChanged!(LaundryShipmentStatus.cancelled);
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('laundry-history-apply')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(service.lastProviderId, 7);
+    expect(service.lastStatus, LaundryShipmentStatus.cancelled);
+    expect(service.listCalls, 2);
+  });
+
+  testWidgets('administra listado, bÃºsqueda y filtro de artÃ­culos', (
+    WidgetTester tester,
+  ) async {
+    final _FakeLaundryService service = _FakeLaundryService(
+      items: <LaundryItem>[_activeItem, _inactiveItem],
+    );
+    await _pumpLaundry(tester, service);
+    await _openItems(tester);
+    expect(find.text('Toalla de baÃ±o'), findsOneWidget);
+    expect(find.text('SÃ¡bana individual'), findsOneWidget);
+    expect(find.text('Inactivo'), findsOneWidget);
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('laundry-item-search')),
+      'toalla',
+    );
+    await tester.pump();
+    expect(find.text('Toalla de baÃ±o'), findsOneWidget);
+    expect(find.text('SÃ¡bana individual'), findsNothing);
+
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('laundry-item-search')),
+      '',
+    );
+    final Finder filter = find.byKey(
+      const ValueKey<String>('laundry-item-status-filter'),
+    );
+    await tester.tap(filter);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Inactivos').last);
+    await tester.pumpAndSettle();
+    expect(find.text('Toalla de baÃ±o'), findsNothing);
+    expect(find.text('SÃ¡bana individual'), findsOneWidget);
+  });
+
+  testWidgets('valida y crea un artÃ­culo evitando doble envÃ­o', (
+    WidgetTester tester,
+  ) async {
+    final Completer<void> gate = Completer<void>();
+    final _FakeLaundryService service = _FakeLaundryService(createGate: gate);
+    await _pumpLaundry(tester, service);
+    await _openItems(tester);
+    await tester.tap(find.byKey(const ValueKey<String>('laundry-new-item')));
+    await tester.pumpAndSettle();
+    final Finder save = find.byKey(const ValueKey<String>('laundry-item-save'));
+    expect(tester.widget<FilledButton>(save).onPressed, isNull);
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('laundry-item-name')),
+      '  Alfombra de baÃ±o  ',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('laundry-item-price')),
+      '8,501',
+    );
+    await tester.pump();
+    expect(tester.widget<FilledButton>(save).onPressed, isNull);
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('laundry-item-price')),
+      '8,50',
+    );
+    await tester.pump();
+    await tester.tap(save);
+    await tester.pump();
+    await tester.tap(save, warnIfMissed: false);
+    expect(service.createCalls, 1);
+    expect(service.lastItem?.name, 'Alfombra de baÃ±o');
+    expect(service.lastItem?.currentUnitPrice, 8.5);
+    gate.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('Artículo creado.'), findsOneWidget);
+  });
+
+  testWidgets('edita y confirma la desactivaciÃ³n', (
+    WidgetTester tester,
+  ) async {
+    final _FakeLaundryService service = _FakeLaundryService(
+      items: <LaundryItem>[_activeItem],
+    );
+    await _pumpLaundry(tester, service);
+    await _openItems(tester);
+    await tester.tap(find.byKey(const ValueKey<String>('laundry-edit-item-1')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey<String>('laundry-item-active')));
+    await tester.tap(find.byKey(const ValueKey<String>('laundry-item-save')));
+    await tester.pumpAndSettle();
+    expect(find.text('Desactivar artÃ­culo'), findsOneWidget);
+    await tester.tap(find.text('Desactivar'));
+    await tester.pumpAndSettle();
+    expect(service.updateCalls, 1);
+    expect(service.lastItem?.active, isFalse);
+  });
+
+  testWidgets('mantiene el formulario abierto ante 409', (
+    WidgetTester tester,
+  ) async {
+    final _FakeLaundryService service = _FakeLaundryService(
+      itemError: const ApiException(
+        'Conflicto',
+        kind: ApiErrorKind.http,
+        statusCode: 409,
+      ),
+    );
+    await _pumpLaundry(tester, service);
+    await _openItems(tester);
+    await tester.tap(find.byKey(const ValueKey<String>('laundry-new-item')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('laundry-item-name')),
+      'Toalla',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('laundry-item-price')),
+      '4.50',
+    );
+    await tester.pump();
+    final Finder save = find.byKey(const ValueKey<String>('laundry-item-save'));
+    expect(tester.widget<FilledButton>(save).onPressed, isNotNull);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(service.createCalls, 1);
+    expect(find.textContaining('Ya existe otro'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey<String>('laundry-item-save')),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('cierra ediciÃ³n y recarga ante 404', (
+    WidgetTester tester,
+  ) async {
+    final _FakeLaundryService service = _FakeLaundryService(
+      items: <LaundryItem>[_activeItem],
+      itemError: const ApiException(
+        'No existe',
+        kind: ApiErrorKind.http,
+        statusCode: 404,
+      ),
+    );
+    await _pumpLaundry(tester, service);
+    await _openItems(tester);
+    await tester.tap(find.byKey(const ValueKey<String>('laundry-edit-item-1')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('laundry-item-price')),
+      '5.00',
+    );
+    await tester.tap(find.byKey(const ValueKey<String>('laundry-item-save')));
+    await tester.pumpAndSettle();
+    expect(
+      find.byKey(const ValueKey<String>('laundry-item-save')),
+      findsNothing,
+    );
+    expect(find.textContaining('ya no existe'), findsOneWidget);
+  });
+
+  testWidgets('nuevo envÃ­o muestra exclusivamente artÃ­culos activos', (
+    WidgetTester tester,
+  ) async {
+    final _FakeLaundryService service = _FakeLaundryService(
+      items: <LaundryItem>[_activeItem, _inactiveItem],
+    );
+    await _pumpLaundry(tester, service);
+    await tester.tap(find.textContaining('Nuevo env'));
+    await tester.pumpAndSettle();
+    expect(find.text('Toalla de baÃ±o'), findsOneWidget);
+    expect(find.text('SÃ¡bana individual'), findsNothing);
+  });
+
+  testWidgets('cantidad inicia en cero y responde a los botones mÃ¡s y menos', (
+    WidgetTester tester,
+  ) async {
+    final _FakeLaundryService service = _FakeLaundryService(
+      items: <LaundryItem>[_activeItem],
+    );
+    await _pumpLaundry(tester, service);
+    await tester.tap(find.textContaining('Nuevo env'));
+    await tester.pumpAndSettle();
+
+    final Finder quantity = find.byKey(
+      const ValueKey<String>('laundry-item-1'),
+    );
+    expect(tester.widget<TextFormField>(quantity).controller?.text, '0');
+
+    await tester.tap(find.byIcon(Icons.add_circle_outline));
+    await tester.pump();
+    expect(tester.widget<TextFormField>(quantity).controller?.text, '1');
+
+    await tester.tap(find.byIcon(Icons.remove_circle_outline));
+    await tester.pump();
+    expect(tester.widget<TextFormField>(quantity).controller?.text, '0');
+  });
+
+  testWidgets('nuevo envÃ­o permite seleccionar una fecha anterior', (
+    WidgetTester tester,
+  ) async {
+    final _FakeLaundryService service = _FakeLaundryService(
+      items: <LaundryItem>[_activeItem],
+      providers: const <LaundryProvider>[
+        LaundryProvider(id: 7, name: 'Aguas Claras', active: true),
+      ],
+    );
+    await _pumpLaundry(tester, service);
+    await tester.tap(find.textContaining('Nuevo env'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('laundry-shipment-date')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('15').last);
+    await tester.tap(find.text('OK'));
+    await tester.pumpAndSettle();
+
+    final Finder provider = find.byKey(
+      const ValueKey<String>('laundry-shipment-provider'),
+    );
+    tester.widget<DropdownButtonFormField<int>>(provider).onChanged!(7);
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('laundry-item-1')),
+      '2',
+    );
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('laundry-shipment-save')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(service.lastShipmentRequest, isNotNull);
+    expect(service.lastShipmentRequest!.sentAt.day, 15);
+    expect(service.getShipmentCalls, 0);
+    expect(find.text('Envío guardado.'), findsOneWidget);
+    expect(find.textContaining('Aceptado'), findsNothing);
+    expect(find.textContaining('Faltante'), findsNothing);
+  });
+
+  testWidgets('registra relavado manual como transacción independiente', (
+    WidgetTester tester,
+  ) async {
+    final _FakeLaundryService service = _FakeLaundryService(
+      items: <LaundryItem>[_activeItem],
+      providers: const <LaundryProvider>[
+        LaundryProvider(id: 7, name: 'Aguas Claras', active: true),
+      ],
+    );
+    await _pumpLaundry(tester, service);
+    await _openTab(tester, 'Relavado');
+    expect(find.text('Registrar relavado'), findsOneWidget);
+    tester
+        .widget<DropdownButtonFormField<int>>(
+          find.byKey(const ValueKey<String>('laundry-shipment-provider')),
+        )
+        .onChanged!(7);
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('laundry-item-1')),
+      '2',
+    );
+    await tester.pump();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('laundry-shipment-save')),
+    );
+    await tester.pumpAndSettle();
+    expect(service.lastShipmentRequest?.kind, LaundryShipmentKind.rewash);
+    expect(find.text('Relavado guardado sin costo.'), findsOneWidget);
+  });
+}
+
+const LaundryItem _activeItem = LaundryItem(
+  id: 1,
+  name: 'Toalla de baÃ±o',
+  unitType: LaundryUnitType.piece,
+  currentUnitPrice: 4.5,
+  active: true,
+);
+const LaundryItem _inactiveItem = LaundryItem(
+  id: 2,
+  name: 'SÃ¡bana individual',
+  unitType: LaundryUnitType.piece,
+  currentUnitPrice: 7,
+  active: false,
+);
+
+Future<void> _pumpLaundry(
+  WidgetTester tester,
+  _FakeLaundryService service,
+) async {
+  await tester.binding.setSurfaceSize(const Size(1200, 900));
+  addTearDown(() => tester.binding.setSurfaceSize(null));
+  await tester.pumpWidget(
+    MaterialApp(
+      home: Scaffold(body: LaundryPage(service: service)),
+    ),
+  );
+  await tester.pumpAndSettle();
+}
+
+Future<void> _openItems(WidgetTester tester) async {
+  await _openTab(tester, 'Artículos y precios');
+}
+
+Future<void> _openTab(WidgetTester tester, String label) async {
+  Finder tab = find.text(label);
+  if (tab.evaluate().isEmpty) {
+    await tester.tap(
+      find.byKey(const ValueKey<String>('laundry-secondary-menu')),
+    );
+    await tester.pumpAndSettle();
+    tab = find.text(label).last;
+  }
+  await tester.ensureVisible(tab);
+  await tester.pumpAndSettle();
+  await tester.tap(tab);
+  await tester.pumpAndSettle();
+}
+
+LaundryShipment _shipment({
+  required LaundryShipmentKind kind,
+  required double billableAmount,
+  LaundryShipmentStatus status = LaundryShipmentStatus.sent,
+  DateTime? sentAt,
+  int id = 1,
+  String shipmentNumber = 'LAV-1',
+  List<LaundryShipmentLine> lines = const <LaundryShipmentLine>[],
+}) => LaundryShipment(
+  id: id,
+  shipmentNumber: shipmentNumber,
+  providerId: 1,
+  providerName: 'Aguas Claras',
+  kind: kind,
+  status: status,
+  sentAt: status == LaundryShipmentStatus.pendingDispatch
+      ? sentAt
+      : sentAt ?? DateTime.utc(2026, 10, 30),
+  version: 0,
+  totalQuantity: 2,
+  billableAmount: billableAmount,
+  lines: lines,
+);
+
+final class _FakeLaundryService implements LaundryAppService {
+  _FakeLaundryService({
+    this.shipments,
+    this.error,
+    this.providers = const <LaundryProvider>[],
+    List<LaundryItem>? items,
+    this.itemError,
+    this.createGate,
+  }) : items = items ?? <LaundryItem>[];
+  final Future<List<LaundryShipment>>? shipments;
+  final Object? error;
+  final List<LaundryProvider> providers;
+  final List<LaundryItem> items;
+  final ApiException? itemError;
+  final Completer<void>? createGate;
+  int listCalls = 0;
+  int createCalls = 0;
+  int updateCalls = 0;
+  int dispatchCalls = 0;
+  int receiveCalls = 0;
+  int getShipmentCalls = 0;
+  LaundryItem? lastItem;
+  CreateLaundryShipmentRequest? lastShipmentRequest;
+  DispatchLaundryShipmentRequest? lastDispatchRequest;
+  ReceiveLaundryShipmentRequest? lastReceiveRequest;
+  int? lastProviderId;
+  LaundryShipmentStatus? lastStatus;
+  @override
+  Future<List<LaundryProvider>> listProviders() async => providers;
+  @override
+  Future<List<LaundryItem>> listItems() async => List<LaundryItem>.of(items);
+  @override
+  Future<List<LaundryShipment>> listShipments({
+    LaundryShipmentStatus? status,
+    int? providerId,
+    String? dateFrom,
+    String? dateTo,
+  }) async {
+    listCalls++;
+    lastProviderId = providerId;
+    lastStatus = status;
+    if (error != null) {
+      throw error!;
+    }
+    return (await shipments) ?? const <LaundryShipment>[];
+  }
+
+  @override
+  Future<LaundryProvider> createProvider(
+    CreateLaundryProviderRequest request,
+  ) => throw UnimplementedError();
+  @override
+  Future<LaundryItem> createItem(LaundryItem item) async {
+    createCalls++;
+    lastItem = item;
+    if (itemError != null) {
+      throw itemError!;
+    }
+    if (createGate != null) {
+      await createGate!.future;
+    }
+    final LaundryItem created = LaundryItem(
+      id: 99,
+      name: item.name,
+      unitType: item.unitType,
+      currentUnitPrice: item.currentUnitPrice,
+      active: item.active,
+    );
+    items.add(created);
+    return created;
+  }
+
+  @override
+  Future<LaundryItem> updateItem(int id, LaundryItem item) async {
+    updateCalls++;
+    lastItem = item;
+    if (itemError != null) {
+      throw itemError!;
+    }
+    final int index = items.indexWhere((LaundryItem value) => value.id == id);
+    if (index >= 0) {
+      items[index] = item;
+    }
+    return item;
+  }
+
+  @override
+  Future<LaundryShipment> createShipment(
+    CreateLaundryShipmentRequest request,
+  ) async {
+    lastShipmentRequest = request;
+    return _shipment(kind: LaundryShipmentKind.standard, billableAmount: 9);
+  }
+
+  @override
+  Future<LaundryShipment> getShipment(int id) async {
+    getShipmentCalls++;
+    return _shipment(kind: LaundryShipmentKind.standard, billableAmount: 9);
+  }
+
+  @override
+  Future<ReceiveLaundryShipmentResult> receiveShipment(
+    int id,
+    ReceiveLaundryShipmentRequest request,
+  ) async {
+    receiveCalls++;
+    lastReceiveRequest = request;
+    return ReceiveLaundryShipmentResult(
+      shipment: _shipment(
+        kind: LaundryShipmentKind.standard,
+        billableAmount: 20,
+        status: LaundryShipmentStatus.received,
+      ),
+    );
+  }
+
+  @override
+  Future<LaundryShipment> dispatchShipment(
+    int id,
+    DispatchLaundryShipmentRequest request,
+  ) async {
+    dispatchCalls++;
+    lastDispatchRequest = request;
+    return _shipment(kind: LaundryShipmentKind.rewash, billableAmount: 0);
+  }
+
+  @override
+  Future<LaundryShipment> cancelShipment(int id, String cancellationNotes) =>
+      throw UnimplementedError();
+  @override
+  Future<List<AuditEventModel>> shipmentAudit(int id) async =>
+      const <AuditEventModel>[];
+}
