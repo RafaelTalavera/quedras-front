@@ -26,7 +26,7 @@ void main() {
     expect(find.byType(CircularProgressIndicator), findsOneWidget);
     shipments.complete(<LaundryShipment>[]);
     await tester.pumpAndSettle();
-    expect(find.text('Registrar recibido'), findsOneWidget);
+    expect(find.text('Registrar recebimento'), findsOneWidget);
   });
 
   testWidgets('presenta las tres operaciones independientes en la cabecera', (
@@ -63,8 +63,8 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    expect(find.text('No se pudo completar la operación.'), findsOneWidget);
-    expect(find.text('Reintentar'), findsOneWidget);
+    expect(find.text('Não foi possível concluir a operação.'), findsOneWidget);
+    expect(find.text('Tentar novamente'), findsOneWidget);
   });
 
   testWidgets('identifica relavado como sin costo', (
@@ -89,10 +89,76 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Relavados registrados'));
+    await tester.tap(find.text('Relavagens registradas'));
     await tester.pumpAndSettle();
-    expect(find.text('RELAVADO · SIN COSTO'), findsOneWidget);
-    expect(find.text('Facturable: R\$ 0,00'), findsOneWidget);
+    expect(find.text('RELAVAGEM · SEM CUSTO'), findsOneWidget);
+    expect(find.text('Faturável: R\$ 0,00'), findsOneWidget);
+  });
+
+  testWidgets('resume por fecha recibidas, enviadas, relavadas y totales', (
+    WidgetTester tester,
+  ) async {
+    final List<LaundryShipment> shipments = <LaundryShipment>[
+      _shipment(
+        id: 1,
+        kind: LaundryShipmentKind.standard,
+        billableAmount: 20,
+        sentAt: DateTime.utc(2026, 10, 30, 12),
+        totalQuantity: 4,
+      ),
+      _shipment(
+        id: 2,
+        kind: LaundryShipmentKind.receipt,
+        billableAmount: 0,
+        sentAt: DateTime.utc(2026, 10, 30, 14),
+        totalQuantity: 3,
+      ),
+      _shipment(
+        id: 3,
+        kind: LaundryShipmentKind.rewash,
+        billableAmount: 0,
+        sentAt: DateTime.utc(2026, 10, 29, 12),
+        totalQuantity: 2,
+      ),
+      _shipment(
+        id: 4,
+        kind: LaundryShipmentKind.standard,
+        status: LaundryShipmentStatus.cancelled,
+        billableAmount: 0,
+        sentAt: DateTime.utc(2026, 10, 30, 15),
+        totalQuantity: 99,
+      ),
+    ];
+    await _pumpLaundry(
+      tester,
+      _FakeLaundryService(
+        shipments: Future<List<LaundryShipment>>.value(shipments),
+      ),
+    );
+
+    await _openTab(tester, 'Resumo por data');
+
+    final Finder table = find.byKey(
+      const ValueKey<String>('laundry-daily-summary-table'),
+    );
+    expect(table, findsOneWidget);
+    expect(
+      find.descendant(of: table, matching: find.text('30/10/2026')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: table, matching: find.text('29/10/2026')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: table, matching: find.text('Totais')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: table, matching: find.text('9')),
+      findsOneWidget,
+    );
+    expect(find.descendant(of: table, matching: find.text('99')), findsNothing);
   });
 
   testWidgets(
@@ -106,7 +172,7 @@ void main() {
       );
       await _pumpLaundry(tester, service);
 
-      expect(find.text('Registrar recibido'), findsOneWidget);
+      expect(find.text('Registrar recebimento'), findsOneWidget);
       tester
           .widget<DropdownButtonFormField<int>>(
             find.byKey(const ValueKey<String>('laundry-shipment-provider')),
@@ -123,10 +189,89 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(service.lastShipmentRequest?.kind, LaundryShipmentKind.receipt);
-      expect(find.text('Recibido guardado.'), findsOneWidget);
+      expect(find.text('Recebimento salvo.'), findsOneWidget);
+      expect(find.text('Não há recebimentos registrados.'), findsOneWidget);
+      expect(find.text('Não há relavagens registradas.'), findsNothing);
       expect(service.receiveCalls, 0);
     },
   );
+
+  testWidgets('el detalle muestra solo prendas y total', (
+    WidgetTester tester,
+  ) async {
+    const LaundryShipmentLine line = LaundryShipmentLine(
+      id: 10,
+      itemId: 1,
+      itemName: 'Toalla de baño',
+      unitType: LaundryUnitType.piece,
+      sentQuantity: 2,
+      acceptedQuantity: 1,
+      rewashQuantity: 0.5,
+      missingQuantity: 0.25,
+      damagedQuantity: 0.25,
+      pendingQuantity: 0,
+      unitPrice: 4.5,
+      billableAmount: 9,
+    );
+    final LaundryShipment receipt = _shipment(
+      kind: LaundryShipmentKind.receipt,
+      billableAmount: 0,
+      status: LaundryShipmentStatus.sent,
+      sentAt: DateTime.utc(2026, 10, 30, 12),
+      lines: const <LaundryShipmentLine>[line],
+    );
+    await _pumpLaundry(
+      tester,
+      _FakeLaundryService(
+        shipments: Future<List<LaundryShipment>>.value(<LaundryShipment>[
+          receipt,
+        ]),
+        detailShipment: receipt,
+      ),
+    );
+
+    await tester.tap(find.text('Recebimentos registrados'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('· Recebido'), findsOneWidget);
+    expect(find.textContaining('· Enviado'), findsNothing);
+
+    await tester.tap(find.text('Detalhes'));
+    await tester.pumpAndSettle();
+    final Finder detail = find.byType(AlertDialog);
+    expect(
+      find.descendant(of: detail, matching: find.text('Toalla de baño')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: detail, matching: find.text('2')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('laundry-detail-total')),
+      findsOneWidget,
+    );
+    expect(find.text('Total: 2'), findsOneWidget);
+    expect(
+      find.descendant(of: detail, matching: find.textContaining('Aceito')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: detail, matching: find.textContaining('Relavagem')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: detail, matching: find.textContaining('Faltante')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: detail, matching: find.textContaining('Danificado')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: detail, matching: find.textContaining('Pendente')),
+      findsNothing,
+    );
+  });
 
   testWidgets('Historial aplica filtros de proveedor y estado al servicio', (
     WidgetTester tester,
@@ -143,7 +288,7 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
-    await _openTab(tester, 'Historial');
+    await _openTab(tester, 'Histórico');
     final Finder providerFilter = find.byKey(
       const ValueKey<String>('laundry-history-provider'),
     );
@@ -175,7 +320,7 @@ void main() {
     await _openItems(tester);
     expect(find.text('Toalla de baÃ±o'), findsOneWidget);
     expect(find.text('SÃ¡bana individual'), findsOneWidget);
-    expect(find.text('Inactivo'), findsOneWidget);
+    expect(find.text('Inativo'), findsOneWidget);
 
     await tester.enterText(
       find.byKey(const ValueKey<String>('laundry-item-search')),
@@ -194,7 +339,7 @@ void main() {
     );
     await tester.tap(filter);
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Inactivos').last);
+    await tester.tap(find.text('Inativos').last);
     await tester.pumpAndSettle();
     expect(find.text('Toalla de baÃ±o'), findsNothing);
     expect(find.text('SÃ¡bana individual'), findsOneWidget);
@@ -234,7 +379,7 @@ void main() {
     expect(service.lastItem?.currentUnitPrice, 8.5);
     gate.complete();
     await tester.pumpAndSettle();
-    expect(find.text('Artículo creado.'), findsOneWidget);
+    expect(find.text('Item criado.'), findsOneWidget);
   });
 
   testWidgets('edita y confirma la desactivaciÃ³n', (
@@ -250,8 +395,8 @@ void main() {
     await tester.tap(find.byKey(const ValueKey<String>('laundry-item-active')));
     await tester.tap(find.byKey(const ValueKey<String>('laundry-item-save')));
     await tester.pumpAndSettle();
-    expect(find.text('Desactivar artÃ­culo'), findsOneWidget);
-    await tester.tap(find.text('Desactivar'));
+    expect(find.text('Desativar item'), findsOneWidget);
+    await tester.tap(find.text('Desativar'));
     await tester.pumpAndSettle();
     expect(service.updateCalls, 1);
     expect(service.lastItem?.active, isFalse);
@@ -285,7 +430,7 @@ void main() {
     await tester.tap(save);
     await tester.pumpAndSettle();
     expect(service.createCalls, 1);
-    expect(find.textContaining('Ya existe otro'), findsOneWidget);
+    expect(find.textContaining('Já existe outro'), findsOneWidget);
     expect(
       find.byKey(const ValueKey<String>('laundry-item-save')),
       findsOneWidget,
@@ -317,7 +462,7 @@ void main() {
       find.byKey(const ValueKey<String>('laundry-item-save')),
       findsNothing,
     );
-    expect(find.textContaining('ya no existe'), findsOneWidget);
+    expect(find.textContaining('não existe mais'), findsOneWidget);
   });
 
   testWidgets('nuevo envÃ­o muestra exclusivamente artÃ­culos activos', (
@@ -327,7 +472,7 @@ void main() {
       items: <LaundryItem>[_activeItem, _inactiveItem],
     );
     await _pumpLaundry(tester, service);
-    await tester.tap(find.textContaining('Nuevo env'));
+    await tester.tap(find.textContaining('Novo env'));
     await tester.pumpAndSettle();
     expect(find.text('Toalla de baÃ±o'), findsOneWidget);
     expect(find.text('SÃ¡bana individual'), findsNothing);
@@ -340,7 +485,7 @@ void main() {
       items: <LaundryItem>[_activeItem],
     );
     await _pumpLaundry(tester, service);
-    await tester.tap(find.textContaining('Nuevo env'));
+    await tester.tap(find.textContaining('Novo env'));
     await tester.pumpAndSettle();
 
     final Finder quantity = find.byKey(
@@ -357,6 +502,65 @@ void main() {
     expect(tester.widget<TextFormField>(quantity).controller?.text, '0');
   });
 
+  testWidgets(
+    'Enter avanza entre cantidades y guarda recibido desde el ultimo campo',
+    (WidgetTester tester) async {
+      final _FakeLaundryService service = _FakeLaundryService(
+        items: const <LaundryItem>[_activeItem, _secondActiveItem],
+        providers: const <LaundryProvider>[
+          LaundryProvider(id: 7, name: 'Aguas Claras', active: true),
+        ],
+      );
+      await _pumpLaundry(tester, service);
+      tester
+          .widget<DropdownButtonFormField<int>>(
+            find.byKey(const ValueKey<String>('laundry-shipment-provider')),
+          )
+          .onChanged!(7);
+
+      final Finder first = find.byKey(const ValueKey<String>('laundry-item-1'));
+      final Finder second = find.byKey(
+        const ValueKey<String>('laundry-item-3'),
+      );
+      await tester.tap(first);
+      await tester.enterText(first, '2');
+      await tester.testTextInput.receiveAction(TextInputAction.next);
+      await tester.pump();
+
+      final EditableText secondEditable = tester.widget<EditableText>(
+        find.descendant(of: second, matching: find.byType(EditableText)),
+      );
+      expect(secondEditable.focusNode.hasFocus, isTrue);
+      await tester.enterText(second, '3');
+      await tester.testTextInput.receiveAction(TextInputAction.done);
+      await tester.pumpAndSettle();
+
+      expect(service.lastShipmentRequest?.kind, LaundryShipmentKind.receipt);
+      expect(
+        service.lastShipmentRequest?.lines.map((line) => line.quantity),
+        <double>[2, 3],
+      );
+      expect(find.text('Recebimento salvo.'), findsOneWidget);
+    },
+  );
+
+  testWidgets('las cantidades rechazan caracteres no numericos', (
+    WidgetTester tester,
+  ) async {
+    await _pumpLaundry(
+      tester,
+      _FakeLaundryService(items: <LaundryItem>[_activeItem]),
+    );
+    final Finder quantity = find.byKey(
+      const ValueKey<String>('laundry-item-1'),
+    );
+
+    await tester.tap(quantity);
+    await tester.enterText(quantity, '2a');
+
+    expect(tester.widget<TextFormField>(quantity).controller?.text, '0');
+  });
+
   testWidgets('nuevo envÃ­o permite seleccionar una fecha anterior', (
     WidgetTester tester,
   ) async {
@@ -367,7 +571,7 @@ void main() {
       ],
     );
     await _pumpLaundry(tester, service);
-    await tester.tap(find.textContaining('Nuevo env'));
+    await tester.tap(find.textContaining('Novo env'));
     await tester.pumpAndSettle();
     await tester.tap(
       find.byKey(const ValueKey<String>('laundry-shipment-date')),
@@ -394,8 +598,8 @@ void main() {
     expect(service.lastShipmentRequest, isNotNull);
     expect(service.lastShipmentRequest!.sentAt.day, 15);
     expect(service.getShipmentCalls, 0);
-    expect(find.text('Envío guardado.'), findsOneWidget);
-    expect(find.textContaining('Aceptado'), findsNothing);
+    expect(find.text('Envio salvo.'), findsOneWidget);
+    expect(find.textContaining('Aceito'), findsNothing);
     expect(find.textContaining('Faltante'), findsNothing);
   });
 
@@ -409,8 +613,8 @@ void main() {
       ],
     );
     await _pumpLaundry(tester, service);
-    await _openTab(tester, 'Relavado');
-    expect(find.text('Registrar relavado'), findsOneWidget);
+    await _openTab(tester, 'Relavagem');
+    expect(find.text('Registrar relavagem'), findsOneWidget);
     tester
         .widget<DropdownButtonFormField<int>>(
           find.byKey(const ValueKey<String>('laundry-shipment-provider')),
@@ -426,7 +630,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(service.lastShipmentRequest?.kind, LaundryShipmentKind.rewash);
-    expect(find.text('Relavado guardado sin costo.'), findsOneWidget);
+    expect(find.text('Relavagem salva sem custo.'), findsOneWidget);
   });
 }
 
@@ -444,6 +648,13 @@ const LaundryItem _inactiveItem = LaundryItem(
   currentUnitPrice: 7,
   active: false,
 );
+const LaundryItem _secondActiveItem = LaundryItem(
+  id: 3,
+  name: 'Funda de almohada',
+  unitType: LaundryUnitType.piece,
+  currentUnitPrice: 3,
+  active: true,
+);
 
 Future<void> _pumpLaundry(
   WidgetTester tester,
@@ -460,7 +671,7 @@ Future<void> _pumpLaundry(
 }
 
 Future<void> _openItems(WidgetTester tester) async {
-  await _openTab(tester, 'Artículos y precios');
+  await _openTab(tester, 'Itens e preços');
 }
 
 Future<void> _openTab(WidgetTester tester, String label) async {
@@ -486,6 +697,7 @@ LaundryShipment _shipment({
   int id = 1,
   String shipmentNumber = 'LAV-1',
   List<LaundryShipmentLine> lines = const <LaundryShipmentLine>[],
+  double totalQuantity = 2,
 }) => LaundryShipment(
   id: id,
   shipmentNumber: shipmentNumber,
@@ -497,7 +709,7 @@ LaundryShipment _shipment({
       ? sentAt
       : sentAt ?? DateTime.utc(2026, 10, 30),
   version: 0,
-  totalQuantity: 2,
+  totalQuantity: totalQuantity,
   billableAmount: billableAmount,
   lines: lines,
 );
@@ -510,6 +722,7 @@ final class _FakeLaundryService implements LaundryAppService {
     List<LaundryItem>? items,
     this.itemError,
     this.createGate,
+    this.detailShipment,
   }) : items = items ?? <LaundryItem>[];
   final Future<List<LaundryShipment>>? shipments;
   final Object? error;
@@ -517,6 +730,7 @@ final class _FakeLaundryService implements LaundryAppService {
   final List<LaundryItem> items;
   final ApiException? itemError;
   final Completer<void>? createGate;
+  final LaundryShipment? detailShipment;
   int listCalls = 0;
   int createCalls = 0;
   int updateCalls = 0;
@@ -599,7 +813,8 @@ final class _FakeLaundryService implements LaundryAppService {
   @override
   Future<LaundryShipment> getShipment(int id) async {
     getShipmentCalls++;
-    return _shipment(kind: LaundryShipmentKind.standard, billableAmount: 9);
+    return detailShipment ??
+        _shipment(kind: LaundryShipmentKind.standard, billableAmount: 9);
   }
 
   @override

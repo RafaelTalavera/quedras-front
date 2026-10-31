@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../../core/audit/audit_timeline_dialog.dart';
 import '../../../core/feedback/app_alerts.dart';
@@ -25,6 +26,8 @@ class _LaundryPageState extends State<LaundryPage>
   List<LaundryShipment> _shipments = const <LaundryShipment>[];
   List<LaundryShipment> _historyShipments = const <LaundryShipment>[];
   final Map<int, double> _quantities = <int, double>{};
+  final Map<LaundryShipmentKind, Map<int, FocusNode>> _quantityFocusNodes =
+      <LaundryShipmentKind, Map<int, FocusNode>>{};
   int? _providerId;
   DateTime _sentAt = DateTime.now();
   int? _historyProviderId;
@@ -40,7 +43,7 @@ class _LaundryPageState extends State<LaundryPage>
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 8, vsync: this);
+    _tabs = TabController(length: 9, vsync: this);
     _tabs.addListener(_refreshNavigation);
     _load();
   }
@@ -55,8 +58,18 @@ class _LaundryPageState extends State<LaundryPage>
     _tabs.dispose();
     _notes.dispose();
     _itemSearch.dispose();
+    for (final Map<int, FocusNode> nodes in _quantityFocusNodes.values) {
+      for (final FocusNode node in nodes.values) {
+        node.dispose();
+      }
+    }
     super.dispose();
   }
+
+  FocusNode _quantityFocusNode(LaundryShipmentKind kind, int itemId) =>
+      _quantityFocusNodes
+          .putIfAbsent(kind, () => <int, FocusNode>{})
+          .putIfAbsent(itemId, FocusNode.new);
 
   Future<void> _load() async {
     setState(() {
@@ -96,11 +109,13 @@ class _LaundryPageState extends State<LaundryPage>
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: <Widget>[
           Text(
-            'Control de lavandería',
+            'Controle de lavanderia',
             style: Theme.of(context).textTheme.headlineMedium,
           ),
           const SizedBox(height: 6),
-          const Text('Envíos, recepción y trazabilidad de prendas del hotel.'),
+          const Text(
+            'Envios, recebimentos e rastreabilidade das peças do hotel.',
+          ),
           const SizedBox(height: 18),
           Wrap(
             spacing: 10,
@@ -111,21 +126,21 @@ class _LaundryPageState extends State<LaundryPage>
                 key: const ValueKey<String>('laundry-action-new-shipment'),
                 selected: _tabs.index == 1,
                 icon: Icons.add_box_outlined,
-                label: 'Nuevo envío',
+                label: 'Novo envio',
                 onPressed: () => _tabs.animateTo(1),
               ),
               _LaundryActionButton(
                 key: const ValueKey<String>('laundry-action-rewash'),
                 selected: _tabs.index == 2,
                 icon: Icons.replay_rounded,
-                label: 'Relavado',
+                label: 'Relavagem',
                 onPressed: () => _tabs.animateTo(2),
               ),
               _LaundryActionButton(
                 key: const ValueKey<String>('laundry-action-receive'),
                 selected: _tabs.index == 0,
                 icon: Icons.inventory_rounded,
-                label: 'Recibido',
+                label: 'Recebido',
                 onPressed: () => _tabs.animateTo(0),
               ),
             ],
@@ -136,29 +151,33 @@ class _LaundryPageState extends State<LaundryPage>
             runSpacing: 10,
             crossAxisAlignment: WrapCrossAlignment.center,
             children: <Widget>[
-              Text('Resúmenes', style: Theme.of(context).textTheme.titleMedium),
-              OutlinedButton(
-                onPressed: () => _tabs.animateTo(3),
-                child: const Text('Envíos registrados'),
-              ),
+              Text('Resumos', style: Theme.of(context).textTheme.titleMedium),
               OutlinedButton(
                 onPressed: () => _tabs.animateTo(4),
-                child: const Text('Relavados registrados'),
+                child: const Text('Envios registrados'),
               ),
               OutlinedButton(
                 onPressed: () => _tabs.animateTo(5),
-                child: const Text('Recepciones registradas'),
+                child: const Text('Relavagens registradas'),
+              ),
+              OutlinedButton(
+                onPressed: () => _tabs.animateTo(6),
+                child: const Text('Recebimentos registrados'),
               ),
               PopupMenuButton<int>(
                 key: const ValueKey<String>('laundry-secondary-menu'),
-                tooltip: 'Consultas y configuración',
+                tooltip: 'Consultas e configuração',
                 onSelected: _tabs.animateTo,
                 itemBuilder: (BuildContext context) =>
                     const <PopupMenuEntry<int>>[
-                      PopupMenuItem<int>(value: 6, child: Text('Historial')),
                       PopupMenuItem<int>(
-                        value: 7,
-                        child: Text('Artículos y precios'),
+                        value: 3,
+                        child: Text('Resumo por data'),
+                      ),
+                      PopupMenuItem<int>(value: 7, child: Text('Histórico')),
+                      PopupMenuItem<int>(
+                        value: 8,
+                        child: Text('Itens e preços'),
                       ),
                     ],
                 child: const Padding(
@@ -168,7 +187,7 @@ class _LaundryPageState extends State<LaundryPage>
                     children: <Widget>[
                       Icon(Icons.more_horiz_rounded),
                       SizedBox(width: 6),
-                      Text('Consultas y configuración'),
+                      Text('Consultas e configuração'),
                     ],
                   ),
                 ),
@@ -187,6 +206,7 @@ class _LaundryPageState extends State<LaundryPage>
                       _buildReceived(),
                       _buildNewShipment(),
                       _buildRewash(),
+                      _buildSummaryByDate(),
                       _buildSent(LaundryShipmentKind.standard),
                       _buildSent(LaundryShipmentKind.rewash),
                       _buildReceptionSummary(),
@@ -204,6 +224,97 @@ class _LaundryPageState extends State<LaundryPage>
 
   Widget _buildReceived() => _buildShipmentForm(LaundryShipmentKind.receipt);
 
+  Widget _buildSummaryByDate() {
+    final List<_LaundryDailySummary> rows = _dailySummaries(_shipments);
+    if (rows.isEmpty) {
+      return const _EmptyState(
+        icon: Icons.table_chart_outlined,
+        message: 'Não há movimentações para resumir.',
+      );
+    }
+    final _LaundryDailySummary totals = rows.fold(
+      const _LaundryDailySummary(date: null),
+      (_LaundryDailySummary total, _LaundryDailySummary row) => total.add(row),
+    );
+    return RefreshIndicator(
+      onRefresh: _load,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        children: <Widget>[
+          Text(
+            'Resumo de peças por data',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 4),
+          const Text('As movimentações canceladas não estão incluídas.'),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: DataTable(
+              key: const ValueKey<String>('laundry-daily-summary-table'),
+              columns: const <DataColumn>[
+                DataColumn(label: Text('Data')),
+                DataColumn(label: Text('Recebidas'), numeric: true),
+                DataColumn(label: Text('Enviadas'), numeric: true),
+                DataColumn(label: Text('Relavadas'), numeric: true),
+                DataColumn(label: Text('Total'), numeric: true),
+              ],
+              rows: <DataRow>[
+                ...rows.map(
+                  (_LaundryDailySummary row) =>
+                      _summaryDataRow(_displayDate(row.date!), row),
+                ),
+                _summaryDataRow('Totais', totals, total: true),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  DataRow _summaryDataRow(
+    String label,
+    _LaundryDailySummary summary, {
+    bool total = false,
+  }) {
+    final TextStyle? style = total
+        ? const TextStyle(fontWeight: FontWeight.bold)
+        : null;
+    DataCell cell(String value) => DataCell(Text(value, style: style));
+    return DataRow(
+      key: ValueKey<String>(total ? 'laundry-summary-totals' : label),
+      cells: <DataCell>[
+        cell(label),
+        cell(_quantityText(summary.received)),
+        cell(_quantityText(summary.sent)),
+        cell(_quantityText(summary.rewashed)),
+        cell(_quantityText(summary.total)),
+      ],
+    );
+  }
+
+  List<_LaundryDailySummary> _dailySummaries(List<LaundryShipment> shipments) {
+    final Map<DateTime, _LaundryDailySummary> grouped =
+        <DateTime, _LaundryDailySummary>{};
+    for (final LaundryShipment shipment in shipments) {
+      if (shipment.status == LaundryShipmentStatus.cancelled ||
+          shipment.sentAt == null) {
+        continue;
+      }
+      final DateTime value = shipment.sentAt!.toLocal();
+      final DateTime date = DateTime(value.year, value.month, value.day);
+      grouped[date] = (grouped[date] ?? _LaundryDailySummary(date: date))
+          .addShipment(shipment);
+    }
+    final List<_LaundryDailySummary> rows = grouped.values.toList();
+    rows.sort(
+      (_LaundryDailySummary a, _LaundryDailySummary b) =>
+          b.date!.compareTo(a.date!),
+    );
+    return rows;
+  }
+
   Widget _buildSent(LaundryShipmentKind kind) {
     final List<LaundryShipment> sent = _shipments
         .where(
@@ -217,9 +328,9 @@ class _LaundryPageState extends State<LaundryPage>
       shipments: sent,
       emptyIcon: Icons.local_shipping_outlined,
       emptyMessage: kind == LaundryShipmentKind.rewash
-          ? 'No hay relavados registrados.'
-          : 'No hay envíos registrados.',
-      primaryLabel: 'Detalle',
+          ? 'Não há relavagens registradas.'
+          : 'Não há envios registrados.',
+      primaryLabel: 'Detalhes',
       onOpen: (LaundryShipment shipment) => _openDetail(shipment.id),
     );
   }
@@ -233,8 +344,8 @@ class _LaundryPageState extends State<LaundryPage>
     return _buildShipmentList(
       shipments: received,
       emptyIcon: Icons.inventory_rounded,
-      emptyMessage: 'No hay recepciones registradas.',
-      primaryLabel: 'Detalle',
+      emptyMessage: 'Não há recebimentos registrados.',
+      primaryLabel: 'Detalhes',
       onOpen: (LaundryShipment shipment) => _openDetail(shipment.id),
     );
   }
@@ -280,7 +391,7 @@ class _LaundryPageState extends State<LaundryPage>
                 key: const ValueKey<String>('laundry-history-provider'),
                 initialValue: _historyProviderId,
                 isExpanded: true,
-                decoration: const InputDecoration(labelText: 'Proveedor'),
+                decoration: const InputDecoration(labelText: 'Fornecedor'),
                 items: <DropdownMenuItem<int>>[
                   const DropdownMenuItem<int>(
                     value: null,
@@ -333,8 +444,8 @@ class _LaundryPageState extends State<LaundryPage>
               icon: const Icon(Icons.calendar_today_outlined),
               label: Text(
                 _historyDateFrom == null
-                    ? 'Desde'
-                    : 'Desde ${_displayDate(_historyDateFrom!)}',
+                    ? 'De'
+                    : 'De ${_displayDate(_historyDateFrom!)}',
               ),
             ),
             OutlinedButton.icon(
@@ -345,8 +456,8 @@ class _LaundryPageState extends State<LaundryPage>
               icon: const Icon(Icons.event_outlined),
               label: Text(
                 _historyDateTo == null
-                    ? 'Hasta'
-                    : 'Hasta ${_displayDate(_historyDateTo!)}',
+                    ? 'Até'
+                    : 'Até ${_displayDate(_historyDateTo!)}',
               ),
             ),
             FilledButton.icon(
@@ -358,7 +469,7 @@ class _LaundryPageState extends State<LaundryPage>
             TextButton(
               key: const ValueKey<String>('laundry-history-clear'),
               onPressed: _historyLoading ? null : _clearHistoryFilters,
-              child: const Text('Limpiar'),
+              child: const Text('Limpar'),
             ),
           ],
         ),
@@ -369,7 +480,7 @@ class _LaundryPageState extends State<LaundryPage>
               : _historyShipments.isEmpty
               ? const _EmptyState(
                   icon: Icons.history,
-                  message: 'No hay remesas para los filtros seleccionados.',
+                  message: 'Não há remessas para os filtros selecionados.',
                 )
               : RefreshIndicator(
                   onRefresh: _loadHistory,
@@ -378,7 +489,7 @@ class _LaundryPageState extends State<LaundryPage>
                     separatorBuilder: (_, _) => const SizedBox(height: 10),
                     itemBuilder: (_, int index) => _ShipmentCard(
                       shipment: _historyShipments[index],
-                      primaryLabel: 'Detalle',
+                      primaryLabel: 'Detalhes',
                       onOpen: () => _openDetail(_historyShipments[index].id),
                     ),
                   ),
@@ -474,14 +585,14 @@ class _LaundryPageState extends State<LaundryPage>
           crossAxisAlignment: WrapCrossAlignment.center,
           children: <Widget>[
             Text(
-              'ArtÃ­culos de lavanderÃ­a',
+              'Itens de lavanderia',
               style: Theme.of(context).textTheme.titleLarge,
             ),
             FilledButton.icon(
               key: const ValueKey<String>('laundry-new-item'),
               onPressed: () => _openItemForm(),
               icon: const Icon(Icons.add_rounded),
-              label: const Text('Nuevo artÃ­culo'),
+              label: const Text('Novo item'),
             ),
           ],
         ),
@@ -496,7 +607,7 @@ class _LaundryPageState extends State<LaundryPage>
                 key: const ValueKey<String>('laundry-item-search'),
                 controller: _itemSearch,
                 decoration: const InputDecoration(
-                  labelText: 'Buscar por nombre',
+                  labelText: 'Buscar por nome',
                   prefixIcon: Icon(Icons.search_rounded),
                 ),
                 onChanged: (_) => setState(() {}),
@@ -532,7 +643,7 @@ class _LaundryPageState extends State<LaundryPage>
           child: visibleItems.isEmpty
               ? const _EmptyState(
                   icon: Icons.inventory_2_outlined,
-                  message: 'No hay artÃ­culos para los filtros seleccionados.',
+                  message: 'Não há itens para os filtros selecionados.',
                 )
               : RefreshIndicator(
                   onRefresh: _reloadItems,
@@ -582,13 +693,13 @@ class _LaundryPageState extends State<LaundryPage>
     }
     if (result.notFound) {
       _showWarning(
-        'Artículo no disponible',
-        'El artículo ya no existe. La lista fue actualizada.',
+        'Item indisponível',
+        'O item não existe mais. A lista foi atualizada.',
       );
     } else {
       _showSuccess(
-        item == null ? 'Artículo creado' : 'Artículo actualizado',
-        item == null ? 'Artículo creado.' : 'Artículo actualizado.',
+        item == null ? 'Item criado' : 'Item atualizado',
+        item == null ? 'Item criado.' : 'Item atualizado.',
       );
     }
   }
@@ -621,17 +732,17 @@ class _LaundryPageState extends State<LaundryPage>
       children: <Widget>[
         Text(
           isRewash
-              ? 'Registrar relavado'
+              ? 'Registrar relavagem'
               : isReceipt
-              ? 'Registrar recibido'
-              : 'Registrar nuevo envío',
+              ? 'Registrar recebimento'
+              : 'Registrar novo envio',
           style: Theme.of(context).textTheme.titleLarge,
         ),
         if (isRewash || isReceipt)
           const Padding(
             padding: EdgeInsets.only(top: 4, bottom: 12),
             child: Text(
-              'Registra esta operación de forma independiente con las prendas y cantidades correspondientes.',
+              'Registre esta operação separadamente, com as peças e quantidades correspondentes.',
             ),
           )
         else
@@ -639,7 +750,7 @@ class _LaundryPageState extends State<LaundryPage>
         DropdownButtonFormField<int>(
           key: const ValueKey<String>('laundry-shipment-provider'),
           initialValue: _providerId,
-          decoration: const InputDecoration(labelText: 'Proveedor activo'),
+          decoration: const InputDecoration(labelText: 'Fornecedor ativo'),
           items: _providers
               .map(
                 (LaundryProvider provider) => DropdownMenuItem<int>(
@@ -661,7 +772,7 @@ class _LaundryPageState extends State<LaundryPage>
               key: const ValueKey<String>('laundry-shipment-date'),
               onPressed: _saving ? null : _selectShipmentDate,
               icon: const Icon(Icons.calendar_today_outlined),
-              label: Text('Fecha: ${_displayDate(_sentAt)}'),
+              label: Text('Data: ${_displayDate(_sentAt)}'),
             ),
             OutlinedButton.icon(
               key: const ValueKey<String>('laundry-shipment-time'),
@@ -672,12 +783,26 @@ class _LaundryPageState extends State<LaundryPage>
           ],
         ),
         const SizedBox(height: 16),
-        ...activeItems.map(
-          (LaundryItem item) => _QuantityRow(
-            item: item,
-            value: _quantities[item.id] ?? 0,
+        ...activeItems.indexed.map(
+          ((int, LaundryItem) entry) => _QuantityRow(
+            item: entry.$2,
+            focusNode: _quantityFocusNode(kind, entry.$2.id),
+            textInputAction: entry.$1 == activeItems.length - 1
+                ? TextInputAction.done
+                : TextInputAction.next,
+            value: _quantities[entry.$2.id] ?? 0,
             onChanged: (double value) =>
-                setState(() => _quantities[item.id] = value),
+                setState(() => _quantities[entry.$2.id] = value),
+            onSubmitted: () {
+              if (entry.$1 < activeItems.length - 1) {
+                _quantityFocusNode(
+                  kind,
+                  activeItems[entry.$1 + 1].id,
+                ).requestFocus();
+              } else if (!_saving) {
+                _createShipment(kind);
+              }
+            },
           ),
         ),
         const SizedBox(height: 12),
@@ -685,7 +810,7 @@ class _LaundryPageState extends State<LaundryPage>
           controller: _notes,
           enabled: !_saving,
           maxLines: 2,
-          decoration: const InputDecoration(labelText: 'Observación opcional'),
+          decoration: const InputDecoration(labelText: 'Observação opcional'),
         ),
         const SizedBox(height: 16),
         if (selected.isNotEmpty)
@@ -696,7 +821,7 @@ class _LaundryPageState extends State<LaundryPage>
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: <Widget>[
                   Text(
-                    'Resumen',
+                    'Resumo',
                     style: Theme.of(context).textTheme.titleMedium,
                   ),
                   ...selected.map(
@@ -707,8 +832,8 @@ class _LaundryPageState extends State<LaundryPage>
                   const SizedBox(height: 8),
                   Text(
                     kind != LaundryShipmentKind.standard
-                        ? 'Importe: ${_money(0)} · SIN COSTO'
-                        : 'Importe estimado: ${_money(estimated)}',
+                        ? 'Valor: ${_money(0)} · SEM CUSTO'
+                        : 'Valor estimado: ${_money(estimated)}',
                     style: const TextStyle(fontWeight: FontWeight.bold),
                   ),
                 ],
@@ -727,10 +852,10 @@ class _LaundryPageState extends State<LaundryPage>
               : const Icon(Icons.send_rounded),
           label: Text(
             isRewash
-                ? 'Guardar relavado'
+                ? 'Salvar relavagem'
                 : isReceipt
-                ? 'Guardar recibido'
-                : 'Guardar envío',
+                ? 'Salvar recebimento'
+                : 'Salvar envio',
           ),
         ),
       ],
@@ -743,7 +868,7 @@ class _LaundryPageState extends State<LaundryPage>
       initialDate: _sentAt,
       firstDate: DateTime(DateTime.now().year - 5),
       lastDate: DateTime(DateTime.now().year + 1, 12, 31),
-      helpText: 'Fecha del envÃ­o',
+      helpText: 'Data do envio',
     );
     if (selected == null || !mounted) {
       return;
@@ -763,7 +888,7 @@ class _LaundryPageState extends State<LaundryPage>
     final TimeOfDay? selected = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(_sentAt),
-      helpText: 'Hora del envÃ­o',
+      helpText: 'Hora do envio',
     );
     if (selected == null || !mounted) {
       return;
@@ -793,8 +918,8 @@ class _LaundryPageState extends State<LaundryPage>
         .toList();
     if (_providerId == null || lines.isEmpty) {
       _showWarning(
-        'Datos incompletos',
-        'Selecciona un proveedor y al menos una prenda.',
+        'Dados incompletos',
+        'Selecione um fornecedor e pelo menos uma peça.',
       );
       return;
     }
@@ -820,20 +945,20 @@ class _LaundryPageState extends State<LaundryPage>
       await _load();
       if (!mounted) return;
       _tabs.animateTo(switch (kind) {
-        LaundryShipmentKind.standard => 3,
-        LaundryShipmentKind.rewash => 4,
-        LaundryShipmentKind.receipt => 5,
+        LaundryShipmentKind.standard => 4,
+        LaundryShipmentKind.rewash => 5,
+        LaundryShipmentKind.receipt => 6,
       });
       _showSuccess(
         switch (kind) {
-          LaundryShipmentKind.standard => 'Envío guardado',
-          LaundryShipmentKind.rewash => 'Relavado guardado',
-          LaundryShipmentKind.receipt => 'Recibido guardado',
+          LaundryShipmentKind.standard => 'Envio salvo',
+          LaundryShipmentKind.rewash => 'Relavagem salva',
+          LaundryShipmentKind.receipt => 'Recebimento salvo',
         },
         switch (kind) {
-          LaundryShipmentKind.standard => 'Envío guardado.',
-          LaundryShipmentKind.rewash => 'Relavado guardado sin costo.',
-          LaundryShipmentKind.receipt => 'Recibido guardado.',
+          LaundryShipmentKind.standard => 'Envio salvo.',
+          LaundryShipmentKind.rewash => 'Relavagem salva sem custo.',
+          LaundryShipmentKind.receipt => 'Recebimento salvo.',
         },
       );
     } catch (error) {
@@ -869,7 +994,7 @@ class _LaundryPageState extends State<LaundryPage>
             if (dialogContext.mounted) {
               await showAuditTimelineDialog(
                 context: dialogContext,
-                title: 'Auditoría ${shipment.shipmentNumber}',
+                title: 'Auditoria ${shipment.shipmentNumber}',
                 events: events,
               );
             }
@@ -895,13 +1020,13 @@ class _LaundryPageState extends State<LaundryPage>
       await _load();
       if (!mounted) return;
       _tabs.animateTo(3);
-      _showSuccess('Envío confirmado', 'Envío a relavado confirmado.');
+      _showSuccess('Envio confirmado', 'Envio para relavagem confirmado.');
     } on ApiException catch (error) {
       if (!mounted) return;
       if (error.statusCode == 409) {
         _showWarning(
-          'Relavado actualizado',
-          'Otra operación modificó el relavado. Se actualizaron los datos.',
+          'Relavagem atualizada',
+          'Outra operação modificou a relavagem. Os dados foram atualizados.',
         );
         await _load();
       } else {
@@ -915,16 +1040,16 @@ class _LaundryPageState extends State<LaundryPage>
     final String? notes = await showDialog<String>(
       context: context,
       builder: (BuildContext context) => AlertDialog(
-        title: const Text('Cancelar remesa'),
+        title: const Text('Cancelar remessa'),
         content: TextField(
           controller: controller,
           autofocus: true,
-          decoration: const InputDecoration(labelText: 'Motivo obligatorio'),
+          decoration: const InputDecoration(labelText: 'Motivo obrigatório'),
         ),
         actions: <Widget>[
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('Volver'),
+            child: const Text('Voltar'),
           ),
           FilledButton(
             onPressed: () {
@@ -932,7 +1057,7 @@ class _LaundryPageState extends State<LaundryPage>
                 Navigator.pop(context, controller.text.trim());
               }
             },
-            child: const Text('Cancelar remesa'),
+            child: const Text('Cancelar remessa'),
           ),
         ],
       ),
@@ -943,7 +1068,7 @@ class _LaundryPageState extends State<LaundryPage>
       await widget.service.cancelShipment(shipment.id, notes);
       await _load();
       if (mounted) {
-        _showSuccess('Remesa cancelada', 'La remesa fue cancelada.');
+        _showSuccess('Remessa cancelada', 'A remessa foi cancelada.');
       }
     } catch (error) {
       if (mounted) _showError(_errorText(error));
@@ -959,14 +1084,18 @@ class _LaundryPageState extends State<LaundryPage>
   }
 
   void _showError(String message) {
-    AppAlerts.error(context, title: 'No se pudo completar', message: message);
+    AppAlerts.error(
+      context,
+      title: 'Não foi possível concluir',
+      message: message,
+    );
   }
 }
 
 enum _LaundryItemStatusFilter {
   all('Todos'),
-  active('Activos'),
-  inactive('Inactivos');
+  active('Ativos'),
+  inactive('Inativos');
 
   const _LaundryItemStatusFilter(this.label);
   final String label;
@@ -1013,12 +1142,12 @@ class _LaundryItemCard extends StatelessWidget {
                               : Icons.pause_circle_outline,
                           size: 18,
                         ),
-                        label: Text(item.active ? 'Activo' : 'Inactivo'),
+                        label: Text(item.active ? 'Ativo' : 'Inativo'),
                       ),
                     ],
                   ),
                   Text(
-                    '${item.unitType.label} Â· Precio actual: ${_money(item.currentUnitPrice)}',
+                    '${item.unitType.label} · Preço atual: ${_money(item.currentUnitPrice)}',
                   ),
                 ],
               ),
@@ -1080,7 +1209,7 @@ class _LaundryItemFormDialogState extends State<_LaundryItemFormDialog> {
   Widget build(BuildContext context) {
     final bool editing = widget.item != null;
     return AlertDialog(
-      title: Text(editing ? 'Editar artÃ­culo' : 'Nuevo artÃ­culo'),
+      title: Text(editing ? 'Editar item' : 'Novo item'),
       content: SizedBox(
         width: 520,
         child: SingleChildScrollView(
@@ -1095,14 +1224,14 @@ class _LaundryItemFormDialogState extends State<_LaundryItemFormDialog> {
                 maxLength: 120,
                 autofocus: true,
                 textInputAction: TextInputAction.next,
-                decoration: const InputDecoration(labelText: 'Nombre'),
+                decoration: const InputDecoration(labelText: 'Nome'),
                 onChanged: (_) => setState(() => _serverError = null),
               ),
               const SizedBox(height: 10),
               DropdownButtonFormField<LaundryUnitType>(
                 key: const ValueKey<String>('laundry-item-unit'),
                 initialValue: _unitType,
-                decoration: const InputDecoration(labelText: 'Unidad'),
+                decoration: const InputDecoration(labelText: 'Unidade'),
                 items: LaundryUnitType.values
                     .map(
                       (LaundryUnitType type) =>
@@ -1128,16 +1257,16 @@ class _LaundryItemFormDialogState extends State<_LaundryItemFormDialog> {
                 keyboardType: const TextInputType.numberWithOptions(
                   decimal: true,
                 ),
-                decoration: const InputDecoration(labelText: 'Precio actual'),
+                decoration: const InputDecoration(labelText: 'Preço atual'),
                 onChanged: (_) => setState(() => _serverError = null),
               ),
               const SizedBox(height: 6),
               SwitchListTile.adaptive(
                 key: const ValueKey<String>('laundry-item-active'),
                 contentPadding: EdgeInsets.zero,
-                title: const Text('Activo'),
+                title: const Text('Ativo'),
                 subtitle: const Text(
-                  'Los artÃ­culos inactivos no aparecen en nuevos envÃ­os.',
+                  'Itens inativos não aparecem em novos envios.',
                 ),
                 value: _active,
                 onChanged: _saving
@@ -1171,7 +1300,7 @@ class _LaundryItemFormDialogState extends State<_LaundryItemFormDialog> {
                   dimension: 18,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
-              : const Text('Guardar'),
+              : const Text('Salvar'),
         ),
       ],
     );
@@ -1186,18 +1315,18 @@ class _LaundryItemFormDialogState extends State<_LaundryItemFormDialog> {
           await showDialog<bool>(
             context: context,
             builder: (BuildContext context) => AlertDialog(
-              title: const Text('Desactivar artÃ­culo'),
+              title: const Text('Desativar item'),
               content: const Text(
-                'DejarÃ¡ de estar disponible para nuevos envÃ­os. Los envÃ­os histÃ³ricos no se modificarÃ¡n.',
+                'O item deixará de estar disponível para novos envios. Os envios históricos não serão alterados.',
               ),
               actions: <Widget>[
                 TextButton(
                   onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Volver'),
+                  child: const Text('Voltar'),
                 ),
                 FilledButton(
                   onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Desactivar'),
+                  child: const Text('Desativar'),
                 ),
               ],
             ),
@@ -1238,7 +1367,7 @@ class _LaundryItemFormDialogState extends State<_LaundryItemFormDialog> {
       setState(() {
         _saving = false;
         _serverError = error.statusCode == 409
-            ? 'Ya existe otro artÃ­culo con ese nombre.'
+            ? 'Já existe outro item com esse nome.'
             : error.message;
       });
     } catch (error) {
@@ -1295,11 +1424,17 @@ class _QuantityRow extends StatefulWidget {
   const _QuantityRow({
     required this.item,
     required this.value,
+    required this.focusNode,
+    required this.textInputAction,
     required this.onChanged,
+    required this.onSubmitted,
   });
   final LaundryItem item;
   final double value;
+  final FocusNode focusNode;
+  final TextInputAction textInputAction;
   final ValueChanged<double> onChanged;
+  final VoidCallback onSubmitted;
 
   @override
   State<_QuantityRow> createState() => _QuantityRowState();
@@ -1365,9 +1500,16 @@ class _QuantityRowState extends State<_QuantityRow> {
             child: TextFormField(
               key: ValueKey<String>('laundry-item-${widget.item.id}'),
               controller: _controller,
+              focusNode: widget.focusNode,
               keyboardType: const TextInputType.numberWithOptions(
                 decimal: true,
               ),
+              inputFormatters: <TextInputFormatter>[
+                _QuantityInputFormatter(
+                  allowDecimal: widget.item.unitType != LaundryUnitType.piece,
+                ),
+              ],
+              textInputAction: widget.textInputAction,
               textAlign: TextAlign.center,
               onChanged: (String text) {
                 final double? parsed = double.tryParse(
@@ -1380,6 +1522,7 @@ class _QuantityRowState extends State<_QuantityRow> {
                   widget.onChanged(parsed);
                 }
               },
+              onFieldSubmitted: (_) => widget.onSubmitted(),
             ),
           ),
           IconButton(
@@ -1393,6 +1536,23 @@ class _QuantityRowState extends State<_QuantityRow> {
       ),
     ),
   );
+}
+
+class _QuantityInputFormatter extends TextInputFormatter {
+  const _QuantityInputFormatter({required this.allowDecimal});
+
+  final bool allowDecimal;
+
+  @override
+  TextEditingValue formatEditUpdate(
+    TextEditingValue oldValue,
+    TextEditingValue newValue,
+  ) {
+    final RegExp pattern = allowDecimal
+        ? RegExp(r'^\d*(?:[.,]\d*)?$')
+        : RegExp(r'^\d*$');
+    return pattern.hasMatch(newValue.text) ? newValue : oldValue;
+  }
 }
 
 class _ShipmentCard extends StatelessWidget {
@@ -1430,14 +1590,14 @@ class _ShipmentCard extends StatelessWidget {
                   shipment.kind == LaundryShipmentKind.receipt
                       ? '${shipment.providerName} · ${shipment.receivedAt == null ? '-' : _dateTime(shipment.receivedAt!)}'
                       : shipment.sentAt == null
-                      ? '${shipment.providerName} · Envío pendiente'
+                      ? '${shipment.providerName} · Envio pendente'
                       : '${shipment.providerName} · ${_dateTime(shipment.sentAt!)}',
                 ),
                 Text(
-                  '${shipment.kind == LaundryShipmentKind.receipt ? 'Recibido' : 'Enviado'}: ${_quantity(shipment.totalQuantity, LaundryUnitType.kilogram)} · Pendiente: ${_quantity(shipment.pendingQuantity, LaundryUnitType.kilogram)} · ${shipment.status.label}',
+                  '${shipment.kind == LaundryShipmentKind.receipt ? 'Recebido' : 'Enviado'}: ${_quantity(shipment.totalQuantity, LaundryUnitType.kilogram)} · Pendente: ${_quantity(shipment.pendingQuantity, LaundryUnitType.kilogram)} · ${shipment.kind == LaundryShipmentKind.receipt ? 'Recebido' : shipment.status.label}',
                 ),
                 Text(
-                  'Facturable: ${_money(shipment.displayedBillableAmount)}',
+                  'Faturável: ${_money(shipment.displayedBillableAmount)}',
                   style: const TextStyle(fontWeight: FontWeight.bold),
                 ),
               ],
@@ -1469,52 +1629,40 @@ class _ShipmentDetailDialog extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            if (shipment.kind != LaundryShipmentKind.standard)
-              Chip(label: Text(shipment.kind.label)),
-            Text('${shipment.providerName} · ${shipment.status.label}'),
-            Text(
-              shipment.sentAt == null
-                  ? 'Envío pendiente de confirmación'
-                  : 'Enviado: ${_dateTime(shipment.sentAt!)}',
-            ),
-            Text(
-              'Cantidad: ${shipment.totalQuantity} · Pendiente: ${shipment.pendingQuantity}',
-            ),
-            Text(
-              'Importe facturable: ${_money(shipment.displayedBillableAmount)}',
-            ),
-            if (shipment.notes != null)
-              Text('Observaciones: ${shipment.notes}'),
-            const Divider(),
             ...shipment.lines.map(
               (LaundryShipmentLine line) => ListTile(
                 contentPadding: EdgeInsets.zero,
                 title: Text(line.itemName),
-                subtitle: Text(
-                  'Enviado ${line.sentQuantity} · Aceptado ${line.acceptedQuantity} · Relavado ${line.rewashQuantity} · Faltante ${line.missingQuantity} · Dañado ${line.damagedQuantity} · Pendiente ${line.pendingQuantity}',
+                trailing: Text(
+                  _quantity(line.sentQuantity, line.unitType),
+                  style: Theme.of(context).textTheme.bodyLarge,
                 ),
               ),
             ),
             const Divider(),
             Text(
-              'Creado por: ${shipment.createdBy ?? '-'} · Actualizado por: ${shipment.updatedBy ?? '-'}',
+              'Total: ${_quantityText(shipment.totalQuantity)}',
+              key: const ValueKey<String>('laundry-detail-total'),
+              style: Theme.of(
+                context,
+              ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
             ),
           ],
         ),
       ),
     ),
     actions: <Widget>[
-      TextButton(onPressed: onAudit, child: const Text('Auditoría')),
+      TextButton(onPressed: onAudit, child: const Text('Auditoria')),
       if (onCancel != null)
         TextButton(onPressed: onCancel, child: const Text('Cancelar')),
       if (onDispatch != null)
         FilledButton(
           onPressed: onDispatch,
-          child: const Text('Confirmar envío'),
+          child: const Text('Confirmar envio'),
         ),
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Cerrar'),
+        child: const Text('Fechar'),
       ),
     ],
   );
@@ -1545,7 +1693,7 @@ class _ReceiveDialogState extends State<_ReceiveDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text('Registrar recibido · ${widget.shipment.shipmentNumber}'),
+    title: Text('Registrar recebimento · ${widget.shipment.shipmentNumber}'),
     content: SizedBox(
       width: 850,
       child: SingleChildScrollView(
@@ -1553,7 +1701,7 @@ class _ReceiveDialogState extends State<_ReceiveDialog> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
             Text(
-              '${widget.shipment.providerName} · Clasifica únicamente lo que llegó al hotel.',
+              '${widget.shipment.providerName} · Classifique apenas o que chegou ao hotel.',
             ),
             const SizedBox(height: 12),
             for (final _ReceiveLineDraft draft in _lines)
@@ -1582,7 +1730,7 @@ class _ReceiveDialogState extends State<_ReceiveDialog> {
       FilledButton(
         key: const ValueKey<String>('laundry-receive-confirm'),
         onPressed: _submit,
-        child: const Text('Guardar recepción'),
+        child: const Text('Salvar recebimento'),
       ),
     ],
   );
@@ -1593,7 +1741,7 @@ class _ReceiveDialogState extends State<_ReceiveDialog> {
     for (final _ReceiveLineDraft draft in _lines) {
       final ReceiveLaundryLineRequest? request = draft.toRequest();
       if (request == null) {
-        setState(() => _error = 'Revisa las cantidades ingresadas.');
+        setState(() => _error = 'Revise as quantidades informadas.');
         return;
       }
       final String? validation = request.validate(draft.line.pendingQuantity);
@@ -1604,7 +1752,7 @@ class _ReceiveDialogState extends State<_ReceiveDialog> {
       requests.add(request);
     }
     if (requests.isEmpty) {
-      setState(() => _error = 'La remesa no tiene prendas pendientes.');
+      setState(() => _error = 'A remessa não possui peças pendentes.');
       return;
     }
     Navigator.pop(
@@ -1673,7 +1821,7 @@ class _ReceiveLineEditor extends StatelessWidget {
             style: Theme.of(context).textTheme.titleMedium,
           ),
           Text(
-            'Pendiente: ${_quantity(draft.line.pendingQuantity, draft.line.unitType)}',
+            'Pendente: ${_quantity(draft.line.pendingQuantity, draft.line.unitType)}',
           ),
           const SizedBox(height: 8),
           Wrap(
@@ -1681,7 +1829,7 @@ class _ReceiveLineEditor extends StatelessWidget {
             runSpacing: 10,
             children: <Widget>[
               _quantityField(
-                'Aceptado',
+                'Aceito',
                 draft.accepted,
                 draft.line.id,
                 'accepted',
@@ -1695,7 +1843,7 @@ class _ReceiveLineEditor extends StatelessWidget {
                 onChanged,
               ),
               _quantityField(
-                'Dañado',
+                'Danificado',
                 draft.damaged,
                 draft.line.id,
                 'damaged',
@@ -1753,14 +1901,14 @@ class _DispatchDialogState extends State<_DispatchDialog> {
 
   @override
   Widget build(BuildContext context) => AlertDialog(
-    title: Text('Enviar ${widget.shipment.shipmentNumber} a relavado'),
+    title: Text('Enviar ${widget.shipment.shipmentNumber} para relavagem'),
     content: SizedBox(
       width: 520,
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text('${widget.shipment.providerName} · RELAVADO · SIN COSTO'),
+          Text('${widget.shipment.providerName} · RELAVAGEM · SEM CUSTO'),
           const SizedBox(height: 12),
           Wrap(
             spacing: 10,
@@ -1769,7 +1917,7 @@ class _DispatchDialogState extends State<_DispatchDialog> {
                 key: const ValueKey<String>('laundry-dispatch-date'),
                 onPressed: _selectDate,
                 icon: const Icon(Icons.calendar_today_outlined),
-                label: Text('Fecha: ${_displayDate(_sentAt)}'),
+                label: Text('Data: ${_displayDate(_sentAt)}'),
               ),
               OutlinedButton.icon(
                 key: const ValueKey<String>('laundry-dispatch-time'),
@@ -1784,9 +1932,7 @@ class _DispatchDialogState extends State<_DispatchDialog> {
             key: const ValueKey<String>('laundry-dispatch-notes'),
             controller: _notes,
             maxLines: 2,
-            decoration: const InputDecoration(
-              labelText: 'Observación opcional',
-            ),
+            decoration: const InputDecoration(labelText: 'Observação opcional'),
           ),
         ],
       ),
@@ -1794,7 +1940,7 @@ class _DispatchDialogState extends State<_DispatchDialog> {
     actions: <Widget>[
       TextButton(
         onPressed: () => Navigator.pop(context),
-        child: const Text('Volver'),
+        child: const Text('Voltar'),
       ),
       FilledButton(
         key: const ValueKey<String>('laundry-dispatch-confirm'),
@@ -1806,7 +1952,7 @@ class _DispatchDialogState extends State<_DispatchDialog> {
             notes: _notes.text,
           ),
         ),
-        child: const Text('Confirmar envío'),
+        child: const Text('Confirmar envio'),
       ),
     ],
   );
@@ -1865,6 +2011,48 @@ class _EmptyState extends StatelessWidget {
   );
 }
 
+final class _LaundryDailySummary {
+  const _LaundryDailySummary({
+    required this.date,
+    this.received = 0,
+    this.sent = 0,
+    this.rewashed = 0,
+  });
+
+  final DateTime? date;
+  final double received;
+  final double sent;
+  final double rewashed;
+  double get total => received + sent + rewashed;
+
+  _LaundryDailySummary addShipment(LaundryShipment shipment) =>
+      _LaundryDailySummary(
+        date: date,
+        received:
+            received +
+            (shipment.kind == LaundryShipmentKind.receipt
+                ? shipment.totalQuantity
+                : 0),
+        sent:
+            sent +
+            (shipment.kind == LaundryShipmentKind.standard
+                ? shipment.totalQuantity
+                : 0),
+        rewashed:
+            rewashed +
+            (shipment.kind == LaundryShipmentKind.rewash
+                ? shipment.totalQuantity
+                : 0),
+      );
+
+  _LaundryDailySummary add(_LaundryDailySummary other) => _LaundryDailySummary(
+    date: date,
+    received: received + other.received,
+    sent: sent + other.sent,
+    rewashed: rewashed + other.rewashed,
+  );
+}
+
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message, required this.retry});
   final String message;
@@ -1879,7 +2067,7 @@ class _ErrorState extends StatelessWidget {
         OutlinedButton.icon(
           onPressed: retry,
           icon: const Icon(Icons.refresh),
-          label: const Text('Reintentar'),
+          label: const Text('Tentar novamente'),
         ),
       ],
     ),
@@ -1888,7 +2076,7 @@ class _ErrorState extends StatelessWidget {
 
 String _errorText(Object error) => error is ApiException
     ? error.message
-    : 'No se pudo completar la operación.';
+    : 'Não foi possível concluir a operação.';
 String _money(double value) =>
     r'R$ ' + value.toStringAsFixed(2).replaceAll('.', ',');
 String _quantity(double value, LaundryUnitType unit) =>
@@ -1898,6 +2086,10 @@ String _quantity(double value, LaundryUnitType unit) =>
           .toStringAsFixed(3)
           .replaceFirst(RegExp(r'0+$'), '')
           .replaceFirst(RegExp(r'\.$'), '');
+String _quantityText(double value) => value
+    .toStringAsFixed(3)
+    .replaceFirst(RegExp(r'0+$'), '')
+    .replaceFirst(RegExp(r'\.$'), '');
 String _dateTime(DateTime value) {
   final DateTime local = value.toLocal();
   String two(int number) => number.toString().padLeft(2, '0');

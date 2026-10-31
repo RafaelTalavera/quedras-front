@@ -1,6 +1,6 @@
 enum LaundryUnitType {
-  piece('PIECE', 'Pieza'),
-  kilogram('KILOGRAM', 'Kilogramo');
+  piece('PIECE', 'Peça'),
+  kilogram('KILOGRAM', 'Quilograma');
 
   const LaundryUnitType(this.apiValue, this.label);
   final String apiValue;
@@ -13,8 +13,8 @@ enum LaundryUnitType {
 
 enum LaundryShipmentKind {
   standard('STANDARD', 'Normal'),
-  rewash('REWASH', 'RELAVADO · SIN COSTO'),
-  receipt('RECEIPT', 'RECIBIDO');
+  rewash('REWASH', 'RELAVAGEM · SEM CUSTO'),
+  receipt('RECEIPT', 'RECEBIDO');
 
   const LaundryShipmentKind(this.apiValue, this.label);
   final String apiValue;
@@ -26,10 +26,10 @@ enum LaundryShipmentKind {
 }
 
 enum LaundryShipmentStatus {
-  pendingDispatch('PENDING_DISPATCH', 'Pendiente de envío'),
+  pendingDispatch('PENDING_DISPATCH', 'Pendente de envio'),
   sent('SENT', 'Enviado'),
-  partiallyReceived('PARTIALLY_RECEIVED', 'Recibido parcialmente'),
-  received('RECEIVED', 'Recibido'),
+  partiallyReceived('PARTIALLY_RECEIVED', 'Recebido parcialmente'),
+  received('RECEIVED', 'Recebido'),
   cancelled('CANCELLED', 'Cancelado');
 
   const LaundryShipmentStatus(this.apiValue, this.label);
@@ -43,10 +43,10 @@ enum LaundryShipmentStatus {
 
 enum LaundryRewashReason {
   stain('STAIN', 'Mancha'),
-  odor('ODOR', 'Olor'),
-  humidity('HUMIDITY', 'Humedad'),
-  incompleteWash('INCOMPLETE_WASH', 'Lavado incompleto'),
-  other('OTHER', 'Otro');
+  odor('ODOR', 'Odor'),
+  humidity('HUMIDITY', 'Umidade'),
+  incompleteWash('INCOMPLETE_WASH', 'Lavagem incompleta'),
+  other('OTHER', 'Outro');
 
   const LaundryRewashReason(this.apiValue, this.label);
   final String apiValue;
@@ -306,16 +306,16 @@ final class ReceiveLaundryLineRequest {
       missingQuantity,
       damagedQuantity,
     ].any((double value) => value < 0)) {
-      return 'Las cantidades no pueden ser negativas.';
+      return 'As quantidades não podem ser negativas.';
     }
     if (total <= 0) {
-      return 'Clasifica al menos una cantidad.';
+      return 'Classifique pelo menos uma quantidade.';
     }
     if (total > pendingQuantity + 0.000001) {
-      return 'La cantidad clasificada supera el pendiente.';
+      return 'A quantidade classificada supera a quantidade pendente.';
     }
     if (rewashQuantity > 0 && rewashReason == null) {
-      return 'Selecciona el motivo del relavado.';
+      return 'Selecione o motivo da relavagem.';
     }
     return null;
   }

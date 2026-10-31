@@ -462,7 +462,7 @@ final class HttpMassageAppService implements MassageAppService {
     }
 
     throw const FormatException(
-      'Formato invalido da resposta do backend para masajista.',
+      'Formato inválido da resposta do backend para massagista.',
     );
   }
 

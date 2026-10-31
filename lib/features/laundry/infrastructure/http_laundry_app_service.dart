@@ -193,7 +193,7 @@ final class HttpLaundryAppService implements LaundryAppService {
     final Object? decoded = _decode(response.body);
     if (decoded is! List) {
       throw const ApiException(
-        'Formato inválido de respuesta.',
+        'Formato de resposta inválido.',
         kind: ApiErrorKind.invalidResponse,
       );
     }
@@ -221,7 +221,7 @@ final class HttpLaundryAppService implements LaundryAppService {
       rethrow;
     } on TimeoutException catch (error) {
       throw ApiException(
-        'Tiempo agotado al conectar con el servidor.',
+        'Tempo esgotado ao conectar com o servidor.',
         kind: ApiErrorKind.timeout,
         method: method,
         path: path,
@@ -229,7 +229,7 @@ final class HttpLaundryAppService implements LaundryAppService {
       );
     } on FormatException catch (error) {
       throw ApiException(
-        'Respuesta inválida del servidor.',
+        'Resposta inválida do servidor.',
         kind: ApiErrorKind.invalidResponse,
         method: method,
         path: path,
@@ -237,7 +237,7 @@ final class HttpLaundryAppService implements LaundryAppService {
       );
     } on Exception catch (error) {
       throw ApiException(
-        'No se pudo conectar con el servidor.',
+        'Não foi possível conectar ao servidor.',
         kind: ApiErrorKind.network,
         method: method,
         path: path,
@@ -259,15 +259,15 @@ final class HttpLaundryAppService implements LaundryAppService {
     }
     switch (response.statusCode) {
       case 403:
-        return 'No tienes autorización para esta operación.';
+        return 'Você não tem autorização para esta operação.';
       case 404:
-        return 'La remesa ya no existe.';
+        return 'A remessa não existe mais.';
       case 409:
-        return 'Otra operación modificó la remesa. Se recargarán los datos.';
+        return 'Outra operação modificou a remessa. Os dados serão recarregados.';
       default:
         return response.statusCode >= 500
-            ? 'El servidor no pudo completar la operación.'
-            : 'La operación no pudo completarse.';
+            ? 'O servidor não conseguiu concluir a operação.'
+            : 'Não foi possível concluir a operação.';
     }
   }
 
@@ -275,7 +275,7 @@ final class HttpLaundryAppService implements LaundryAppService {
       body.trim().isEmpty ? null : jsonDecode(body);
   static Map<String, dynamic> _asMap(Object? value) {
     if (value is! Map) {
-      throw const FormatException('Se esperaba un objeto JSON.');
+      throw const FormatException('Era esperado um objeto JSON.');
     }
     return value.map(
       (Object? key, Object? value) => MapEntry(key.toString(), value),

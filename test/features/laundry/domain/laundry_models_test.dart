@@ -19,7 +19,7 @@ void main() {
     expect(shipment.kind, LaundryShipmentKind.rewash);
     expect(shipment.status, LaundryShipmentStatus.sent);
     expect(shipment.displayedBillableAmount, 0);
-    expect(shipment.kind.label, 'RELAVADO · SIN COSTO');
+    expect(shipment.kind.label, 'RELAVAGEM · SEM CUSTO');
   });
 
   test('crea request de envío con fecha UTC y solo contrato permitido', () {

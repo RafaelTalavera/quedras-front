@@ -5914,7 +5914,7 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
           onChanged: (_) => setState(() {}),
           decoration: InputDecoration(
             labelText: 'Buscar local',
-            hintText: 'Nombre, referencia, piso...',
+            hintText: 'Nome, referência, andar...',
             prefixIcon: const Icon(Icons.search_rounded),
             suffixIcon: _searchController.text.isEmpty
                 ? null

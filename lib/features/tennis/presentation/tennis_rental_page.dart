@@ -2462,7 +2462,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
       await AppAlerts.success(
         context,
         title: 'Pago informado',
-        message: 'El pago fue registrado correctamente.',
+        message: 'O pagamento foi registrado corretamente.',
       );
     } catch (error) {
       if (!mounted) {
@@ -2680,7 +2680,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
           content: SizedBox(
             width: 520,
             child: items.isEmpty
-                ? const Text('No hay reservas activas para este dia.')
+                ? const Text('Não há reservas ativas para este dia.')
                 : ListView.separated(
                     shrinkWrap: true,
                     itemCount: items.length,
@@ -3810,7 +3810,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                 DropdownButtonFormField<CourtCustomerType>(
                   value: _customerType,
                   decoration: const InputDecoration(
-                    labelText: 'Tipo de usuario',
+                    labelText: 'Tipo de usuário',
                   ),
                   items: CourtCustomerType.values.map((CourtCustomerType item) {
                     return DropdownMenuItem<CourtCustomerType>(
@@ -3852,7 +3852,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                   ),
                   validator: (String? value) =>
                       value == null || value.trim().isEmpty
-                      ? 'Informe el hospede o la unidad'
+                      ? 'Informe o hóspede ou a unidade'
                       : null,
                 ),
                 const SizedBox(height: 12),
@@ -3901,7 +3901,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                       child: OutlinedButton(
                         onPressed: _loadingBookedSlots ? null : _pickDate,
                         child: Text(
-                          'Fecha: ${_formatBookingDateWithWeekday(_bookingDate)}',
+                          'Data: ${_formatBookingDateWithWeekday(_bookingDate)}',
                         ),
                       ),
                     ),
@@ -3972,8 +3972,8 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                       : _bookedSlotsLoadFailed
                       ? 'Nao foi possivel consultar a agenda. Escolha a data novamente para tentar.'
                       : _availableEndSlots.isEmpty
-                      ? 'La ultima franja disponible no admite una hora final posterior. Selecciona un inicio anterior.'
-                      : 'Por defecto la reserva dura 1 hora, pero puedes extender el horario final.',
+                      ? 'O último horário disponível não permite um término posterior. Selecione um início anterior.'
+                      : 'Por padrão, a reserva dura 1 hora, mas você pode estender o horário final.',
                   style: Theme.of(context).textTheme.bodySmall,
                 ),
                 const SizedBox(height: 12),
@@ -4218,7 +4218,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
             alignment: Alignment.centerLeft,
             child: TextButton(
               onPressed: _loadPartnerCoaches,
-              child: const Text('Reintentar'),
+              child: const Text('Tentar novamente'),
             ),
           ),
         ],
@@ -4519,12 +4519,12 @@ class _PaymentDialogState extends State<_PaymentDialog> {
             const SizedBox(height: 12),
             OutlinedButton(
               onPressed: _pickDate,
-              child: Text('Fecha de pago: ${_formatShortDate(_date)}'),
+              child: Text('Data do pagamento: ${_formatShortDate(_date)}'),
             ),
             const SizedBox(height: 12),
             TextField(
               controller: _notesController,
-              decoration: const InputDecoration(labelText: 'Observaciones'),
+              decoration: const InputDecoration(labelText: 'Observações'),
               maxLines: 3,
             ),
           ],

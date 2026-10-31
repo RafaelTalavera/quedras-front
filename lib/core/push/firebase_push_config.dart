@@ -35,7 +35,7 @@ abstract final class FirebasePushConfig {
 
   static FirebaseOptions get options {
     if (!enabled) {
-      throw StateError('Firebase no esta habilitado.');
+      throw StateError('O Firebase não está habilitado.');
     }
     final String appId = kIsWeb
         ? webAppId
@@ -53,7 +53,7 @@ abstract final class FirebasePushConfig {
     ];
     if (missing.isNotEmpty) {
       throw StateError(
-        'Configuracion Firebase incompleta: ${missing.join(', ')}',
+        'Configuração do Firebase incompleta: ${missing.join(', ')}',
       );
     }
     return FirebaseOptions(

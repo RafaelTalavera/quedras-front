@@ -1819,7 +1819,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       await AppAlerts.warning(
         context,
         title: 'Horario ocupado',
-        message: 'Esse masajista ja esta ocupado nesse horario.',
+        message: 'Esse massagista já está ocupado nesse horário.',
       );
       return;
     }
@@ -1918,7 +1918,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
       await AppAlerts.warning(
         context,
         title: 'Horario ocupado',
-        message: 'Esse masajista ja esta ocupado nesse horario.',
+        message: 'Esse massagista já está ocupado nesse horário.',
       );
       return;
     }
@@ -3514,7 +3514,7 @@ class _BookingDialogState extends State<_BookingDialog> {
                           )
                           .toList(),
                       validator: (int? value) =>
-                          value == null ? 'Selecione um masajista.' : null,
+                          value == null ? 'Selecione um massagista.' : null,
                       onChanged: (int? value) {
                         setState(() {
                           _selectedTherapistId = value;
@@ -4577,7 +4577,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                                               ),
                                               const SizedBox(height: 4),
                                               Text(
-                                                '$activeTherapists masajistas ativos',
+                                                '$activeTherapists massagistas ativos',
                                                 style: Theme.of(context)
                                                     .textTheme
                                                     .bodySmall
@@ -4752,7 +4752,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
               _buildSummaryChip(
                 context,
                 Icons.spa_outlined,
-                '$activeTherapists masajistas ativos',
+                '$activeTherapists massagistas ativos',
               ),
             ],
           ),
@@ -4883,14 +4883,14 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                         _therapistNameFocusNode.requestFocus();
                       },
                 icon: const Icon(Icons.person_add_alt_1_rounded),
-                label: const Text('Novo masajista'),
+                label: const Text('Novo massagista'),
               ),
           ],
         ),
         const SizedBox(height: 12),
         if (_creatingProvider)
           Text(
-            'Salve primeiro o prestador para poder registrar e ativar masajistas.',
+            'Salve primeiro o prestador para poder registrar e ativar massagistas.',
             style: Theme.of(context).textTheme.bodyMedium,
           )
         else ...<Widget>[
@@ -4904,7 +4904,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
             child: _selectedProvider!.therapists.isEmpty
                 ? Center(
                     child: Text(
-                      'Esse prestador ainda nao possui masajistas.',
+                      'Esse prestador ainda não possui massagistas.',
                       style: Theme.of(context).textTheme.bodyMedium,
                     ),
                   )
@@ -4969,7 +4969,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
           TextField(
             controller: _therapistNameController,
             focusNode: _therapistNameFocusNode,
-            decoration: const InputDecoration(labelText: 'Novo masajista'),
+            decoration: const InputDecoration(labelText: 'Novo massagista'),
           ),
           const SizedBox(height: 12),
           TextField(
@@ -5381,7 +5381,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       await AppAlerts.warning(
         context,
         title: 'Campo obrigatorio',
-        message: 'Informe o nome do masajista.',
+        message: 'Informe o nome do massagista.',
       );
       return;
     }
@@ -5394,7 +5394,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
         context,
         title: 'Massagista ja cadastrado',
         message:
-            'Ja existe um masajista com esse nome para o prestador selecionado.',
+            'Já existe um massagista com esse nome para o prestador selecionado.',
       );
       return;
     }
@@ -5447,7 +5447,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       });
       await AppAlerts.error(
         context,
-        title: 'Falha ao salvar masajista',
+        title: 'Falha ao salvar massagista',
         message: error.toString().replaceFirst('Bad state: ', ''),
       );
     }
@@ -5511,7 +5511,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
       });
       await AppAlerts.error(
         context,
-        title: 'Falha ao atualizar masajista',
+        title: 'Falha ao atualizar massagista',
         message: error.toString().replaceFirst('Bad state: ', ''),
       );
     }
