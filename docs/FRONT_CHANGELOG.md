@@ -1,5 +1,23 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-11-03 | Transversal | Normalizacion de APIs Flutter deprecadas
+- Componentes afectados: `Manutencao`, `Massagens`, `Quadras`, `Tours e Viagens` y `Configuracoes`.
+- Archivos funcionales:
+  - `lib/features/maintenance/presentation/maintenance_page.dart`
+  - `lib/features/massages/presentation/massage_booking_page.dart`
+  - `lib/features/settings/presentation/settings_page.dart`
+  - `lib/features/tennis/presentation/tennis_rental_page.dart`
+  - `lib/features/tours/presentation/tours_travel_page.dart`
+- Motivo del cambio: dejar el gate `flutter analyze` en verde antes de iniciar el plan de stock operativo de lavanderia.
+- Impacto funcional:
+  - los formularios de seleccion usan `initialValue` en lugar del `value` deprecado, conservando la sincronizacion externa del valor;
+  - la seleccion del alcance de cancelacion de reservas usa `RadioGroup` en lugar de `groupValue`/`onChanged` por tile;
+  - sin cambios de comportamiento, textos, rutas ni contrato backend.
+- Contrato backend: sin cambios.
+- Validacion ejecutada:
+  - `flutter analyze`: sin issues;
+  - `flutter test`: 120 pruebas OK.
+
 ## 2026-08-25 | Manutencao | Etiqueta sin ambiguedad en el mapa operacional
 - Componente afectado: Frontend (`Manutencao`)
 - Archivo funcional: `lib/features/maintenance/presentation/maintenance_page.dart`

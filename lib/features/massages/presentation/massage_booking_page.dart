@@ -1217,7 +1217,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
               SizedBox(
                 width: 260,
                 child: DropdownButtonFormField<int>(
-                  value: _selectedMonth,
+                  initialValue: _selectedMonth,
                   decoration: const InputDecoration(
                     labelText: 'Mes da agenda',
                     prefixIcon: Icon(Icons.calendar_month_rounded),
@@ -1257,7 +1257,7 @@ class _MassageBookingPageState extends State<MassageBookingPage>
             child: SizedBox(
               width: 260,
               child: DropdownButtonFormField<int>(
-                value: _selectedMonth,
+                initialValue: _selectedMonth,
                 decoration: const InputDecoration(
                   labelText: 'Mes da agenda',
                   prefixIcon: Icon(Icons.calendar_month_rounded),
@@ -3373,7 +3373,7 @@ class _BookingDialogState extends State<_BookingDialog> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: _selectedTime,
+                      initialValue: _selectedTime,
                       decoration: const InputDecoration(
                         labelText: 'Horario',
                         prefixIcon: Icon(Icons.schedule_rounded),
@@ -3409,7 +3409,7 @@ class _BookingDialogState extends State<_BookingDialog> {
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       isExpanded: true,
-                      value: _selectedAttendanceType,
+                      initialValue: _selectedAttendanceType,
                       decoration: const InputDecoration(
                         labelText: 'Tipo de atendimento',
                         prefixIcon: Icon(Icons.hotel_rounded),
@@ -3435,7 +3435,7 @@ class _BookingDialogState extends State<_BookingDialog> {
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
                       isExpanded: true,
-                      value: _selectedTreatment,
+                      initialValue: _selectedTreatment,
                       decoration: const InputDecoration(
                         labelText: 'Tipo de massagem',
                         prefixIcon: Icon(Icons.spa_outlined),
@@ -3459,7 +3459,7 @@ class _BookingDialogState extends State<_BookingDialog> {
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int>(
                       isExpanded: true,
-                      value: _selectedProviderId,
+                      initialValue: _selectedProviderId,
                       decoration: const InputDecoration(
                         labelText: 'Prestador',
                         prefixIcon: Icon(Icons.groups_2_outlined),
@@ -3495,7 +3495,7 @@ class _BookingDialogState extends State<_BookingDialog> {
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int>(
                       isExpanded: true,
-                      value: _selectedTherapistId,
+                      initialValue: _selectedTherapistId,
                       decoration: const InputDecoration(
                         labelText: 'Massagista',
                         prefixIcon: Icon(Icons.person_pin_circle_outlined),
@@ -3554,7 +3554,7 @@ class _BookingDialogState extends State<_BookingDialog> {
                     if (_paid) ...<Widget>[
                       const SizedBox(height: 12),
                       DropdownButtonFormField<MassagePaymentMethod>(
-                        value: _paymentMethod,
+                        initialValue: _paymentMethod,
                         decoration: const InputDecoration(
                           labelText: 'Meio de pagamento',
                           prefixIcon: Icon(Icons.credit_card_rounded),
@@ -4167,7 +4167,7 @@ class _PaymentBookingDialogState extends State<_PaymentBookingDialog> {
             ),
             const SizedBox(height: 16),
             DropdownButtonFormField<MassagePaymentMethod>(
-              value: _paymentMethod,
+              initialValue: _paymentMethod,
               decoration: const InputDecoration(
                 labelText: 'Meio de pagamento',
                 prefixIcon: Icon(Icons.account_balance_wallet_rounded),

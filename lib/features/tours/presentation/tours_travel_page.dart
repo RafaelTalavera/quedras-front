@@ -940,7 +940,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
               SizedBox(
                 width: 260,
                 child: DropdownButtonFormField<int>(
-                  value: _selectedDate.month - 1,
+                  initialValue: _selectedDate.month - 1,
                   decoration: const InputDecoration(
                     labelText: 'Mes da agenda',
                     prefixIcon: Icon(Icons.calendar_month_rounded),
@@ -970,7 +970,7 @@ class _ToursTravelPageState extends State<ToursTravelPage>
             child: SizedBox(
               width: 260,
               child: DropdownButtonFormField<int>(
-                value: _selectedDate.month - 1,
+                initialValue: _selectedDate.month - 1,
                 decoration: const InputDecoration(
                   labelText: 'Mes da agenda',
                   prefixIcon: Icon(Icons.calendar_month_rounded),
@@ -2741,7 +2741,7 @@ class _BookingDialogState extends State<_BookingDialog> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: <Widget>[
                     DropdownButtonFormField<ToursServiceType>(
-                      value: _serviceType,
+                      initialValue: _serviceType,
                       decoration: const InputDecoration(
                         labelText: 'Tipo',
                         prefixIcon: Icon(Icons.category_rounded),
@@ -2761,7 +2761,7 @@ class _BookingDialogState extends State<_BookingDialog> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int>(
-                      value: _providerId,
+                      initialValue: _providerId,
                       decoration: const InputDecoration(
                         labelText: 'Fornecedor',
                         prefixIcon: Icon(Icons.business_rounded),
@@ -2790,7 +2790,7 @@ class _BookingDialogState extends State<_BookingDialog> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<int?>(
-                      value: _providerOfferingId,
+                      initialValue: _providerOfferingId,
                       decoration: const InputDecoration(
                         labelText: 'Servico do fornecedor',
                         prefixIcon: Icon(Icons.place_rounded),
@@ -2882,7 +2882,7 @@ class _BookingDialogState extends State<_BookingDialog> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: _time(_startAt),
+                      initialValue: _time(_startAt),
                       decoration: const InputDecoration(
                         labelText: 'Horario de inicio',
                         prefixIcon: Icon(Icons.schedule_rounded),
@@ -2912,7 +2912,7 @@ class _BookingDialogState extends State<_BookingDialog> {
                     ),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<String>(
-                      value: _time(_endAt),
+                      initialValue: _time(_endAt),
                       decoration: const InputDecoration(
                         labelText: 'Horario de termino',
                         prefixIcon: Icon(Icons.timelapse_rounded),
@@ -3002,7 +3002,7 @@ class _BookingDialogState extends State<_BookingDialog> {
                     if (_paid) ...<Widget>[
                       const SizedBox(height: 12),
                       DropdownButtonFormField<ToursPaymentMethod>(
-                        value: _paymentMethod,
+                        initialValue: _paymentMethod,
                         decoration: const InputDecoration(
                           labelText: 'Forma de pagamento',
                           prefixIcon: Icon(Icons.credit_card_rounded),
@@ -3469,7 +3469,7 @@ class _ProviderDialogState extends State<_ProviderDialog> {
                       }),
                     const SizedBox(height: 12),
                     DropdownButtonFormField<ToursServiceType>(
-                      value: _offeringServiceType,
+                      initialValue: _offeringServiceType,
                       decoration: const InputDecoration(
                         labelText: 'Tipo do item',
                         prefixIcon: Icon(Icons.map_rounded),
@@ -3847,7 +3847,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             DropdownButtonFormField<ToursPaymentMethod>(
-              value: _method,
+              initialValue: _method,
               decoration: const InputDecoration(
                 labelText: 'Forma de pagamento',
                 prefixIcon: Icon(Icons.payments_rounded),

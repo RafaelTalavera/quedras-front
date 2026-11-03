@@ -3764,7 +3764,7 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<MaintenanceRequestOrigin>(
-                value: _requestOrigin,
+                initialValue: _requestOrigin,
                 decoration: const InputDecoration(
                   labelText: 'Origem do pedido',
                 ),
@@ -3789,7 +3789,7 @@ class _MaintenanceOrderDialogState extends State<_MaintenanceOrderDialog> {
               const SizedBox(height: 12),
               if (!_shouldHideProviderField) ...<Widget>[
                 DropdownButtonFormField<int?>(
-                  value: _providerId,
+                  initialValue: _providerId,
                   isExpanded: true,
                   style: const TextStyle(overflow: TextOverflow.ellipsis),
                   decoration: InputDecoration(
@@ -4647,7 +4647,7 @@ class _MaintenancePlanDialogState extends State<_MaintenancePlanDialog> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<int>(
-                value: _locationId,
+                initialValue: _locationId,
                 decoration: const InputDecoration(labelText: 'Local'),
                 items: widget.locations
                     .map(
@@ -4667,7 +4667,7 @@ class _MaintenancePlanDialogState extends State<_MaintenancePlanDialog> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<int?>(
-                value: _providerId,
+                initialValue: _providerId,
                 isExpanded: true,
                 decoration: const InputDecoration(labelText: 'Prestador'),
                 items: <DropdownMenuItem<int?>>[
@@ -4710,7 +4710,7 @@ class _MaintenancePlanDialogState extends State<_MaintenancePlanDialog> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<MaintenancePlanRecurrenceUnit>(
-                value: _recurrenceUnit,
+                initialValue: _recurrenceUnit,
                 decoration: const InputDecoration(labelText: 'Recorrencia'),
                 items: MaintenancePlanRecurrenceUnit.values
                     .map(
@@ -5984,7 +5984,7 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
           const SizedBox(height: 12),
           DropdownButtonFormField<MaintenanceLocationType>(
             isExpanded: true,
-            value: _type,
+            initialValue: _type,
             decoration: const InputDecoration(labelText: 'Tipo'),
             items: MaintenanceLocationType.values
                 .map(
@@ -6015,7 +6015,7 @@ class _CatalogLocationPaneState extends State<_CatalogLocationPane> {
           const SizedBox(height: 12),
           DropdownButtonFormField<MaintenanceLocationCategory>(
             isExpanded: true,
-            value: _type == MaintenanceLocationType.commonArea
+            initialValue: _type == MaintenanceLocationType.commonArea
                 ? MaintenanceLocationCategory.commonArea
                 : _category,
             decoration: const InputDecoration(labelText: 'Categoria'),
@@ -6486,7 +6486,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
           const SizedBox(height: 12),
           DropdownButtonFormField<MaintenanceProviderType>(
             isExpanded: true,
-            value: _type,
+            initialValue: _type,
             decoration: const InputDecoration(labelText: 'Tipo'),
             items: MaintenanceProviderType.values
                 .map(
@@ -6504,7 +6504,7 @@ class _CatalogProviderPaneState extends State<_CatalogProviderPane> {
           const SizedBox(height: 12),
           DropdownButtonFormField<MaintenanceProviderSpecialty>(
             isExpanded: true,
-            value: _specialty,
+            initialValue: _specialty,
             decoration: const InputDecoration(labelText: 'Especialidade'),
             items: MaintenanceProviderSpecialty.values
                 .map(

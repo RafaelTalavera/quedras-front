@@ -724,7 +724,7 @@ class _CreateUserDialogState extends State<_CreateUserDialog> {
               ),
               const SizedBox(height: 12),
               DropdownButtonFormField<ManagedUserRole>(
-                value: _role,
+                initialValue: _role,
                 decoration: const InputDecoration(labelText: 'Perfil'),
                 items: ManagedUserRole.values
                     .map(
@@ -801,7 +801,7 @@ class _EditUserDialogState extends State<_EditUserDialog> {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             DropdownButtonFormField<ManagedUserRole>(
-              value: _role,
+              initialValue: _role,
               decoration: const InputDecoration(labelText: 'Perfil'),
               items: ManagedUserRole.values
                   .map(

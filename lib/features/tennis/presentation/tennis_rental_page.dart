@@ -1256,7 +1256,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
               SizedBox(
                 width: 260,
                 child: DropdownButtonFormField<int>(
-                  value: _selectedDate.month - 1,
+                  initialValue: _selectedDate.month - 1,
                   decoration: const InputDecoration(
                     labelText: 'Mes da agenda',
                     prefixIcon: Icon(Icons.calendar_month_rounded),
@@ -1288,7 +1288,7 @@ class _TennisRentalPageState extends State<TennisRentalPage>
             child: SizedBox(
               width: 260,
               child: DropdownButtonFormField<int>(
-                value: _selectedDate.month - 1,
+                initialValue: _selectedDate.month - 1,
                 decoration: const InputDecoration(
                   labelText: 'Mes da agenda',
                   prefixIcon: Icon(Icons.calendar_month_rounded),
@@ -3808,7 +3808,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
               mainAxisSize: MainAxisSize.min,
               children: <Widget>[
                 DropdownButtonFormField<CourtCustomerType>(
-                  value: _customerType,
+                  initialValue: _customerType,
                   decoration: const InputDecoration(
                     labelText: 'Tipo de usuário',
                   ),
@@ -3908,7 +3908,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                     const SizedBox(width: 12),
                     Expanded(
                       child: DropdownButtonFormField<String>(
-                        value: _formatTimeOfDay(_startTime),
+                        initialValue: _formatTimeOfDay(_startTime),
                         decoration: const InputDecoration(
                           labelText: 'Inicio',
                           prefixIcon: Icon(Icons.schedule_rounded),
@@ -3938,7 +3938,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                 ),
                 const SizedBox(height: 12),
                 DropdownButtonFormField<String>(
-                  value: _selectedEndSlotValue,
+                  initialValue: _selectedEndSlotValue,
                   decoration: const InputDecoration(
                     labelText: 'Fin',
                     prefixIcon: Icon(Icons.east_rounded),
@@ -4014,7 +4014,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
                 ),
                 if (_paid)
                   DropdownButtonFormField<CourtPaymentMethod>(
-                    value: _paymentMethod,
+                    initialValue: _paymentMethod,
                     decoration: const InputDecoration(
                       labelText: 'Modalidad de pago',
                     ),
@@ -4225,7 +4225,7 @@ class _CourtBookingDialogState extends State<_CourtBookingDialog> {
       );
     }
     return DropdownButtonFormField<String>(
-      value: _selectedPartnerCoachName,
+      initialValue: _selectedPartnerCoachName,
       decoration: const InputDecoration(labelText: 'Nome'),
       items: _partnerCoaches
           .map(
@@ -4500,7 +4500,7 @@ class _PaymentDialogState extends State<_PaymentDialog> {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             DropdownButtonFormField<CourtPaymentMethod>(
-              value: _method,
+              initialValue: _method,
               decoration: const InputDecoration(labelText: 'Modalidad'),
               items: CourtPaymentMethod.values.map((CourtPaymentMethod item) {
                 return DropdownMenuItem<CourtPaymentMethod>(
@@ -5413,9 +5413,7 @@ class _CancelCourtBookingDialogState extends State<_CancelCourtBookingDialog> {
           mainAxisSize: MainAxisSize.min,
           children: <Widget>[
             if (widget.booking.isRecurring) ...<Widget>[
-              RadioListTile<CourtBookingCancellationScope>(
-                contentPadding: EdgeInsets.zero,
-                value: CourtBookingCancellationScope.single,
+              RadioGroup<CourtBookingCancellationScope>(
                 groupValue: _scope,
                 onChanged: (CourtBookingCancellationScope? value) {
                   if (value == null) {
@@ -5425,21 +5423,21 @@ class _CancelCourtBookingDialogState extends State<_CancelCourtBookingDialog> {
                     _scope = value;
                   });
                 },
-                title: const Text('Cancelar somente este dia'),
-              ),
-              RadioListTile<CourtBookingCancellationScope>(
-                contentPadding: EdgeInsets.zero,
-                value: CourtBookingCancellationScope.series,
-                groupValue: _scope,
-                onChanged: (CourtBookingCancellationScope? value) {
-                  if (value == null) {
-                    return;
-                  }
-                  setState(() {
-                    _scope = value;
-                  });
-                },
-                title: const Text('Cancelar toda a recorrencia'),
+                child: const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    RadioListTile<CourtBookingCancellationScope>(
+                      contentPadding: EdgeInsets.zero,
+                      value: CourtBookingCancellationScope.single,
+                      title: Text('Cancelar somente este dia'),
+                    ),
+                    RadioListTile<CourtBookingCancellationScope>(
+                      contentPadding: EdgeInsets.zero,
+                      value: CourtBookingCancellationScope.series,
+                      title: Text('Cancelar toda a recorrencia'),
+                    ),
+                  ],
+                ),
               ),
               const SizedBox(height: 8),
             ],

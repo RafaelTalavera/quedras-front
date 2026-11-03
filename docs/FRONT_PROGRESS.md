@@ -3,10 +3,16 @@
 ## Estado general frontend
 - Proyecto: COSTANORTE Frontend
 - Estado: En progreso (snapshot operativo post Hito 12, con despliegue web alineado al backend productivo)
-- Ultimo hito trabajado: Alineacion de frontend web con backend productivo de Railway
-- Ultima actualizacion: 2026-07-10
+- Ultimo hito trabajado: Preparacion del frontend para el plan de stock operativo de lavanderia
+- Ultima actualizacion: 2026-11-03
 - Fuente de verdad global: `C:/Users/Public/Documents/Proyectos/quadras/docs/TABLERO_PROGRESO.md`
 - Proximo paso frontend: completar comportamiento web en flujos de archivos/PDF y validar despliegue real contra backend publicado.
+
+## Actualizacion 2026-11-03 - Preparacion lavanderia
+- Se normalizaron 42 avisos de deprecacion preexistentes en `maintenance`, `massages`, `settings`, `tennis` y `tours` para dejar `flutter analyze` en verde.
+- `flutter analyze`: sin issues.
+- `flutter test`: 120 pruebas OK.
+- El frontend queda listo para iniciar la implementacion por fases del plan `LAUNDRY_OPERATIONAL_STOCK_PLAN.md` sin arrastrar deuda de analisis estatico.
 
 ## Snapshot actual de desarrollo
 - Fecha de corte: 2026-05-13
