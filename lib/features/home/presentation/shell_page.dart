@@ -15,7 +15,9 @@ import '../../massages/application/massage_app_service.dart';
 import '../../massages/presentation/massage_booking_page.dart';
 import '../../maintenance/application/maintenance_app_service.dart';
 import '../../laundry/application/laundry_app_service.dart';
+import '../../laundry/application/provider_laundry_app_service.dart';
 import '../../laundry/presentation/laundry_page.dart';
+import '../../laundry/presentation/provider_laundry_page.dart';
 import 'package:costanorte/features/maintenance/presentation/maintenance_page.dart';
 import '../../maintenance/domain/maintenance_models.dart';
 import '../../maintenance/presentation/maintenance_notification_bell.dart';
@@ -40,6 +42,7 @@ class ShellPage extends StatefulWidget {
     required this.toursAppService,
     required this.maintenanceAppService,
     required this.laundryAppService,
+    required this.providerLaundryAppService,
     required this.userManagementAppService,
     required this.scheduleSyncService,
     required this.pushNotificationService,
@@ -54,6 +57,7 @@ class ShellPage extends StatefulWidget {
   final ToursAppService toursAppService;
   final MaintenanceAppService maintenanceAppService;
   final LaundryAppService laundryAppService;
+  final ProviderLaundryAppService providerLaundryAppService;
   final UserManagementAppService userManagementAppService;
   final ScheduleSyncService scheduleSyncService;
   final PushNotificationService pushNotificationService;
@@ -205,24 +209,25 @@ class _ShellPageState extends State<ShellPage> {
                       content: content,
                     ),
             ),
-            SafeArea(
-              child: Align(
-                alignment: Alignment.topRight,
-                child: Padding(
-                  padding: EdgeInsets.only(
-                    top: compactLayout ? 17 : 25,
-                    right: compactLayout ? 20 : 27,
-                  ),
-                  child: MaintenanceNotificationBell(
-                    service: widget.maintenanceAppService,
-                    syncEvents: widget.scheduleSyncService.events,
-                    refreshEvents:
-                        widget.pushNotificationService.notificationsChanged,
-                    onOpenNotification: _openMaintenanceNotification,
+            if (session?.isProvider != true)
+              SafeArea(
+                child: Align(
+                  alignment: Alignment.topRight,
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      top: compactLayout ? 17 : 25,
+                      right: compactLayout ? 20 : 27,
+                    ),
+                    child: MaintenanceNotificationBell(
+                      service: widget.maintenanceAppService,
+                      syncEvents: widget.scheduleSyncService.events,
+                      refreshEvents:
+                          widget.pushNotificationService.notificationsChanged,
+                      onOpenNotification: _openMaintenanceNotification,
+                    ),
                   ),
                 ),
               ),
-            ),
           ],
         ),
       ),
@@ -274,7 +279,9 @@ class _ShellPageState extends State<ShellPage> {
           onSectionChanged: _handleMaintenanceSectionChanged,
         );
       case AppSection.laundry:
-        return LaundryPage(service: widget.laundryAppService);
+        return widget.sessionController.session?.isProvider == true
+            ? ProviderLaundryPage(service: widget.providerLaundryAppService)
+            : LaundryPage(service: widget.laundryAppService);
       case AppSection.settings:
         return SingleChildScrollView(
           child: SettingsPage(

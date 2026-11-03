@@ -18,4 +18,20 @@ final class BackendConfig {
     }
     return default_base_url.defaultApiBaseUrl;
   }
+
+  static String get laundryV2BaseUrl {
+    final Uri base = Uri.parse(apiBaseUrl);
+    final List<String> segments = base.pathSegments
+        .where((String segment) => segment.isNotEmpty)
+        .toList();
+    if (segments.length >= 2 &&
+        segments[segments.length - 2] == 'api' &&
+        segments.last == 'v1') {
+      segments[segments.length - 1] = 'v2';
+    } else {
+      segments.addAll(const <String>['api', 'v2']);
+    }
+    segments.add('laundry');
+    return base.replace(pathSegments: segments).toString();
+  }
 }

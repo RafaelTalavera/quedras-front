@@ -16,16 +16,14 @@ final class HttpProviderLaundryAppService implements ProviderLaundryAppService {
   };
 
   @override
-  Future<ProviderLaundryPage<ProviderLaundryDocumentSummary>> listDocuments({
-    int page = 0,
-    int size = 20,
-  }) => _getPage(
+  Future<ProviderLaundryResultPage<ProviderLaundryDocumentSummary>>
+  listDocuments({int page = 0, int size = 20}) => _getPage(
     'provider/documents?page=$page&size=$size',
     ProviderLaundryDocumentSummary.fromJson,
   );
 
   @override
-  Future<ProviderLaundryPage<ProviderLaundryReturnSummary>> listReturns({
+  Future<ProviderLaundryResultPage<ProviderLaundryReturnSummary>> listReturns({
     int page = 0,
     int size = 20,
   }) => _getPage(
@@ -34,7 +32,7 @@ final class HttpProviderLaundryAppService implements ProviderLaundryAppService {
   );
 
   @override
-  Future<ProviderLaundryPage<ProviderLaundryStockRow>> listStock({
+  Future<ProviderLaundryResultPage<ProviderLaundryStockRow>> listStock({
     required ProviderLaundryStockBucket bucket,
     int page = 0,
     int size = 50,
@@ -43,7 +41,7 @@ final class HttpProviderLaundryAppService implements ProviderLaundryAppService {
     ProviderLaundryStockRow.fromJson,
   );
 
-  Future<ProviderLaundryPage<T>> _getPage<T>(
+  Future<ProviderLaundryResultPage<T>> _getPage<T>(
     String path,
     T Function(Map<String, dynamic>) parseItem,
   ) async {

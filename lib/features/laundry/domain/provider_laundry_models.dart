@@ -6,8 +6,8 @@ enum ProviderLaundryStockBucket {
   final String apiValue;
 }
 
-final class ProviderLaundryPage<T> {
-  const ProviderLaundryPage({
+final class ProviderLaundryResultPage<T> {
+  const ProviderLaundryResultPage({
     required this.page,
     required this.size,
     required this.hasNext,
@@ -116,7 +116,7 @@ final class ProviderLaundryStockRow {
       );
 }
 
-ProviderLaundryPage<T> parseProviderLaundryPage<T>(
+ProviderLaundryResultPage<T> parseProviderLaundryPage<T>(
   Map<String, dynamic> json,
   T Function(Map<String, dynamic>) parseItem,
 ) {
@@ -124,7 +124,7 @@ ProviderLaundryPage<T> parseProviderLaundryPage<T>(
   if (rawItems is! List) {
     throw const FormatException('items must be a list');
   }
-  return ProviderLaundryPage<T>(
+  return ProviderLaundryResultPage<T>(
     page: _requiredInt(json, 'page'),
     size: _requiredInt(json, 'size'),
     hasNext: json['hasNext'] == true,
