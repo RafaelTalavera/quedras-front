@@ -5,6 +5,7 @@ final class AuthSession {
     required this.expiresInSeconds,
     required this.username,
     required this.role,
+    this.laundryProviderId,
   });
 
   final String accessToken;
@@ -12,6 +13,7 @@ final class AuthSession {
   final int expiresInSeconds;
   final String username;
   final String role;
+  final int? laundryProviderId;
 
   String get authorizationHeader => '$tokenType $accessToken';
 
@@ -21,6 +23,8 @@ final class AuthSession {
 
   bool get isOperator => normalizedRole == 'OPERATOR' || isSupervisor;
 
+  bool get isProvider => normalizedRole == 'PROVIDER';
+
   factory AuthSession.fromJson(Map<String, dynamic> json) {
     final String accessToken = json['accessToken']?.toString().trim() ?? '';
     final String tokenType = json['tokenType']?.toString().trim() ?? 'Bearer';
@@ -29,6 +33,10 @@ final class AuthSession {
     );
     final String username = json['username']?.toString().trim() ?? '';
     final String role = json['role']?.toString().trim() ?? '';
+    final Object? rawLaundryProviderId = json['laundryProviderId'];
+    final int? laundryProviderId = rawLaundryProviderId == null
+        ? null
+        : int.tryParse(rawLaundryProviderId.toString());
 
     if (accessToken.isEmpty) {
       throw const FormatException('accessToken is required');
@@ -47,6 +55,15 @@ final class AuthSession {
     if (role.isEmpty) {
       throw const FormatException('role is required');
     }
+    if (rawLaundryProviderId != null &&
+        (laundryProviderId == null || laundryProviderId <= 0)) {
+      throw const FormatException(
+        'laundryProviderId must be a positive integer',
+      );
+    }
+    if (role.toUpperCase() == 'PROVIDER' && laundryProviderId == null) {
+      throw const FormatException('laundryProviderId is required for PROVIDER');
+    }
 
     return AuthSession(
       accessToken: accessToken,
@@ -54,6 +71,7 @@ final class AuthSession {
       expiresInSeconds: expiresInSeconds,
       username: username,
       role: role,
+      laundryProviderId: laundryProviderId,
     );
   }
 }

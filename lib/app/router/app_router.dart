@@ -42,6 +42,19 @@ final class AppRouter {
     }
 
     final String sessionRole = sessionController.session?.role ?? 'OPERATOR';
+    final List<AppSection> allowedSections = AppRoutes.sectionsForRole(
+      sessionRole,
+    );
+    if (allowedSections.isEmpty) {
+      sessionController.clearSession();
+      return MaterialPageRoute<void>(
+        builder: (_) => LoginPage(
+          authAppService: authAppService,
+          sessionController: sessionController,
+        ),
+        settings: const RouteSettings(name: AppRoutes.login),
+      );
+    }
     final String requestedRoute = routeName == AppRoutes.login
         ? AppRoutes.defaultRouteForRole(sessionRole)
         : routeName;
@@ -51,7 +64,7 @@ final class AppRouter {
     final AppSection section =
         AppRoutes.canAccessSection(sessionRole, requestedSection)
         ? requestedSection
-        : AppRoutes.sectionsForRole(sessionRole).first;
+        : allowedSections.first;
 
     return MaterialPageRoute<void>(
       builder: (_) => ShellPage(

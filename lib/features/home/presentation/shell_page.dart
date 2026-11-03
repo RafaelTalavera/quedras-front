@@ -378,6 +378,9 @@ class _ShellPageState extends State<ShellPage> {
   }
 
   void _openMaintenanceNotification(MaintenanceNotificationModel notification) {
+    if (!_availableSections.contains(AppSection.maintenance)) {
+      return;
+    }
     setState(() {
       _ensureSectionLoaded(AppSection.maintenance);
       _selectedSection = AppSection.maintenance;
@@ -393,7 +396,9 @@ class _ShellPageState extends State<ShellPage> {
   }
 
   void _openMaintenanceFromPush(PushMaintenanceOpenRequest request) {
-    if (!mounted) return;
+    if (!mounted || !_availableSections.contains(AppSection.maintenance)) {
+      return;
+    }
     setState(() {
       _ensureSectionLoaded(AppSection.maintenance);
       _selectedSection = AppSection.maintenance;

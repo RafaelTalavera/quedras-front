@@ -16,6 +16,9 @@ final class AppRoutes {
     AppSection.laundry,
     AppSection.settings,
   ];
+  static const List<AppSection> _providerSections = <AppSection>[
+    AppSection.laundry,
+  ];
 
   static const String login = '/login';
   static const String tennisRental = '/quadras';
@@ -65,7 +68,10 @@ final class AppRoutes {
     if (normalizedRole == 'SUPERVISOR' || normalizedRole == 'OPERATOR') {
       return _fullSystemSections;
     }
-    return _fullSystemSections;
+    if (normalizedRole == 'PROVIDER') {
+      return _providerSections;
+    }
+    return const <AppSection>[];
   }
 
   static bool canAccessSection(String role, AppSection section) {
@@ -73,6 +79,7 @@ final class AppRoutes {
   }
 
   static String defaultRouteForRole(String role) {
-    return routeBySection(sectionsForRole(role).first);
+    final List<AppSection> sections = sectionsForRole(role);
+    return sections.isEmpty ? login : routeBySection(sections.first);
   }
 }

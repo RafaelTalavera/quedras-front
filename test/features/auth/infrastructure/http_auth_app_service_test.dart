@@ -56,6 +56,50 @@ void main() {
     );
   });
 
+  test('HttpAuthAppService parsea la asociacion del proveedor', () async {
+    final _FakeApiClient client = _FakeApiClient()
+      ..enqueue(
+        const ApiResponse(
+          statusCode: 200,
+          body:
+              '{"accessToken":"jwt-provider","tokenType":"Bearer","expiresInSeconds":1800,"username":"lavanderia.demo","role":"PROVIDER","laundryProviderId":7}',
+        ),
+      );
+    final HttpAuthAppService service = HttpAuthAppService(apiClient: client);
+
+    final session = await service.login(
+      username: 'lavanderia.demo',
+      password: '123456',
+    );
+
+    expect(session.isProvider, isTrue);
+    expect(session.laundryProviderId, 7);
+    expect(session.isOperator, isFalse);
+  });
+
+  test('HttpAuthAppService rechaza proveedor sin asociacion', () async {
+    final _FakeApiClient client = _FakeApiClient()
+      ..enqueue(
+        const ApiResponse(
+          statusCode: 200,
+          body:
+              '{"accessToken":"jwt-provider","tokenType":"Bearer","expiresInSeconds":1800,"username":"lavanderia.demo","role":"PROVIDER"}',
+        ),
+      );
+    final HttpAuthAppService service = HttpAuthAppService(apiClient: client);
+
+    await expectLater(
+      () => service.login(username: 'lavanderia.demo', password: '123456'),
+      throwsA(
+        isA<StateError>().having(
+          (StateError error) => error.message.toString(),
+          'message',
+          contains('laundryProviderId is required for PROVIDER'),
+        ),
+      ),
+    );
+  });
+
   test(
     'HttpAuthAppService traduz credenciais invalidas com senha nao ascii',
     () async {
