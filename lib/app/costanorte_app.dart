@@ -20,7 +20,9 @@ import '../features/massages/infrastructure/http_massage_app_service.dart';
 import '../features/maintenance/application/maintenance_app_service.dart';
 import '../features/maintenance/infrastructure/http_maintenance_app_service.dart';
 import '../features/laundry/application/laundry_app_service.dart';
+import '../features/laundry/application/hotel_laundry_app_service.dart';
 import '../features/laundry/application/provider_laundry_app_service.dart';
+import '../features/laundry/infrastructure/http_hotel_laundry_app_service.dart';
 import '../features/laundry/infrastructure/http_laundry_app_service.dart';
 import '../features/laundry/infrastructure/http_provider_laundry_app_service.dart';
 import '../features/reservations/application/reservation_app_service.dart';
@@ -44,6 +46,7 @@ class CostaNorteApp extends StatefulWidget {
     ToursAppService? toursAppService,
     MaintenanceAppService? maintenanceAppService,
     LaundryAppService? laundryAppService,
+    HotelLaundryAppService? hotelLaundryAppService,
     ProviderLaundryAppService? providerLaundryAppService,
     UserManagementAppService? userManagementAppService,
     PushNotificationService? pushNotificationService,
@@ -56,6 +59,7 @@ class CostaNorteApp extends StatefulWidget {
        _toursAppService = toursAppService,
        _maintenanceAppService = maintenanceAppService,
        _laundryAppService = laundryAppService,
+       _hotelLaundryAppService = hotelLaundryAppService,
        _providerLaundryAppService = providerLaundryAppService,
        _userManagementAppService = userManagementAppService,
        _pushNotificationService = pushNotificationService;
@@ -69,6 +73,7 @@ class CostaNorteApp extends StatefulWidget {
   final ToursAppService? _toursAppService;
   final MaintenanceAppService? _maintenanceAppService;
   final LaundryAppService? _laundryAppService;
+  final HotelLaundryAppService? _hotelLaundryAppService;
   final ProviderLaundryAppService? _providerLaundryAppService;
   final UserManagementAppService? _userManagementAppService;
   final PushNotificationService? _pushNotificationService;
@@ -89,6 +94,7 @@ class _CostaNorteAppState extends State<CostaNorteApp>
   late final ToursAppService _toursAppService;
   late final MaintenanceAppService _maintenanceAppService;
   late final LaundryAppService _laundryAppService;
+  late final HotelLaundryAppService _hotelLaundryAppService;
   late final ProviderLaundryAppService _providerLaundryAppService;
   late final UserManagementAppService _userManagementAppService;
   late final ScheduleSyncService _scheduleSyncService;
@@ -140,6 +146,9 @@ class _CostaNorteAppState extends State<CostaNorteApp>
     _providerLaundryAppService =
         widget._providerLaundryAppService ??
         HttpProviderLaundryAppService(apiClient: laundryV2Client);
+    _hotelLaundryAppService =
+        widget._hotelLaundryAppService ??
+        HttpHotelLaundryAppService(apiClient: laundryV2Client);
     _userManagementAppService =
         widget._userManagementAppService ??
         HttpUserManagementAppService(apiClient: _authorizedApiClient);
@@ -209,6 +218,7 @@ class _CostaNorteAppState extends State<CostaNorteApp>
         toursAppService: _toursAppService,
         maintenanceAppService: _maintenanceAppService,
         laundryAppService: _laundryAppService,
+        hotelLaundryAppService: _hotelLaundryAppService,
         providerLaundryAppService: _providerLaundryAppService,
         userManagementAppService: _userManagementAppService,
         scheduleSyncService: _scheduleSyncService,

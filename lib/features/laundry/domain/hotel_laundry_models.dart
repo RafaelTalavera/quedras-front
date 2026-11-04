@@ -1,7 +1,7 @@
 import 'provider_laundry_models.dart';
 
-final class HotelLaundryPage<T> {
-  const HotelLaundryPage({
+final class HotelLaundryResultPage<T> {
+  const HotelLaundryResultPage({
     required this.page,
     required this.size,
     required this.hasNext,
@@ -199,13 +199,13 @@ final class HotelLaundryReturnConfirmationInput {
   };
 }
 
-HotelLaundryPage<T> parseHotelLaundryPage<T>(
+HotelLaundryResultPage<T> parseHotelLaundryPage<T>(
   Map<String, dynamic> json,
   T Function(Map<String, dynamic>) parser,
 ) {
   final Object? rawItems = json['items'];
   if (rawItems is! List) throw const FormatException('items must be a list');
-  return HotelLaundryPage<T>(
+  return HotelLaundryResultPage<T>(
     page: _int(json, 'page'),
     size: _int(json, 'size'),
     hasNext: json['hasNext'] == true,

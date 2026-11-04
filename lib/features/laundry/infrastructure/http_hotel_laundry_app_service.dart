@@ -28,7 +28,7 @@ final class HttpHotelLaundryAppService implements HotelLaundryAppService {
   }
 
   @override
-  Future<HotelLaundryPage<HotelLaundryDocumentSummary>> listDocuments({
+  Future<HotelLaundryResultPage<HotelLaundryDocumentSummary>> listDocuments({
     int? providerId,
     String? status,
     String? documentType,
@@ -46,7 +46,7 @@ final class HttpHotelLaundryAppService implements HotelLaundryAppService {
   );
 
   @override
-  Future<HotelLaundryPage<HotelLaundryReturnSummary>> listReturns({
+  Future<HotelLaundryResultPage<HotelLaundryReturnSummary>> listReturns({
     int? providerId,
     String? status,
     int page = 0,
@@ -93,7 +93,7 @@ final class HttpHotelLaundryAppService implements HotelLaundryAppService {
     parseHotelLaundryReturn,
   );
 
-  Future<HotelLaundryPage<T>> _getPage<T>(
+  Future<HotelLaundryResultPage<T>> _getPage<T>(
     String path,
     T Function(Map<String, dynamic>) parser,
   ) async => parseHotelLaundryPage<T>(await _getObject(path), parser);

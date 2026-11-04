@@ -15,8 +15,9 @@ import '../../massages/application/massage_app_service.dart';
 import '../../massages/presentation/massage_booking_page.dart';
 import '../../maintenance/application/maintenance_app_service.dart';
 import '../../laundry/application/laundry_app_service.dart';
+import '../../laundry/application/hotel_laundry_app_service.dart';
 import '../../laundry/application/provider_laundry_app_service.dart';
-import '../../laundry/presentation/laundry_page.dart';
+import '../../laundry/presentation/hotel_laundry_page.dart';
 import '../../laundry/presentation/provider_laundry_page.dart';
 import 'package:costanorte/features/maintenance/presentation/maintenance_page.dart';
 import '../../maintenance/domain/maintenance_models.dart';
@@ -42,6 +43,7 @@ class ShellPage extends StatefulWidget {
     required this.toursAppService,
     required this.maintenanceAppService,
     required this.laundryAppService,
+    required this.hotelLaundryAppService,
     required this.providerLaundryAppService,
     required this.userManagementAppService,
     required this.scheduleSyncService,
@@ -57,6 +59,7 @@ class ShellPage extends StatefulWidget {
   final ToursAppService toursAppService;
   final MaintenanceAppService maintenanceAppService;
   final LaundryAppService laundryAppService;
+  final HotelLaundryAppService hotelLaundryAppService;
   final ProviderLaundryAppService providerLaundryAppService;
   final UserManagementAppService userManagementAppService;
   final ScheduleSyncService scheduleSyncService;
@@ -281,7 +284,10 @@ class _ShellPageState extends State<ShellPage> {
       case AppSection.laundry:
         return widget.sessionController.session?.isProvider == true
             ? ProviderLaundryPage(service: widget.providerLaundryAppService)
-            : LaundryPage(service: widget.laundryAppService);
+            : HotelLaundryPage(
+                service: widget.hotelLaundryAppService,
+                catalogService: widget.laundryAppService,
+              );
       case AppSection.settings:
         return SingleChildScrollView(
           child: SettingsPage(

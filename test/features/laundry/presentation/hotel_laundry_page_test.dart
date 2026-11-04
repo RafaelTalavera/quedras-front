@@ -1,0 +1,179 @@
+import 'package:costanorte/core/audit/audit_models.dart';
+import 'package:costanorte/features/laundry/application/hotel_laundry_app_service.dart';
+import 'package:costanorte/features/laundry/application/laundry_app_service.dart';
+import 'package:costanorte/features/laundry/domain/hotel_laundry_models.dart';
+import 'package:costanorte/features/laundry/domain/laundry_models.dart';
+import 'package:costanorte/features/laundry/domain/provider_laundry_models.dart';
+import 'package:costanorte/features/laundry/presentation/hotel_laundry_page.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_test/flutter_test.dart';
+
+void main() {
+  testWidgets('muestra tablero y bandejas operativas V2', (
+    WidgetTester tester,
+  ) async {
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: HotelLaundryPage(
+            service: _HotelService(),
+            catalogService: _CatalogService(),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('hotel-laundry-v2')), findsOneWidget);
+    expect(find.text('DisponÃ­vel'), findsOneWidget);
+    expect(find.text('DEV-7 Â· Lavanderia'), findsOneWidget);
+    await tester.scrollUntilVisible(
+      find.text('Documentos recentes'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    expect(find.text('Documentos recentes'), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('hotel-laundry-dispatch')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('hotel-laundry-rewash')), findsOneWidget);
+  });
+}
+
+final class _HotelService implements HotelLaundryAppService {
+  @override
+  Future<HotelLaundryStockTotals> dashboard({int? providerId}) async =>
+      const HotelLaundryStockTotals(
+        hotelAvailable: 8,
+        hotelRewashQueue: 1,
+        providerProcessing: 4,
+        providerRewash: 2,
+        missing: 1,
+        damaged: 0,
+        total: 16,
+      );
+
+  @override
+  Future<HotelLaundryResultPage<HotelLaundryDocumentSummary>> listDocuments({
+    int? providerId,
+    String? status,
+    String? documentType,
+    int page = 0,
+    int size = 20,
+  }) async => HotelLaundryResultPage<HotelLaundryDocumentSummary>(
+    page: page,
+    size: size,
+    hasNext: false,
+    items: <HotelLaundryDocumentSummary>[
+      HotelLaundryDocumentSummary(
+        id: 11,
+        reference: 'ENV-11',
+        documentType: 'STANDARD_DISPATCH',
+        status: 'SUBMITTED',
+        providerId: 3,
+        providerName: 'Lavanderia',
+        effectiveAt: DateTime.utc(2026, 11, 3),
+        version: 1,
+      ),
+    ],
+  );
+
+  @override
+  Future<HotelLaundryResultPage<HotelLaundryReturnSummary>> listReturns({
+    int? providerId,
+    String? status,
+    int page = 0,
+    int size = 20,
+  }) async => HotelLaundryResultPage<HotelLaundryReturnSummary>(
+    page: page,
+    size: size,
+    hasNext: false,
+    items: <HotelLaundryReturnSummary>[
+      HotelLaundryReturnSummary(
+        id: 7,
+        reference: 'DEV-7',
+        status: 'SUBMITTED',
+        providerId: 3,
+        providerName: 'Lavanderia',
+        effectiveAt: DateTime.utc(2026, 11, 4),
+        version: 1,
+      ),
+    ],
+  );
+
+  @override
+  Future<HotelLaundryDocumentSummary> createDispatch({
+    required HotelLaundryDispatchInput input,
+    required bool rewash,
+  }) => throw UnimplementedError();
+  @override
+  Future<HotelLaundryDocumentSummary> submitDocument({
+    required int id,
+    required int version,
+  }) => throw UnimplementedError();
+  @override
+  Future<ProviderLaundryReturn> getReturn(int id) => throw UnimplementedError();
+  @override
+  Future<ProviderLaundryReturn> confirmReturn({
+    required int id,
+    required HotelLaundryReturnConfirmationInput input,
+  }) => throw UnimplementedError();
+}
+
+final class _CatalogService implements LaundryAppService {
+  @override
+  Future<List<LaundryProvider>> listProviders() async =>
+      const <LaundryProvider>[
+        LaundryProvider(id: 3, name: 'Lavanderia', active: true),
+      ];
+  @override
+  Future<List<LaundryItem>> listItems() async => const <LaundryItem>[
+    LaundryItem(
+      id: 8,
+      name: 'Toalha',
+      unitType: LaundryUnitType.piece,
+      currentUnitPrice: 4.5,
+      active: true,
+    ),
+  ];
+  @override
+  Future<LaundryProvider> createProvider(
+    CreateLaundryProviderRequest request,
+  ) => throw UnimplementedError();
+  @override
+  Future<LaundryItem> createItem(LaundryItem item) =>
+      throw UnimplementedError();
+  @override
+  Future<LaundryItem> updateItem(int id, LaundryItem item) =>
+      throw UnimplementedError();
+  @override
+  Future<LaundryShipment> createShipment(
+    CreateLaundryShipmentRequest request,
+  ) => throw UnimplementedError();
+  @override
+  Future<List<LaundryShipment>> listShipments({
+    LaundryShipmentStatus? status,
+    int? providerId,
+    String? dateFrom,
+    String? dateTo,
+  }) async => const <LaundryShipment>[];
+  @override
+  Future<LaundryShipment> getShipment(int id) => throw UnimplementedError();
+  @override
+  Future<ReceiveLaundryShipmentResult> receiveShipment(
+    int id,
+    ReceiveLaundryShipmentRequest request,
+  ) => throw UnimplementedError();
+  @override
+  Future<LaundryShipment> dispatchShipment(
+    int id,
+    DispatchLaundryShipmentRequest request,
+  ) => throw UnimplementedError();
+  @override
+  Future<LaundryShipment> cancelShipment(int id, String cancellationNotes) =>
+      throw UnimplementedError();
+  @override
+  Future<List<AuditEventModel>> shipmentAudit(int id) async =>
+      const <AuditEventModel>[];
+}
