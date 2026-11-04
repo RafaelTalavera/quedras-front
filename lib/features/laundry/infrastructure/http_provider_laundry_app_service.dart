@@ -76,6 +76,30 @@ final class HttpProviderLaundryAppService implements ProviderLaundryAppService {
     }, ProviderLaundryDocument.fromJson);
   }
 
+  @override
+  Future<ProviderLaundryReturn> getReturn(int id) =>
+      _getObject('returns/$id', ProviderLaundryReturn.fromJson);
+
+  @override
+  Future<ProviderLaundryReturn> createReturn(
+    ProviderLaundryReturnInput input,
+  ) => _postObject('returns', input.toJson(), ProviderLaundryReturn.fromJson);
+
+  @override
+  Future<ProviderLaundryReturn> updateReturn({
+    required int id,
+    required ProviderLaundryReturnInput input,
+  }) =>
+      _putObject('returns/$id', input.toJson(), ProviderLaundryReturn.fromJson);
+
+  @override
+  Future<ProviderLaundryReturn> submitReturn({
+    required int id,
+    required int version,
+  }) => _postObject('returns/$id/submit', <String, Object?>{
+    'version': version,
+  }, ProviderLaundryReturn.fromJson);
+
   Future<T> _getObject<T>(
     String path,
     T Function(Map<String, dynamic>) parser,
@@ -100,6 +124,24 @@ final class HttpProviderLaundryAppService implements ProviderLaundryAppService {
       path: path,
       request: () =>
           _apiClient.post(path, headers: headers, body: jsonEncode(body)),
+      parser: parser,
+    );
+  }
+
+  Future<T> _putObject<T>(
+    String path,
+    Map<String, Object?> body,
+    T Function(Map<String, dynamic>) parser,
+  ) {
+    final Map<String, String> headers = <String, String>{
+      ..._headers,
+      'Idempotency-Key': _nextIdempotencyKey(),
+    };
+    return _objectRequest(
+      method: 'PUT',
+      path: path,
+      request: () =>
+          _apiClient.put(path, headers: headers, body: jsonEncode(body)),
       parser: parser,
     );
   }

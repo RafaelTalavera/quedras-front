@@ -108,6 +108,16 @@ class _ProviderLaundryPageState extends State<ProviderLaundryPage> {
           ),
           const SizedBox(height: 4),
           const Text('Acompanhe envios, devoluções e peças em processamento.'),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerLeft,
+            child: FilledButton.icon(
+              key: const ValueKey('provider-return-create'),
+              onPressed: () => _editReturn(),
+              icon: const Icon(Icons.add),
+              label: const Text('Nova devolução'),
+            ),
+          ),
           const SizedBox(height: 18),
           _StockOverview(processing: _processing, rewash: _rewash),
           const SizedBox(height: 20),
@@ -137,6 +147,7 @@ class _ProviderLaundryPageState extends State<ProviderLaundryPage> {
                     subtitle: 'Devolução',
                     status: _status(item.status),
                     date: item.effectiveAt,
+                    onTap: () => _openReturn(item.id),
                   ),
                 )
                 .toList(),
@@ -249,6 +260,94 @@ class _ProviderLaundryPageState extends State<ProviderLaundryPage> {
     ScaffoldMessenger.of(
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _openReturn(int id) async {
+    late final ProviderLaundryReturn manifest;
+    try {
+      manifest = await widget.service.getReturn(id);
+    } on Object catch (error) {
+      if (!mounted) return;
+      _showError(error);
+      return;
+    }
+    if (!mounted) return;
+    final _ReturnAction? action = await showDialog<_ReturnAction>(
+      context: context,
+      builder: (BuildContext context) => _ReturnDialog(manifest: manifest),
+    );
+    if (action == _ReturnAction.edit && mounted) {
+      await _editReturn(existing: manifest);
+    } else if (action == _ReturnAction.submit && mounted) {
+      try {
+        await widget.service.submitReturn(
+          id: manifest.id,
+          version: manifest.version,
+        );
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Devolução enviada ao hotel.')),
+        );
+        await _load();
+      } on Object catch (error) {
+        if (!mounted) return;
+        _showError(error);
+      }
+    }
+  }
+
+  Future<void> _editReturn({ProviderLaundryReturn? existing}) async {
+    final Map<int, ProviderLaundryStockRow> available =
+        <int, ProviderLaundryStockRow>{};
+    for (final ProviderLaundryStockRow row in <ProviderLaundryStockRow>[
+      ..._processing,
+      ..._rewash,
+    ]) {
+      available.putIfAbsent(row.itemId, () => row);
+    }
+    for (final ProviderLaundryReturnLine line
+        in existing?.lines ?? const <ProviderLaundryReturnLine>[]) {
+      available.putIfAbsent(
+        line.itemId,
+        () => ProviderLaundryStockRow(
+          itemId: line.itemId,
+          itemName: line.itemName,
+          unitType: 'PIECE',
+          bucket: ProviderLaundryStockBucket.processing.apiValue,
+          quantity: line.declaredClean + line.declaredRetained,
+          ageDays: 0,
+          version: 0,
+        ),
+      );
+    }
+    final ProviderLaundryReturnInput? input =
+        await showDialog<ProviderLaundryReturnInput>(
+          context: context,
+          builder: (BuildContext context) => _ReturnFormDialog(
+            availableItems: available.values.toList(growable: false),
+            existing: existing,
+          ),
+        );
+    if (input == null || !mounted) return;
+    try {
+      if (existing == null) {
+        await widget.service.createReturn(input);
+      } else {
+        await widget.service.updateReturn(id: existing.id, input: input);
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            existing == null ? 'Devolução criada.' : 'Rascunho atualizado.',
+          ),
+        ),
+      );
+      await _load();
+    } on Object catch (error) {
+      if (!mounted) return;
+      _showError(error);
+    }
   }
 }
 
@@ -391,6 +490,8 @@ class _SummaryTile extends StatelessWidget {
 
 enum _DocumentDecision { acknowledge, observe }
 
+enum _ReturnAction { edit, submit }
+
 class _DocumentDialog extends StatelessWidget {
   const _DocumentDialog({required this.document});
 
@@ -459,6 +560,264 @@ class _DocumentDialog extends StatelessWidget {
   );
 }
 
+class _ReturnDialog extends StatelessWidget {
+  const _ReturnDialog({required this.manifest});
+
+  final ProviderLaundryReturn manifest;
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(manifest.reference),
+    content: SizedBox(
+      width: 620,
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              '${_status(manifest.status)} · ${_date(manifest.effectiveAt)}',
+            ),
+            if (manifest.notes != null) Text(manifest.notes!),
+            const Divider(height: 28),
+            ...manifest.lines.map(
+              (ProviderLaundryReturnLine line) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(line.itemName),
+                subtitle: Text(
+                  'Limpas: ${_quantity(line.declaredClean)} · Retidas: ${_quantity(line.declaredRetained)}',
+                ),
+              ),
+            ),
+            if (manifest.correctionNotes != null) ...<Widget>[
+              const Divider(height: 28),
+              Text('Correção do hotel: ${manifest.correctionNotes}'),
+            ],
+          ],
+        ),
+      ),
+    ),
+    actions: <Widget>[
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Fechar'),
+      ),
+      if (manifest.isDraft) ...<Widget>[
+        OutlinedButton(
+          onPressed: () => Navigator.pop(context, _ReturnAction.edit),
+          child: const Text('Editar'),
+        ),
+        FilledButton(
+          key: const ValueKey('provider-return-submit'),
+          onPressed: () => Navigator.pop(context, _ReturnAction.submit),
+          child: const Text('Enviar ao hotel'),
+        ),
+      ],
+    ],
+  );
+}
+
+class _ReturnFormDialog extends StatefulWidget {
+  const _ReturnFormDialog({required this.availableItems, this.existing});
+
+  final List<ProviderLaundryStockRow> availableItems;
+  final ProviderLaundryReturn? existing;
+
+  @override
+  State<_ReturnFormDialog> createState() => _ReturnFormDialogState();
+}
+
+class _ReturnFormDialogState extends State<_ReturnFormDialog> {
+  late final TextEditingController _notes = TextEditingController(
+    text: widget.existing?.notes,
+  );
+  late final Map<int, _ReturnLineControllers> _lines =
+      <int, _ReturnLineControllers>{
+        for (final ProviderLaundryStockRow item in widget.availableItems)
+          item.itemId: _ReturnLineControllers(
+            clean: _existingLine(item.itemId)?.declaredClean ?? 0,
+            retained: _existingLine(item.itemId)?.declaredRetained ?? 0,
+          ),
+      };
+  late DateTime _effectiveAt = widget.existing?.effectiveAt ?? DateTime.now();
+  String? _error;
+
+  ProviderLaundryReturnLine? _existingLine(int itemId) {
+    for (final ProviderLaundryReturnLine line
+        in widget.existing?.lines ?? const <ProviderLaundryReturnLine>[]) {
+      if (line.itemId == itemId) return line;
+    }
+    return null;
+  }
+
+  @override
+  void dispose() {
+    _notes.dispose();
+    for (final _ReturnLineControllers line in _lines.values) {
+      line.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(
+      widget.existing == null ? 'Nova devolução' : 'Editar devolução',
+    ),
+    content: SizedBox(
+      width: 720,
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            OutlinedButton.icon(
+              onPressed: _selectDate,
+              icon: const Icon(Icons.calendar_today_outlined),
+              label: Text('Data: ${_date(_effectiveAt)}'),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _notes,
+              maxLength: 500,
+              decoration: const InputDecoration(
+                labelText: 'Observação opcional',
+              ),
+            ),
+            for (final ProviderLaundryStockRow item in widget.availableItems)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(item.itemName),
+                      const SizedBox(height: 8),
+                      Row(
+                        children: <Widget>[
+                          Expanded(
+                            child: TextField(
+                              key: ValueKey('return-clean-${item.itemId}'),
+                              controller: _lines[item.itemId]!.clean,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: 'Limpas',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: TextField(
+                              key: ValueKey('return-retained-${item.itemId}'),
+                              controller: _lines[item.itemId]!.retained,
+                              keyboardType:
+                                  const TextInputType.numberWithOptions(
+                                    decimal: true,
+                                  ),
+                              decoration: const InputDecoration(
+                                labelText: 'Retidas',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (_error != null)
+              Text(
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
+              ),
+          ],
+        ),
+      ),
+    ),
+    actions: <Widget>[
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Cancelar'),
+      ),
+      FilledButton(
+        key: const ValueKey('provider-return-save'),
+        onPressed: _save,
+        child: const Text('Salvar rascunho'),
+      ),
+    ],
+  );
+
+  Future<void> _selectDate() async {
+    final DateTime? selected = await showDatePicker(
+      context: context,
+      initialDate: _effectiveAt,
+      firstDate: DateTime(DateTime.now().year - 1),
+      lastDate: DateTime.now(),
+    );
+    if (selected == null || !mounted) return;
+    setState(
+      () => _effectiveAt = DateTime(
+        selected.year,
+        selected.month,
+        selected.day,
+        _effectiveAt.hour,
+        _effectiveAt.minute,
+      ),
+    );
+  }
+
+  void _save() {
+    final List<ProviderLaundryReturnLineInput> inputs = [];
+    for (final MapEntry<int, _ReturnLineControllers> entry in _lines.entries) {
+      final double? clean = _parseQuantity(entry.value.clean.text);
+      final double? retained = _parseQuantity(entry.value.retained.text);
+      if (clean == null || retained == null || clean < 0 || retained < 0) {
+        setState(
+          () => _error = 'Informe apenas quantidades válidas e não negativas.',
+        );
+        return;
+      }
+      if (clean + retained > 0) {
+        inputs.add(
+          ProviderLaundryReturnLineInput(
+            itemId: entry.key,
+            declaredClean: clean,
+            declaredRetained: retained,
+          ),
+        );
+      }
+    }
+    if (inputs.isEmpty) {
+      setState(() => _error = 'Informe pelo menos uma quantidade.');
+      return;
+    }
+    Navigator.pop(
+      context,
+      ProviderLaundryReturnInput(
+        version: widget.existing?.version ?? 0,
+        effectiveAt: _effectiveAt,
+        notes: _notes.text,
+        lines: inputs,
+      ),
+    );
+  }
+}
+
+class _ReturnLineControllers {
+  _ReturnLineControllers({required double clean, required double retained})
+    : clean = TextEditingController(text: _editableQuantity(clean)),
+      retained = TextEditingController(text: _editableQuantity(retained));
+
+  final TextEditingController clean;
+  final TextEditingController retained;
+
+  void dispose() {
+    clean.dispose();
+    retained.dispose();
+  }
+}
+
 String _documentType(String value) => switch (value) {
   'STANDARD_DISPATCH' => 'Envio normal',
   'REWASH_DISPATCH' => 'Envio para relavagem',
@@ -478,6 +837,13 @@ String _status(String value) => switch (value) {
 };
 
 String _quantity(double value) => value == value.roundToDouble()
+    ? value.toInt().toString()
+    : value.toStringAsFixed(3).replaceFirst(RegExp(r'0+$'), '');
+
+double? _parseQuantity(String value) =>
+    double.tryParse(value.trim().replaceAll(',', '.'));
+
+String _editableQuantity(double value) => value == value.roundToDouble()
     ? value.toInt().toString()
     : value.toStringAsFixed(3).replaceFirst(RegExp(r'0+$'), '');
 

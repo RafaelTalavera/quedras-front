@@ -28,4 +28,18 @@ abstract interface class ProviderLaundryAppService {
     required int version,
     required String notes,
   });
+
+  Future<ProviderLaundryReturn> getReturn(int id);
+
+  Future<ProviderLaundryReturn> createReturn(ProviderLaundryReturnInput input);
+
+  Future<ProviderLaundryReturn> updateReturn({
+    required int id,
+    required ProviderLaundryReturnInput input,
+  });
+
+  Future<ProviderLaundryReturn> submitReturn({
+    required int id,
+    required int version,
+  });
 }

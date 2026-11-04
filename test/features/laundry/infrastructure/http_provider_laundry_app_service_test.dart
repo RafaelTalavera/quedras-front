@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:costanorte/core/network/api_client.dart';
 import 'package:costanorte/core/network/api_exception.dart';
 import 'package:costanorte/features/laundry/domain/provider_laundry_models.dart';
@@ -94,6 +96,38 @@ void main() {
     );
     expect(client.method, isNull);
   });
+
+  test('crea devolucion sin permitir providerId en el payload', () async {
+    final _FakeApiClient client = _FakeApiClient(
+      const ApiResponse(
+        statusCode: 201,
+        body:
+            '{"id":7,"reference":"DEV-7","status":"DRAFT","providerId":3,"providerName":"Lavanderia","effectiveAt":"2026-11-04T10:00:00Z","notes":null,"submittedAt":null,"confirmedAt":null,"correctionNotes":null,"version":0,"lines":[{"id":2,"itemId":8,"itemName":"Toalha","declaredClean":3,"declaredRetained":1,"acceptedClean":0,"returnedDirty":0,"retained":0,"missing":0,"damaged":0}]}',
+      ),
+    );
+    final service = HttpProviderLaundryAppService(apiClient: client);
+
+    final result = await service.createReturn(
+      ProviderLaundryReturnInput(
+        version: 0,
+        effectiveAt: DateTime.utc(2026, 11, 4, 10),
+        lines: const <ProviderLaundryReturnLineInput>[
+          ProviderLaundryReturnLineInput(
+            itemId: 8,
+            declaredClean: 3,
+            declaredRetained: 1,
+          ),
+        ],
+      ),
+    );
+
+    final body = jsonDecode(client.body!) as Map<String, dynamic>;
+    expect(client.path, 'returns');
+    expect(body.containsKey('providerId'), isFalse);
+    expect(body['version'], 0);
+    expect(client.headers?['Idempotency-Key'], isNotEmpty);
+    expect(result.reference, 'DEV-7');
+  });
 }
 
 final class _FakeApiClient implements ApiClient {
@@ -142,5 +176,11 @@ final class _FakeApiClient implements ApiClient {
     String path, {
     Map<String, String>? headers,
     String? body,
-  }) => throw UnimplementedError();
+  }) async {
+    method = 'PUT';
+    this.path = path;
+    this.headers = headers;
+    this.body = body;
+    return response;
+  }
 }

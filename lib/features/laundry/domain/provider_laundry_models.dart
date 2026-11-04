@@ -180,6 +180,135 @@ final class ProviderLaundryReturnSummary {
       );
 }
 
+final class ProviderLaundryReturnLine {
+  const ProviderLaundryReturnLine({
+    required this.id,
+    required this.itemId,
+    required this.itemName,
+    required this.declaredClean,
+    required this.declaredRetained,
+    required this.acceptedClean,
+    required this.returnedDirty,
+    required this.retained,
+    required this.missing,
+    required this.damaged,
+  });
+
+  final int id;
+  final int itemId;
+  final String itemName;
+  final double declaredClean;
+  final double declaredRetained;
+  final double acceptedClean;
+  final double returnedDirty;
+  final double retained;
+  final double missing;
+  final double damaged;
+
+  factory ProviderLaundryReturnLine.fromJson(Map<String, dynamic> json) =>
+      ProviderLaundryReturnLine(
+        id: _requiredInt(json, 'id'),
+        itemId: _requiredInt(json, 'itemId'),
+        itemName: _requiredString(json, 'itemName'),
+        declaredClean: _requiredDouble(json, 'declaredClean'),
+        declaredRetained: _requiredDouble(json, 'declaredRetained'),
+        acceptedClean: _requiredDouble(json, 'acceptedClean'),
+        returnedDirty: _requiredDouble(json, 'returnedDirty'),
+        retained: _requiredDouble(json, 'retained'),
+        missing: _requiredDouble(json, 'missing'),
+        damaged: _requiredDouble(json, 'damaged'),
+      );
+}
+
+final class ProviderLaundryReturn {
+  const ProviderLaundryReturn({
+    required this.id,
+    required this.reference,
+    required this.status,
+    required this.providerId,
+    required this.providerName,
+    required this.effectiveAt,
+    this.notes,
+    this.submittedAt,
+    this.confirmedAt,
+    this.correctionNotes,
+    required this.version,
+    required this.lines,
+  });
+
+  final int id;
+  final String reference;
+  final String status;
+  final int providerId;
+  final String providerName;
+  final DateTime effectiveAt;
+  final String? notes;
+  final DateTime? submittedAt;
+  final DateTime? confirmedAt;
+  final String? correctionNotes;
+  final int version;
+  final List<ProviderLaundryReturnLine> lines;
+
+  bool get isDraft => status == 'DRAFT';
+
+  factory ProviderLaundryReturn.fromJson(Map<String, dynamic> json) =>
+      ProviderLaundryReturn(
+        id: _requiredInt(json, 'id'),
+        reference: _requiredString(json, 'reference'),
+        status: _requiredString(json, 'status'),
+        providerId: _requiredInt(json, 'providerId'),
+        providerName: _requiredString(json, 'providerName'),
+        effectiveAt: _requiredDateTime(json, 'effectiveAt'),
+        notes: _optionalString(json['notes']),
+        submittedAt: _optionalDateTime(json['submittedAt']),
+        confirmedAt: _optionalDateTime(json['confirmedAt']),
+        correctionNotes: _optionalString(json['correctionNotes']),
+        version: _requiredInt(json, 'version'),
+        lines: _parseList(json['lines'], ProviderLaundryReturnLine.fromJson),
+      );
+}
+
+final class ProviderLaundryReturnLineInput {
+  const ProviderLaundryReturnLineInput({
+    required this.itemId,
+    required this.declaredClean,
+    required this.declaredRetained,
+  });
+
+  final int itemId;
+  final double declaredClean;
+  final double declaredRetained;
+
+  Map<String, Object> toJson() => <String, Object>{
+    'itemId': itemId,
+    'declaredClean': declaredClean,
+    'declaredRetained': declaredRetained,
+  };
+}
+
+final class ProviderLaundryReturnInput {
+  const ProviderLaundryReturnInput({
+    required this.version,
+    required this.effectiveAt,
+    this.notes,
+    required this.lines,
+  });
+
+  final int version;
+  final DateTime effectiveAt;
+  final String? notes;
+  final List<ProviderLaundryReturnLineInput> lines;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'version': version,
+    'effectiveAt': effectiveAt.toUtc().toIso8601String(),
+    'notes': _optionalString(notes),
+    'lines': lines
+        .map((ProviderLaundryReturnLineInput line) => line.toJson())
+        .toList(growable: false),
+  };
+}
+
 final class ProviderLaundryStockRow {
   const ProviderLaundryStockRow({
     required this.itemId,

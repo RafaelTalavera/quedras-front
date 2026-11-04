@@ -77,6 +77,50 @@ void main() {
     expect(service.acknowledgedVersion, 1);
     expect(find.text('Envio confirmado.'), findsOneWidget);
   });
+
+  testWidgets('crea una devolucion agregada como borrador', (tester) async {
+    final service = _FakeProviderService();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ProviderLaundryPage(service: service)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('provider-return-create')));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byKey(const ValueKey('return-clean-1')), '3');
+    await tester.tap(find.byKey(const ValueKey('provider-return-save')));
+    await tester.pumpAndSettle();
+
+    expect(service.createdInput?.version, 0);
+    expect(service.createdInput?.lines.single.itemId, 1);
+    expect(service.createdInput?.lines.single.declaredClean, 3);
+    expect(find.text('Devolução criada.'), findsOneWidget);
+  });
+
+  testWidgets('envia un borrador existente con su version', (tester) async {
+    final service = _FakeProviderService();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ProviderLaundryPage(service: service)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.scrollUntilVisible(
+      find.text('DEV-7'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.tap(find.text('DEV-7'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('provider-return-submit')));
+    await tester.pumpAndSettle();
+
+    expect(service.submittedId, 7);
+    expect(service.submittedVersion, 0);
+    expect(find.text('Devolução enviada ao hotel.'), findsOneWidget);
+  });
 }
 
 final class _FakeProviderService implements ProviderLaundryAppService {
@@ -86,6 +130,9 @@ final class _FakeProviderService implements ProviderLaundryAppService {
   bool _failed = false;
   int? acknowledgedId;
   int? acknowledgedVersion;
+  ProviderLaundryReturnInput? createdInput;
+  int? submittedId;
+  int? submittedVersion;
 
   void _maybeFail() {
     if (failFirst && !_failed) {
@@ -197,5 +244,57 @@ final class _FakeProviderService implements ProviderLaundryAppService {
           ),
         ],
         confirmations: const <ProviderLaundryConfirmation>[],
+      );
+
+  @override
+  Future<ProviderLaundryReturn> getReturn(int id) async => _returnManifest();
+
+  @override
+  Future<ProviderLaundryReturn> createReturn(
+    ProviderLaundryReturnInput input,
+  ) async {
+    createdInput = input;
+    return _returnManifest();
+  }
+
+  @override
+  Future<ProviderLaundryReturn> updateReturn({
+    required int id,
+    required ProviderLaundryReturnInput input,
+  }) async => _returnManifest();
+
+  @override
+  Future<ProviderLaundryReturn> submitReturn({
+    required int id,
+    required int version,
+  }) async {
+    submittedId = id;
+    submittedVersion = version;
+    return _returnManifest(status: 'SUBMITTED');
+  }
+
+  ProviderLaundryReturn _returnManifest({String status = 'DRAFT'}) =>
+      ProviderLaundryReturn(
+        id: 7,
+        reference: 'DEV-7',
+        status: status,
+        providerId: 3,
+        providerName: 'Lavanderia Demo',
+        effectiveAt: DateTime.utc(2026, 11, 3),
+        version: 0,
+        lines: const <ProviderLaundryReturnLine>[
+          ProviderLaundryReturnLine(
+            id: 2,
+            itemId: 1,
+            itemName: 'Toalha',
+            declaredClean: 3,
+            declaredRetained: 0,
+            acceptedClean: 0,
+            returnedDirty: 0,
+            retained: 0,
+            missing: 0,
+            damaged: 0,
+          ),
+        ],
       );
 }
