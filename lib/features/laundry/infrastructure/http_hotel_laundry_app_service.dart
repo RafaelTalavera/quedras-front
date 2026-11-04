@@ -5,6 +5,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/api_exception.dart';
 import '../application/hotel_laundry_app_service.dart';
 import '../domain/hotel_laundry_models.dart';
+import '../domain/laundry_models.dart';
 import '../domain/provider_laundry_models.dart';
 
 final class HttpHotelLaundryAppService implements HotelLaundryAppService {
@@ -17,6 +18,14 @@ final class HttpHotelLaundryAppService implements HotelLaundryAppService {
     'Content-Type': 'application/json',
   };
   static int _commandSequence = 0;
+
+  @override
+  Future<List<LaundryProvider>> listProviders() =>
+      _getList('providers', LaundryProvider.fromJson);
+
+  @override
+  Future<List<LaundryItem>> listItems() =>
+      _getList('items', LaundryItem.fromJson);
 
   @override
   Future<HotelLaundryStockTotals> dashboard({int? providerId}) async {
@@ -97,6 +106,48 @@ final class HttpHotelLaundryAppService implements HotelLaundryAppService {
     String path,
     T Function(Map<String, dynamic>) parser,
   ) async => parseHotelLaundryPage<T>(await _getObject(path), parser);
+
+  Future<List<T>> _getList<T>(
+    String path,
+    T Function(Map<String, dynamic>) parser,
+  ) async {
+    try {
+      final ApiResponse response = await _apiClient.get(
+        path,
+        headers: _headers,
+      );
+      if (!response.isSuccess) {
+        throw ApiException(
+          _message(response),
+          kind: ApiErrorKind.http,
+          statusCode: response.statusCode,
+          method: 'GET',
+          path: path,
+        );
+      }
+      final Object? decoded = jsonDecode(response.body);
+      if (decoded is! List) throw const FormatException('list expected');
+      return decoded.map<T>((Object? item) => parser(_map(item))).toList();
+    } on ApiException {
+      rethrow;
+    } on FormatException catch (error) {
+      throw ApiException(
+        'Resposta invÃ¡lida do servidor.',
+        kind: ApiErrorKind.invalidResponse,
+        method: 'GET',
+        path: path,
+        cause: error,
+      );
+    } on Exception catch (error) {
+      throw ApiException(
+        'NÃ£o foi possÃ­vel conectar ao servidor.',
+        kind: ApiErrorKind.network,
+        method: 'GET',
+        path: path,
+        cause: error,
+      );
+    }
+  }
 
   Future<Map<String, dynamic>> _getObject(String path) => _request(
     method: 'GET',

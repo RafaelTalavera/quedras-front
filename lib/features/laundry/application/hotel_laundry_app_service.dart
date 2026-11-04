@@ -1,7 +1,10 @@
 import '../domain/hotel_laundry_models.dart';
+import '../domain/laundry_models.dart';
 import '../domain/provider_laundry_models.dart';
 
 abstract interface class HotelLaundryAppService {
+  Future<List<LaundryProvider>> listProviders();
+  Future<List<LaundryItem>> listItems();
   Future<HotelLaundryStockTotals> dashboard({int? providerId});
   Future<HotelLaundryResultPage<HotelLaundryDocumentSummary>> listDocuments({
     int? providerId,

@@ -1,6 +1,4 @@
-import 'package:costanorte/core/audit/audit_models.dart';
 import 'package:costanorte/features/laundry/application/hotel_laundry_app_service.dart';
-import 'package:costanorte/features/laundry/application/laundry_app_service.dart';
 import 'package:costanorte/features/laundry/domain/hotel_laundry_models.dart';
 import 'package:costanorte/features/laundry/domain/laundry_models.dart';
 import 'package:costanorte/features/laundry/domain/provider_laundry_models.dart';
@@ -14,12 +12,7 @@ void main() {
   ) async {
     await tester.pumpWidget(
       MaterialApp(
-        home: Scaffold(
-          body: HotelLaundryPage(
-            service: _HotelService(),
-            catalogService: _CatalogService(),
-          ),
-        ),
+        home: Scaffold(body: HotelLaundryPage(service: _HotelService())),
       ),
     );
     await tester.pumpAndSettle();
@@ -42,6 +35,23 @@ void main() {
 }
 
 final class _HotelService implements HotelLaundryAppService {
+  @override
+  Future<List<LaundryProvider>> listProviders() async =>
+      const <LaundryProvider>[
+        LaundryProvider(id: 3, name: 'Lavanderia', active: true),
+      ];
+
+  @override
+  Future<List<LaundryItem>> listItems() async => const <LaundryItem>[
+    LaundryItem(
+      id: 8,
+      name: 'Toalha',
+      unitType: LaundryUnitType.piece,
+      currentUnitPrice: 4.5,
+      active: true,
+    ),
+  ];
+
   @override
   Future<HotelLaundryStockTotals> dashboard({int? providerId}) async =>
       const HotelLaundryStockTotals(
@@ -119,61 +129,4 @@ final class _HotelService implements HotelLaundryAppService {
     required int id,
     required HotelLaundryReturnConfirmationInput input,
   }) => throw UnimplementedError();
-}
-
-final class _CatalogService implements LaundryAppService {
-  @override
-  Future<List<LaundryProvider>> listProviders() async =>
-      const <LaundryProvider>[
-        LaundryProvider(id: 3, name: 'Lavanderia', active: true),
-      ];
-  @override
-  Future<List<LaundryItem>> listItems() async => const <LaundryItem>[
-    LaundryItem(
-      id: 8,
-      name: 'Toalha',
-      unitType: LaundryUnitType.piece,
-      currentUnitPrice: 4.5,
-      active: true,
-    ),
-  ];
-  @override
-  Future<LaundryProvider> createProvider(
-    CreateLaundryProviderRequest request,
-  ) => throw UnimplementedError();
-  @override
-  Future<LaundryItem> createItem(LaundryItem item) =>
-      throw UnimplementedError();
-  @override
-  Future<LaundryItem> updateItem(int id, LaundryItem item) =>
-      throw UnimplementedError();
-  @override
-  Future<LaundryShipment> createShipment(
-    CreateLaundryShipmentRequest request,
-  ) => throw UnimplementedError();
-  @override
-  Future<List<LaundryShipment>> listShipments({
-    LaundryShipmentStatus? status,
-    int? providerId,
-    String? dateFrom,
-    String? dateTo,
-  }) async => const <LaundryShipment>[];
-  @override
-  Future<LaundryShipment> getShipment(int id) => throw UnimplementedError();
-  @override
-  Future<ReceiveLaundryShipmentResult> receiveShipment(
-    int id,
-    ReceiveLaundryShipmentRequest request,
-  ) => throw UnimplementedError();
-  @override
-  Future<LaundryShipment> dispatchShipment(
-    int id,
-    DispatchLaundryShipmentRequest request,
-  ) => throw UnimplementedError();
-  @override
-  Future<LaundryShipment> cancelShipment(int id, String cancellationNotes) =>
-      throw UnimplementedError();
-  @override
-  Future<List<AuditEventModel>> shipmentAudit(int id) async =>
-      const <AuditEventModel>[];
 }

@@ -2,20 +2,14 @@ import 'package:flutter/material.dart';
 
 import '../../../core/network/api_exception.dart';
 import '../application/hotel_laundry_app_service.dart';
-import '../application/laundry_app_service.dart';
 import '../domain/hotel_laundry_models.dart';
 import '../domain/laundry_models.dart';
 import '../domain/provider_laundry_models.dart';
 
 class HotelLaundryPage extends StatefulWidget {
-  const HotelLaundryPage({
-    required this.service,
-    required this.catalogService,
-    super.key,
-  });
+  const HotelLaundryPage({required this.service, super.key});
 
   final HotelLaundryAppService service;
-  final LaundryAppService catalogService;
 
   @override
   State<HotelLaundryPage> createState() => _HotelLaundryPageState();
@@ -47,8 +41,8 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
         widget.service.dashboard(),
         widget.service.listDocuments(size: 50),
         widget.service.listReturns(status: 'SUBMITTED', size: 50),
-        widget.catalogService.listProviders(),
-        widget.catalogService.listItems(),
+        widget.service.listProviders(),
+        widget.service.listItems(),
       ]);
       if (!mounted) return;
       setState(() {

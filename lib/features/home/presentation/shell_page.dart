@@ -14,7 +14,6 @@ import '../../courts/application/court_app_service.dart';
 import '../../massages/application/massage_app_service.dart';
 import '../../massages/presentation/massage_booking_page.dart';
 import '../../maintenance/application/maintenance_app_service.dart';
-import '../../laundry/application/laundry_app_service.dart';
 import '../../laundry/application/hotel_laundry_app_service.dart';
 import '../../laundry/application/provider_laundry_app_service.dart';
 import '../../laundry/presentation/hotel_laundry_page.dart';
@@ -42,7 +41,6 @@ class ShellPage extends StatefulWidget {
     required this.courtAppService,
     required this.toursAppService,
     required this.maintenanceAppService,
-    required this.laundryAppService,
     required this.hotelLaundryAppService,
     required this.providerLaundryAppService,
     required this.userManagementAppService,
@@ -58,7 +56,6 @@ class ShellPage extends StatefulWidget {
   final CourtAppService courtAppService;
   final ToursAppService toursAppService;
   final MaintenanceAppService maintenanceAppService;
-  final LaundryAppService laundryAppService;
   final HotelLaundryAppService hotelLaundryAppService;
   final ProviderLaundryAppService providerLaundryAppService;
   final UserManagementAppService userManagementAppService;
@@ -284,10 +281,7 @@ class _ShellPageState extends State<ShellPage> {
       case AppSection.laundry:
         return widget.sessionController.session?.isProvider == true
             ? ProviderLaundryPage(service: widget.providerLaundryAppService)
-            : HotelLaundryPage(
-                service: widget.hotelLaundryAppService,
-                catalogService: widget.laundryAppService,
-              );
+            : HotelLaundryPage(service: widget.hotelLaundryAppService);
       case AppSection.settings:
         return SingleChildScrollView(
           child: SettingsPage(

@@ -6,6 +6,22 @@ import 'package:costanorte/features/laundry/infrastructure/http_hotel_laundry_ap
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
+  test('consulta catalogos por V2', () async {
+    final _FakeApiClient client = _FakeApiClient(
+      const ApiResponse(
+        statusCode: 200,
+        body: '[{"id":3,"name":"Lavanderia","contact":null,"active":true}]',
+      ),
+    );
+
+    final providers = await HttpHotelLaundryAppService(
+      apiClient: client,
+    ).listProviders();
+
+    expect(client.path, 'providers');
+    expect(providers.single.name, 'Lavanderia');
+  });
+
   test('consulta tablero V2 filtrado por proveedor', () async {
     final _FakeApiClient client = _FakeApiClient(
       const ApiResponse(
