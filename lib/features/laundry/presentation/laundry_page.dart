@@ -21,6 +21,7 @@ class _LaundryPageState extends State<LaundryPage>
   late final TabController _tabs;
   final TextEditingController _notes = TextEditingController();
   final TextEditingController _itemSearch = TextEditingController();
+  final TextEditingController _providerSearch = TextEditingController();
   List<LaundryProvider> _providers = const <LaundryProvider>[];
   List<LaundryItem> _items = const <LaundryItem>[];
   List<LaundryShipment> _shipments = const <LaundryShipment>[];
@@ -39,11 +40,16 @@ class _LaundryPageState extends State<LaundryPage>
   bool _saving = false;
   String? _error;
   _LaundryItemStatusFilter _itemStatusFilter = _LaundryItemStatusFilter.all;
+  _LaundryItemStatusFilter _providerStatusFilter = _LaundryItemStatusFilter.all;
+
+  List<LaundryProvider> get _activeProviders => _providers
+      .where((LaundryProvider provider) => provider.active)
+      .toList(growable: false);
 
   @override
   void initState() {
     super.initState();
-    _tabs = TabController(length: 9, vsync: this);
+    _tabs = TabController(length: 10, vsync: this);
     _tabs.addListener(_refreshNavigation);
     _load();
   }
@@ -58,6 +64,7 @@ class _LaundryPageState extends State<LaundryPage>
     _tabs.dispose();
     _notes.dispose();
     _itemSearch.dispose();
+    _providerSearch.dispose();
     for (final Map<int, FocusNode> nodes in _quantityFocusNodes.values) {
       for (final FocusNode node in nodes.values) {
         node.dispose();
@@ -84,9 +91,7 @@ class _LaundryPageState extends State<LaundryPage>
       ]);
       if (!mounted) return;
       setState(() {
-        _providers = (values[0] as List<LaundryProvider>)
-            .where((LaundryProvider value) => value.active)
-            .toList();
+        _providers = values[0] as List<LaundryProvider>;
         _items = values[1] as List<LaundryItem>;
         _shipments = values[2] as List<LaundryShipment>;
         _historyShipments = values[2] as List<LaundryShipment>;
@@ -179,6 +184,7 @@ class _LaundryPageState extends State<LaundryPage>
                         value: 8,
                         child: Text('Itens e preços'),
                       ),
+                      PopupMenuItem<int>(value: 9, child: Text('Lavanderias')),
                     ],
                 child: const Padding(
                   padding: EdgeInsets.symmetric(horizontal: 8, vertical: 12),
@@ -212,6 +218,7 @@ class _LaundryPageState extends State<LaundryPage>
                       _buildReceptionSummary(),
                       _buildHistory(),
                       _buildItemsAdministration(),
+                      _buildProvidersAdministration(),
                     ],
                   ),
           ),
@@ -704,6 +711,151 @@ class _LaundryPageState extends State<LaundryPage>
     }
   }
 
+  Widget _buildProvidersAdministration() {
+    final String query = _providerSearch.text.trim().toLowerCase();
+    final List<LaundryProvider> visibleProviders = _providers.where((
+      LaundryProvider provider,
+    ) {
+      final bool matchesText =
+          query.isEmpty ||
+          provider.name.toLowerCase().contains(query) ||
+          (provider.contact?.toLowerCase().contains(query) ?? false);
+      final bool matchesStatus = switch (_providerStatusFilter) {
+        _LaundryItemStatusFilter.all => true,
+        _LaundryItemStatusFilter.active => provider.active,
+        _LaundryItemStatusFilter.inactive => !provider.active,
+      };
+      return matchesText && matchesStatus;
+    }).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: <Widget>[
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: <Widget>[
+            Text('Lavanderias', style: Theme.of(context).textTheme.titleLarge),
+            FilledButton.icon(
+              key: const ValueKey<String>('laundry-new-provider'),
+              onPressed: () => _openProviderForm(),
+              icon: const Icon(Icons.add_business_outlined),
+              label: const Text('Nova lavanderia'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: <Widget>[
+            SizedBox(
+              width: 320,
+              child: TextField(
+                key: const ValueKey<String>('laundry-provider-search'),
+                controller: _providerSearch,
+                decoration: const InputDecoration(
+                  labelText: 'Buscar por nome ou contato',
+                  prefixIcon: Icon(Icons.search_rounded),
+                ),
+                onChanged: (_) => setState(() {}),
+              ),
+            ),
+            SizedBox(
+              width: 190,
+              child: DropdownButtonFormField<_LaundryItemStatusFilter>(
+                key: const ValueKey<String>('laundry-provider-status-filter'),
+                initialValue: _providerStatusFilter,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'Estado'),
+                items: _LaundryItemStatusFilter.values
+                    .map(
+                      (_LaundryItemStatusFilter value) =>
+                          DropdownMenuItem<_LaundryItemStatusFilter>(
+                            value: value,
+                            child: Text(value.label),
+                          ),
+                    )
+                    .toList(),
+                onChanged: (_LaundryItemStatusFilter? value) {
+                  if (value != null) {
+                    setState(() => _providerStatusFilter = value);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Expanded(
+          child: visibleProviders.isEmpty
+              ? const _EmptyState(
+                  icon: Icons.local_laundry_service_outlined,
+                  message: 'Não há lavanderias para os filtros selecionados.',
+                )
+              : RefreshIndicator(
+                  onRefresh: _reloadProviders,
+                  child: ListView.separated(
+                    itemCount: visibleProviders.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 8),
+                    itemBuilder: (BuildContext context, int index) =>
+                        _LaundryProviderCard(
+                          provider: visibleProviders[index],
+                          onEdit: () =>
+                              _openProviderForm(visibleProviders[index]),
+                        ),
+                  ),
+                ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _reloadProviders() async {
+    try {
+      final List<LaundryProvider> providers = await widget.service
+          .listProviders();
+      if (mounted) {
+        setState(() => _providers = providers);
+      }
+    } catch (error) {
+      if (mounted) {
+        _showError(_errorText(error));
+      }
+    }
+  }
+
+  Future<void> _openProviderForm([LaundryProvider? provider]) async {
+    final _LaundryProviderFormResult? result =
+        await showDialog<_LaundryProviderFormResult>(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) => _LaundryProviderFormDialog(
+            service: widget.service,
+            provider: provider,
+          ),
+        );
+    if (!mounted || result == null) {
+      return;
+    }
+    await _reloadProviders();
+    if (!mounted) {
+      return;
+    }
+    if (result.notFound) {
+      _showWarning(
+        'Lavanderia indisponível',
+        'A lavanderia não existe mais. A lista foi atualizada.',
+      );
+    } else {
+      _showSuccess(
+        provider == null ? 'Lavanderia criada' : 'Lavanderia atualizada',
+        provider == null ? 'Lavanderia criada.' : 'Lavanderia atualizada.',
+      );
+    }
+  }
+
   Widget _buildNewShipment() =>
       _buildShipmentForm(LaundryShipmentKind.standard);
 
@@ -751,7 +903,7 @@ class _LaundryPageState extends State<LaundryPage>
           key: const ValueKey<String>('laundry-shipment-provider'),
           initialValue: _providerId,
           decoration: const InputDecoration(labelText: 'Fornecedor ativo'),
-          items: _providers
+          items: _activeProviders
               .map(
                 (LaundryProvider provider) => DropdownMenuItem<int>(
                   value: provider.id,
@@ -1099,6 +1251,253 @@ enum _LaundryItemStatusFilter {
 
   const _LaundryItemStatusFilter(this.label);
   final String label;
+}
+
+final class _LaundryProviderFormResult {
+  const _LaundryProviderFormResult.saved() : notFound = false;
+  const _LaundryProviderFormResult.notFound() : notFound = true;
+  final bool notFound;
+}
+
+class _LaundryProviderCard extends StatelessWidget {
+  const _LaundryProviderCard({required this.provider, required this.onEdit});
+  final LaundryProvider provider;
+  final VoidCallback onEdit;
+
+  @override
+  Widget build(BuildContext context) => Card(
+    color: provider.active
+        ? null
+        : Theme.of(context).colorScheme.surfaceContainer,
+    child: Padding(
+      padding: const EdgeInsets.all(14),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 6,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: <Widget>[
+                    Text(
+                      provider.name,
+                      style: Theme.of(context).textTheme.titleMedium,
+                    ),
+                    Chip(
+                      avatar: Icon(
+                        provider.active
+                            ? Icons.check_circle_outline
+                            : Icons.pause_circle_outline,
+                        size: 18,
+                      ),
+                      label: Text(provider.active ? 'Ativa' : 'Inativa'),
+                    ),
+                  ],
+                ),
+                Text(provider.contact ?? 'Sem contato informado'),
+              ],
+            ),
+          ),
+          OutlinedButton.icon(
+            key: ValueKey<String>('laundry-edit-provider-${provider.id}'),
+            onPressed: onEdit,
+            icon: const Icon(Icons.edit_outlined),
+            label: const Text('Editar'),
+          ),
+        ],
+      ),
+    ),
+  );
+}
+
+class _LaundryProviderFormDialog extends StatefulWidget {
+  const _LaundryProviderFormDialog({required this.service, this.provider});
+  final LaundryAppService service;
+  final LaundryProvider? provider;
+
+  @override
+  State<_LaundryProviderFormDialog> createState() =>
+      _LaundryProviderFormDialogState();
+}
+
+class _LaundryProviderFormDialogState
+    extends State<_LaundryProviderFormDialog> {
+  late final TextEditingController _name = TextEditingController(
+    text: widget.provider?.name ?? '',
+  );
+  late final TextEditingController _contact = TextEditingController(
+    text: widget.provider?.contact ?? '',
+  );
+  late bool _active = widget.provider?.active ?? true;
+  bool _saving = false;
+  String? _serverError;
+
+  bool get _isValid {
+    final String name = _name.text.trim();
+    return name.isNotEmpty &&
+        name.length <= 120 &&
+        _contact.text.trim().length <= 160;
+  }
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _contact.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final bool editing = widget.provider != null;
+    return AlertDialog(
+      title: Text(editing ? 'Editar lavanderia' : 'Nova lavanderia'),
+      content: SizedBox(
+        width: 520,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: <Widget>[
+              TextField(
+                key: const ValueKey<String>('laundry-provider-name'),
+                controller: _name,
+                enabled: !_saving,
+                maxLength: 120,
+                autofocus: true,
+                textInputAction: TextInputAction.next,
+                decoration: const InputDecoration(labelText: 'Nome'),
+                onChanged: (_) => setState(() => _serverError = null),
+              ),
+              const SizedBox(height: 10),
+              TextField(
+                key: const ValueKey<String>('laundry-provider-contact'),
+                controller: _contact,
+                enabled: !_saving,
+                maxLength: 160,
+                decoration: const InputDecoration(
+                  labelText: 'Contato (opcional)',
+                ),
+                onChanged: (_) => setState(() => _serverError = null),
+              ),
+              SwitchListTile.adaptive(
+                key: const ValueKey<String>('laundry-provider-active'),
+                contentPadding: EdgeInsets.zero,
+                title: const Text('Ativa'),
+                subtitle: const Text(
+                  'Lavanderias inativas não aparecem em novas operações.',
+                ),
+                value: _active,
+                onChanged: _saving
+                    ? null
+                    : (bool value) => setState(() => _active = value),
+              ),
+              if (_serverError != null)
+                Semantics(
+                  liveRegion: true,
+                  child: Text(
+                    _serverError!,
+                    style: TextStyle(
+                      color: Theme.of(context).colorScheme.error,
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+      actions: <Widget>[
+        TextButton(
+          onPressed: _saving ? null : () => Navigator.pop(context),
+          child: const Text('Cancelar'),
+        ),
+        FilledButton(
+          key: const ValueKey<String>('laundry-provider-save'),
+          onPressed: !_isValid || _saving ? null : _save,
+          child: _saving
+              ? const SizedBox.square(
+                  dimension: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Text('Salvar'),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _save() async {
+    if (!_isValid || _saving) {
+      return;
+    }
+    if (widget.provider?.active == true && !_active) {
+      final bool confirmed =
+          await showDialog<bool>(
+            context: context,
+            builder: (BuildContext context) => AlertDialog(
+              title: const Text('Desativar lavanderia'),
+              content: const Text(
+                'A lavanderia não estará disponível para novos envios ou recebimentos. O histórico será preservado.',
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Voltar'),
+                ),
+                FilledButton(
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Desativar'),
+                ),
+              ],
+            ),
+          ) ??
+          false;
+      if (!confirmed || !mounted) {
+        return;
+      }
+    }
+    setState(() {
+      _saving = true;
+      _serverError = null;
+    });
+    final CreateLaundryProviderRequest request = CreateLaundryProviderRequest(
+      name: _name.text.trim(),
+      contact: _contact.text.trim().isEmpty ? null : _contact.text.trim(),
+      active: _active,
+    );
+    try {
+      if (widget.provider == null) {
+        await widget.service.createProvider(request);
+      } else {
+        await widget.service.updateProvider(widget.provider!.id, request);
+      }
+      if (mounted) {
+        Navigator.pop(context, const _LaundryProviderFormResult.saved());
+      }
+    } on ApiException catch (error) {
+      if (!mounted) {
+        return;
+      }
+      if (error.statusCode == 404 && widget.provider != null) {
+        Navigator.pop(context, const _LaundryProviderFormResult.notFound());
+        return;
+      }
+      setState(() {
+        _saving = false;
+        _serverError = error.statusCode == 409
+            ? 'Já existe outra lavanderia com esse nome.'
+            : error.message;
+      });
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _saving = false;
+          _serverError = _errorText(error);
+        });
+      }
+    }
+  }
 }
 
 final class _LaundryItemFormResult {

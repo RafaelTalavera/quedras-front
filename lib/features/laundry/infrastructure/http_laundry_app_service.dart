@@ -39,6 +39,24 @@ final class HttpLaundryAppService implements LaundryAppService {
   }
 
   @override
+  Future<LaundryProvider> updateProvider(
+    int id,
+    CreateLaundryProviderRequest request,
+  ) async {
+    final String path = '$_base/providers/$id';
+    final ApiResponse response = await _run(
+      'PUT',
+      path,
+      () => _apiClient.put(
+        path,
+        headers: _headers,
+        body: jsonEncode(request.toJson()),
+      ),
+    );
+    return LaundryProvider.fromJson(_asMap(_decode(response.body)));
+  }
+
+  @override
   Future<List<LaundryItem>> listItems() =>
       _getList('$_base/items', LaundryItem.fromJson);
 

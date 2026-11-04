@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:costanorte/core/network/api_client.dart';
 import 'package:costanorte/features/laundry/domain/hotel_laundry_models.dart';
+import 'package:costanorte/features/laundry/domain/laundry_models.dart';
 import 'package:costanorte/features/laundry/infrastructure/http_hotel_laundry_app_service.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -129,6 +130,33 @@ void main() {
     expect(result.status, 'CONFIRMED');
     expect(result.lines.single.returnedDirty, 1);
   });
+
+  test('crea y actualiza lavanderias por V2', () async {
+    final _FakeApiClient client = _FakeApiClient(
+      const ApiResponse(
+        statusCode: 200,
+        body:
+            '{"id":9,"name":"Lavanderia Norte","contact":"11999990000","active":false}',
+      ),
+    );
+    final HttpHotelLaundryAppService service = HttpHotelLaundryAppService(
+      apiClient: client,
+    );
+    const CreateLaundryProviderRequest request = CreateLaundryProviderRequest(
+      name: 'Lavanderia Norte',
+      contact: '11999990000',
+      active: false,
+    );
+    await service.createProvider(request);
+    expect(client.method, 'POST');
+    expect(client.path, 'providers');
+    expect(jsonDecode(client.body!)['active'], isFalse);
+
+    final LaundryProvider updated = await service.updateProvider(9, request);
+    expect(client.method, 'PUT');
+    expect(client.path, 'providers/9');
+    expect(updated.active, isFalse);
+  });
 }
 
 final class _FakeApiClient implements ApiClient {
@@ -174,5 +202,11 @@ final class _FakeApiClient implements ApiClient {
     String path, {
     Map<String, String>? headers,
     String? body,
-  }) => throw UnimplementedError();
+  }) async {
+    method = 'PUT';
+    this.path = path;
+    this.headers = headers;
+    this.body = body;
+    return response;
+  }
 }

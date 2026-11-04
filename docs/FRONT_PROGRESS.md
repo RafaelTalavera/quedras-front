@@ -3,10 +3,17 @@
 ## Estado general frontend
 - Proyecto: COSTANORTE Frontend
 - Estado: En progreso (snapshot operativo post Hito 12, con despliegue web alineado al backend productivo)
-- Ultimo hito trabajado: Preparacion del frontend para el plan de stock operativo de lavanderia
-- Ultima actualizacion: 2026-11-03
+- Ultimo hito trabajado: Administracion de proveedores de lavanderia
+- Ultima actualizacion: 2026-11-04
 - Fuente de verdad global: `C:/Users/Public/Documents/Proyectos/quadras/docs/TABLERO_PROGRESO.md`
 - Proximo paso frontend: completar comportamiento web en flujos de archivos/PDF y validar despliegue real contra backend publicado.
+
+## Actualizacion 2026-11-04 - Proveedores de lavanderia
+- La pantalla operativa V2 permite listar, crear y editar lavanderias.
+- Cada proveedor conserva nombre, contacto y estado activo/inactivo.
+- Los inactivos se mantienen en administracion e historicos, pero no aparecen en nuevos envios o relavados.
+- El contrato usa exclusivamente `POST/PUT /api/v2/laundry/providers`, compatible con el corte de escrituras V1.
+- Validacion: `flutter analyze` sin issues y 50 pruebas de lavanderia aprobadas.
 
 ## Actualizacion 2026-11-03 - Preparacion lavanderia
 - Se normalizaron 42 avisos de deprecacion preexistentes en `maintenance`, `massages`, `settings`, `tennis` y `tours` para dejar `flutter analyze` en verde.

@@ -632,6 +632,77 @@ void main() {
     expect(service.lastShipmentRequest?.kind, LaundryShipmentKind.rewash);
     expect(find.text('Relavagem salva sem custo.'), findsOneWidget);
   });
+
+  testWidgets('crea y desactiva lavanderias y excluye inactivas de envios', (
+    WidgetTester tester,
+  ) async {
+    final _FakeLaundryService service = _FakeLaundryService(
+      providers: <LaundryProvider>[
+        const LaundryProvider(id: 7, name: 'Ativa', active: true),
+      ],
+    );
+    await _pumpLaundry(tester, service);
+    await _openTab(tester, 'Lavanderias');
+
+    await tester.tap(
+      find.byKey(const ValueKey<String>('laundry-new-provider')),
+    );
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('laundry-provider-name')),
+      'Lavanderia Nova',
+    );
+    await tester.enterText(
+      find.byKey(const ValueKey<String>('laundry-provider-contact')),
+      '11999990000',
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('laundry-provider-save')),
+    );
+    await tester.pumpAndSettle();
+    expect(service.createProviderCalls, 1);
+    expect(service.lastProviderRequest?.active, isTrue);
+
+    await tester.tap(find.text('Fechar'));
+    await tester.pumpAndSettle();
+    final Finder editProvider = find.byKey(
+      const ValueKey<String>('laundry-edit-provider-99'),
+    );
+    await tester.ensureVisible(editProvider);
+    await tester.tap(editProvider);
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('laundry-provider-active')),
+    );
+    await tester.tap(
+      find.byKey(const ValueKey<String>('laundry-provider-save')),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Desativar'));
+    await tester.pumpAndSettle();
+    expect(service.updateProviderCalls, 1);
+    expect(service.lastProviderRequest?.active, isFalse);
+
+    await tester.tap(find.text('Fechar'));
+    await tester.pumpAndSettle();
+    await tester.tap(
+      find.byKey(const ValueKey<String>('laundry-action-new-shipment')),
+    );
+    await tester.pumpAndSettle();
+    final Finder providerField = find.byKey(
+      const ValueKey<String>('laundry-shipment-provider'),
+    );
+    final DropdownButton<int> dropdown = tester.widget(
+      find.descendant(
+        of: providerField,
+        matching: find.byType(DropdownButton<int>),
+      ),
+    );
+    expect(
+      dropdown.items!.map((DropdownMenuItem<int> item) => item.value),
+      <int>[7],
+    );
+  });
 }
 
 const LaundryItem _activeItem = LaundryItem(
@@ -718,12 +789,13 @@ final class _FakeLaundryService implements LaundryAppService {
   _FakeLaundryService({
     this.shipments,
     this.error,
-    this.providers = const <LaundryProvider>[],
+    List<LaundryProvider>? providers,
     List<LaundryItem>? items,
     this.itemError,
     this.createGate,
     this.detailShipment,
-  }) : items = items ?? <LaundryItem>[];
+  }) : providers = providers ?? <LaundryProvider>[],
+       items = items ?? <LaundryItem>[];
   final Future<List<LaundryShipment>>? shipments;
   final Object? error;
   final List<LaundryProvider> providers;
@@ -734,10 +806,13 @@ final class _FakeLaundryService implements LaundryAppService {
   int listCalls = 0;
   int createCalls = 0;
   int updateCalls = 0;
+  int createProviderCalls = 0;
+  int updateProviderCalls = 0;
   int dispatchCalls = 0;
   int receiveCalls = 0;
   int getShipmentCalls = 0;
   LaundryItem? lastItem;
+  CreateLaundryProviderRequest? lastProviderRequest;
   CreateLaundryShipmentRequest? lastShipmentRequest;
   DispatchLaundryShipmentRequest? lastDispatchRequest;
   ReceiveLaundryShipmentRequest? lastReceiveRequest;
@@ -766,7 +841,41 @@ final class _FakeLaundryService implements LaundryAppService {
   @override
   Future<LaundryProvider> createProvider(
     CreateLaundryProviderRequest request,
-  ) => throw UnimplementedError();
+  ) async {
+    createProviderCalls++;
+    lastProviderRequest = request;
+    final LaundryProvider created = LaundryProvider(
+      id: 99,
+      name: request.name,
+      contact: request.contact,
+      active: request.active,
+    );
+    providers.add(created);
+    return created;
+  }
+
+  @override
+  Future<LaundryProvider> updateProvider(
+    int id,
+    CreateLaundryProviderRequest request,
+  ) async {
+    updateProviderCalls++;
+    lastProviderRequest = request;
+    final LaundryProvider updated = LaundryProvider(
+      id: id,
+      name: request.name,
+      contact: request.contact,
+      active: request.active,
+    );
+    final int index = providers.indexWhere(
+      (LaundryProvider provider) => provider.id == id,
+    );
+    if (index >= 0) {
+      providers[index] = updated;
+    }
+    return updated;
+  }
+
   @override
   Future<LaundryItem> createItem(LaundryItem item) async {
     createCalls++;

@@ -32,14 +32,79 @@ void main() {
     );
     expect(find.byKey(const ValueKey('hotel-laundry-rewash')), findsOneWidget);
   });
+
+  testWidgets('administra lavanderias activas e inactivas', (
+    WidgetTester tester,
+  ) async {
+    final _HotelService service = _HotelService();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: HotelLaundryPage(service: service)),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('hotel-laundry-providers')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const ValueKey('hotel-laundry-new-provider')));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+      find.byKey(const ValueKey('hotel-laundry-provider-name')),
+      'Lavanderia Nova',
+    );
+    tester
+        .widget<SwitchListTile>(
+          find.byKey(const ValueKey('hotel-laundry-provider-active')),
+        )
+        .onChanged!(false);
+    await tester.pump();
+    tester
+        .widget<FilledButton>(
+          find.byKey(const ValueKey('hotel-laundry-provider-save')),
+        )
+        .onPressed!();
+    await tester.pump(const Duration(seconds: 2));
+    await tester.pumpAndSettle();
+
+    expect(service.created?.name, 'Lavanderia Nova');
+    expect(service.created?.active, isFalse);
+    expect(find.text('Lavanderia Nova'), findsOneWidget);
+  });
 }
 
 final class _HotelService implements HotelLaundryAppService {
+  final List<LaundryProvider> providers = <LaundryProvider>[
+    const LaundryProvider(id: 3, name: 'Lavanderia', active: true),
+  ];
+  CreateLaundryProviderRequest? created;
+
   @override
-  Future<List<LaundryProvider>> listProviders() async =>
-      const <LaundryProvider>[
-        LaundryProvider(id: 3, name: 'Lavanderia', active: true),
-      ];
+  Future<List<LaundryProvider>> listProviders() async => providers;
+
+  @override
+  Future<LaundryProvider> createProvider(
+    CreateLaundryProviderRequest request,
+  ) async {
+    created = request;
+    final LaundryProvider provider = LaundryProvider(
+      id: 4,
+      name: request.name,
+      contact: request.contact,
+      active: request.active,
+    );
+    providers.add(provider);
+    return provider;
+  }
+
+  @override
+  Future<LaundryProvider> updateProvider(
+    int id,
+    CreateLaundryProviderRequest request,
+  ) async => LaundryProvider(
+    id: id,
+    name: request.name,
+    contact: request.contact,
+    active: request.active,
+  );
 
   @override
   Future<List<LaundryItem>> listItems() async => const <LaundryItem>[

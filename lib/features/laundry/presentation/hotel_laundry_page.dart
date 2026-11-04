@@ -124,6 +124,12 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
                     icon: const Icon(Icons.replay_outlined),
                     label: const Text('Enviar para relavagem'),
                   ),
+                  OutlinedButton.icon(
+                    key: const ValueKey('hotel-laundry-providers'),
+                    onPressed: _saving ? null : _showProviders,
+                    icon: const Icon(Icons.storefront_outlined),
+                    label: const Text('Lavanderias'),
+                  ),
                 ],
               ),
             ],
@@ -187,6 +193,18 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _showProviders() async {
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) =>
+          _LaundryProvidersDialog(service: widget.service),
+    );
+    if (mounted) {
+      await _load();
+    }
   }
 
   Future<void> _showDispatch(bool rewash) async {
@@ -396,6 +414,273 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
 
   void _message(String value) {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(value)));
+  }
+}
+
+class _LaundryProvidersDialog extends StatefulWidget {
+  const _LaundryProvidersDialog({required this.service});
+  final HotelLaundryAppService service;
+
+  @override
+  State<_LaundryProvidersDialog> createState() =>
+      _LaundryProvidersDialogState();
+}
+
+class _LaundryProvidersDialogState extends State<_LaundryProvidersDialog> {
+  List<LaundryProvider> _providers = const <LaundryProvider>[];
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _reload();
+  }
+
+  Future<void> _reload() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final List<LaundryProvider> providers = await widget.service
+          .listProviders();
+      if (mounted) {
+        setState(() {
+          _providers = providers;
+          _loading = false;
+        });
+      }
+    } on Object catch (error) {
+      if (mounted) {
+        setState(() {
+          _loading = false;
+          _error = error is ApiException
+              ? error.message
+              : 'Não foi possível carregar as lavanderias.';
+        });
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: const Text('Lavanderias'),
+    content: SizedBox(
+      width: 680,
+      height: 500,
+      child: _loading
+          ? const Center(child: CircularProgressIndicator())
+          : _error != null
+          ? Center(child: Text(_error!))
+          : _providers.isEmpty
+          ? const Center(child: Text('Nenhuma lavanderia cadastrada.'))
+          : ListView.separated(
+              itemCount: _providers.length,
+              separatorBuilder: (_, _) => const SizedBox(height: 8),
+              itemBuilder: (BuildContext context, int index) {
+                final LaundryProvider provider = _providers[index];
+                return Card(
+                  color: provider.active
+                      ? null
+                      : Theme.of(context).colorScheme.surfaceContainer,
+                  child: ListTile(
+                    title: Text(provider.name),
+                    subtitle: Text(provider.contact ?? 'Sem contato informado'),
+                    leading: Icon(
+                      provider.active
+                          ? Icons.check_circle_outline
+                          : Icons.pause_circle_outline,
+                      color: provider.active ? Colors.green : Colors.red,
+                    ),
+                    trailing: OutlinedButton.icon(
+                      key: ValueKey('hotel-laundry-provider-${provider.id}'),
+                      onPressed: () => _edit(provider),
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Editar'),
+                    ),
+                  ),
+                );
+              },
+            ),
+    ),
+    actions: <Widget>[
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Fechar'),
+      ),
+      FilledButton.icon(
+        key: const ValueKey('hotel-laundry-new-provider'),
+        onPressed: () => _edit(null),
+        icon: const Icon(Icons.add_rounded),
+        label: const Text('Nova lavanderia'),
+      ),
+    ],
+  );
+
+  Future<void> _edit(LaundryProvider? provider) async {
+    final TextEditingController name = TextEditingController(
+      text: provider?.name ?? '',
+    );
+    final TextEditingController contact = TextEditingController(
+      text: provider?.contact ?? '',
+    );
+    bool active = provider?.active ?? true;
+    bool saving = false;
+    String? error;
+    final bool? saved = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext dialogContext) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setLocal) {
+          final bool valid =
+              name.text.trim().isNotEmpty &&
+              name.text.trim().length <= 120 &&
+              contact.text.trim().length <= 160;
+          return AlertDialog(
+            title: Text(
+              provider == null ? 'Nova lavanderia' : 'Editar lavanderia',
+            ),
+            content: SizedBox(
+              width: 500,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  TextField(
+                    key: const ValueKey('hotel-laundry-provider-name'),
+                    controller: name,
+                    enabled: !saving,
+                    maxLength: 120,
+                    autofocus: true,
+                    decoration: const InputDecoration(labelText: 'Nome'),
+                    onChanged: (_) => setLocal(() => error = null),
+                  ),
+                  TextField(
+                    key: const ValueKey('hotel-laundry-provider-contact'),
+                    controller: contact,
+                    enabled: !saving,
+                    maxLength: 160,
+                    decoration: const InputDecoration(
+                      labelText: 'Contato (opcional)',
+                    ),
+                    onChanged: (_) => setLocal(() => error = null),
+                  ),
+                  SwitchListTile.adaptive(
+                    key: const ValueKey('hotel-laundry-provider-active'),
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Ativa'),
+                    subtitle: const Text(
+                      'Inativas não aparecem em novos envios.',
+                    ),
+                    value: active,
+                    onChanged: saving
+                        ? null
+                        : (bool value) => setLocal(() => active = value),
+                  ),
+                  if (error != null)
+                    Text(
+                      error!,
+                      style: TextStyle(
+                        color: Theme.of(context).colorScheme.error,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+            actions: <Widget>[
+              TextButton(
+                onPressed: saving ? null : () => Navigator.pop(context, false),
+                child: const Text('Cancelar'),
+              ),
+              FilledButton(
+                key: const ValueKey('hotel-laundry-provider-save'),
+                onPressed: !valid || saving
+                    ? null
+                    : () async {
+                        if (provider?.active == true && !active) {
+                          final bool confirm =
+                              await showDialog<bool>(
+                                context: context,
+                                builder: (BuildContext context) => AlertDialog(
+                                  title: const Text('Desativar lavanderia'),
+                                  content: const Text(
+                                    'Ela não aparecerá em novos envios. O histórico será preservado.',
+                                  ),
+                                  actions: <Widget>[
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, false),
+                                      child: const Text('Voltar'),
+                                    ),
+                                    FilledButton(
+                                      onPressed: () =>
+                                          Navigator.pop(context, true),
+                                      child: const Text('Desativar'),
+                                    ),
+                                  ],
+                                ),
+                              ) ??
+                              false;
+                          if (!confirm) return;
+                        }
+                        setLocal(() {
+                          saving = true;
+                          error = null;
+                        });
+                        final CreateLaundryProviderRequest request =
+                            CreateLaundryProviderRequest(
+                              name: name.text.trim(),
+                              contact: contact.text.trim().isEmpty
+                                  ? null
+                                  : contact.text.trim(),
+                              active: active,
+                            );
+                        try {
+                          if (provider == null) {
+                            await widget.service.createProvider(request);
+                          } else {
+                            await widget.service.updateProvider(
+                              provider.id,
+                              request,
+                            );
+                          }
+                          if (dialogContext.mounted) {
+                            Navigator.pop(dialogContext, true);
+                          }
+                        } on Object catch (failure) {
+                          setLocal(() {
+                            saving = false;
+                            error =
+                                failure is ApiException &&
+                                    failure.statusCode == 409
+                                ? 'Já existe outra lavanderia com esse nome.'
+                                : failure is ApiException
+                                ? failure.message
+                                : 'Não foi possível salvar a lavanderia.';
+                          });
+                        }
+                      },
+                child: saving
+                    ? const SizedBox.square(
+                        dimension: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Salvar'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        name.dispose();
+        contact.dispose();
+      });
+    });
+    if (saved == true && mounted) {
+      await _reload();
+    }
   }
 }
 

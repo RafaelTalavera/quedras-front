@@ -4,6 +4,10 @@ import '../domain/laundry_models.dart';
 abstract interface class LaundryAppService {
   Future<List<LaundryProvider>> listProviders();
   Future<LaundryProvider> createProvider(CreateLaundryProviderRequest request);
+  Future<LaundryProvider> updateProvider(
+    int id,
+    CreateLaundryProviderRequest request,
+  );
   Future<List<LaundryItem>> listItems();
   Future<LaundryItem> createItem(LaundryItem item);
   Future<LaundryItem> updateItem(int id, LaundryItem item);

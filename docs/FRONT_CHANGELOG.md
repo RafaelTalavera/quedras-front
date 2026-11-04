@@ -1,5 +1,21 @@
 # FRONT CHANGELOG - COSTANORTE
 
+## 2026-11-04 | Lavanderia | Administracion de proveedores
+- Componentes afectados: pantalla operativa V2 de lavanderia, cliente HTTP y contratos de aplicacion.
+- Impacto funcional:
+  - se incorpora la accion `Lavanderias` en la cabecera del modulo;
+  - el operador puede crear y editar lavanderias con nombre, contacto y estado activo/inactivo;
+  - la desactivacion exige confirmacion y conserva el historico;
+  - los proveedores inactivos permanecen visibles en administracion, pero se excluyen de nuevos envios y relavados.
+- Contrato backend:
+  - `POST /api/v2/laundry/providers` crea el proveedor;
+  - `PUT /api/v2/laundry/providers/{id}` actualiza sus datos y estado;
+  - nombre maximo de 120 caracteres, contacto opcional de hasta 160 y rechazo `409` para nombres duplicados.
+- Validacion ejecutada:
+  - `flutter analyze`: sin issues;
+  - `flutter test test/features/laundry`: 50 pruebas OK;
+  - regresion backend coordinada: 202 pruebas OK.
+
 ## 2026-11-03 | Transversal | Normalizacion de APIs Flutter deprecadas
 - Componentes afectados: `Manutencao`, `Massagens`, `Quadras`, `Tours e Viagens` y `Configuracoes`.
 - Archivos funcionales:

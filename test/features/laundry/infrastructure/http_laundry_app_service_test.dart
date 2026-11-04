@@ -100,6 +100,33 @@ void main() {
     expect(client.lastPath, 'laundry/shipments/3/dispatch');
     expect(jsonDecode(client.lastBody!)['version'], 0);
   });
+  test('crea y edita proveedores con estado activo', () async {
+    final _FakeApiClient client = _FakeApiClient(
+      const ApiResponse(
+        statusCode: 200,
+        body:
+            '{"id":8,"name":"Lavanderia Norte","contact":"11999990000","active":false}',
+      ),
+    );
+    final HttpLaundryAppService service = HttpLaundryAppService(
+      apiClient: client,
+    );
+    const CreateLaundryProviderRequest request = CreateLaundryProviderRequest(
+      name: 'Lavanderia Norte',
+      contact: '11999990000',
+      active: false,
+    );
+
+    await service.createProvider(request);
+    expect(client.lastMethod, 'POST');
+    expect(client.lastPath, 'laundry/providers');
+    expect(jsonDecode(client.lastBody!)['active'], isFalse);
+
+    final LaundryProvider updated = await service.updateProvider(8, request);
+    expect(client.lastMethod, 'PUT');
+    expect(client.lastPath, 'laundry/providers/8');
+    expect(updated.active, isFalse);
+  });
 }
 
 final class _FakeApiClient implements ApiClient {

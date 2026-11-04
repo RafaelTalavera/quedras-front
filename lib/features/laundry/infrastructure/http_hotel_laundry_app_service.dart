@@ -24,8 +24,41 @@ final class HttpHotelLaundryAppService implements HotelLaundryAppService {
       _getList('providers', LaundryProvider.fromJson);
 
   @override
+  Future<LaundryProvider> createProvider(
+    CreateLaundryProviderRequest request,
+  ) => _saveProvider('POST', 'providers', request);
+
+  @override
+  Future<LaundryProvider> updateProvider(
+    int id,
+    CreateLaundryProviderRequest request,
+  ) => _saveProvider('PUT', 'providers/$id', request);
+
+  @override
   Future<List<LaundryItem>> listItems() =>
       _getList('items', LaundryItem.fromJson);
+
+  Future<LaundryProvider> _saveProvider(
+    String method,
+    String path,
+    CreateLaundryProviderRequest request,
+  ) async => LaundryProvider.fromJson(
+    await _request(
+      method: method,
+      path: path,
+      request: () => method == 'POST'
+          ? _apiClient.post(
+              path,
+              headers: _headers,
+              body: jsonEncode(request.toJson()),
+            )
+          : _apiClient.put(
+              path,
+              headers: _headers,
+              body: jsonEncode(request.toJson()),
+            ),
+    ),
+  );
 
   @override
   Future<HotelLaundryStockTotals> dashboard({int? providerId}) async {
