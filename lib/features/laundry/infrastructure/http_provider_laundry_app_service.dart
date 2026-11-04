@@ -13,7 +13,9 @@ final class HttpProviderLaundryAppService implements ProviderLaundryAppService {
   final ApiClient _apiClient;
   static const Map<String, String> _headers = <String, String>{
     'Accept': 'application/json',
+    'Content-Type': 'application/json',
   };
+  static int _commandSequence = 0;
 
   @override
   Future<ProviderLaundryResultPage<ProviderLaundryDocumentSummary>>
@@ -40,6 +42,120 @@ final class HttpProviderLaundryAppService implements ProviderLaundryAppService {
     'provider/stock?bucket=${bucket.apiValue}&page=$page&size=$size',
     ProviderLaundryStockRow.fromJson,
   );
+
+  @override
+  Future<ProviderLaundryDocument> getDocument(int id) =>
+      _getObject('documents/$id', ProviderLaundryDocument.fromJson);
+
+  @override
+  Future<ProviderLaundryDocument> acknowledgeDocument({
+    required int id,
+    required int version,
+    String? notes,
+  }) => _postObject('dispatches/$id/acknowledgements', <String, Object?>{
+    'version': version,
+    'notes': _trimmedOrNull(notes),
+  }, ProviderLaundryDocument.fromJson);
+
+  @override
+  Future<ProviderLaundryDocument> observeDocument({
+    required int id,
+    required int version,
+    required String notes,
+  }) {
+    final String normalizedNotes = notes.trim();
+    if (normalizedNotes.isEmpty) {
+      throw ArgumentError.value(notes, 'notes', 'must not be blank');
+    }
+    if (normalizedNotes.length > 500) {
+      throw ArgumentError.value(notes, 'notes', 'must not exceed 500 chars');
+    }
+    return _postObject('documents/$id/observations', <String, Object?>{
+      'version': version,
+      'notes': normalizedNotes,
+    }, ProviderLaundryDocument.fromJson);
+  }
+
+  Future<T> _getObject<T>(
+    String path,
+    T Function(Map<String, dynamic>) parser,
+  ) => _objectRequest(
+    method: 'GET',
+    path: path,
+    request: () => _apiClient.get(path, headers: _headers),
+    parser: parser,
+  );
+
+  Future<T> _postObject<T>(
+    String path,
+    Map<String, Object?> body,
+    T Function(Map<String, dynamic>) parser,
+  ) {
+    final Map<String, String> headers = <String, String>{
+      ..._headers,
+      'Idempotency-Key': _nextIdempotencyKey(),
+    };
+    return _objectRequest(
+      method: 'POST',
+      path: path,
+      request: () =>
+          _apiClient.post(path, headers: headers, body: jsonEncode(body)),
+      parser: parser,
+    );
+  }
+
+  Future<T> _objectRequest<T>({
+    required String method,
+    required String path,
+    required Future<ApiResponse> Function() request,
+    required T Function(Map<String, dynamic>) parser,
+  }) async {
+    try {
+      final ApiResponse response = await request();
+      if (!response.isSuccess) {
+        throw ApiException(
+          _message(response),
+          kind: ApiErrorKind.http,
+          statusCode: response.statusCode,
+          method: method,
+          path: path,
+        );
+      }
+      final Object? decoded = jsonDecode(response.body);
+      if (decoded is! Map) throw const FormatException('object expected');
+      return parser(
+        decoded.map<String, dynamic>(
+          (Object? key, Object? value) => MapEntry(key.toString(), value),
+        ),
+      );
+    } on ApiException {
+      rethrow;
+    } on TimeoutException catch (error) {
+      throw ApiException(
+        'Tempo esgotado ao conectar com o servidor.',
+        kind: ApiErrorKind.timeout,
+        method: method,
+        path: path,
+        cause: error,
+      );
+    } on FormatException catch (error) {
+      throw ApiException(
+        'Resposta inválida do servidor.',
+        kind: ApiErrorKind.invalidResponse,
+        method: method,
+        path: path,
+        cause: error,
+      );
+    } on Exception catch (error) {
+      throw ApiException(
+        'Não foi possível conectar ao servidor.',
+        kind: ApiErrorKind.network,
+        method: method,
+        path: path,
+        cause: error,
+      );
+    }
+  }
 
   Future<ProviderLaundryResultPage<T>> _getPage<T>(
     String path,
@@ -111,5 +227,15 @@ final class HttpProviderLaundryAppService implements ProviderLaundryAppService {
     return response.statusCode == 403
         ? 'Você não tem autorização para consultar a lavanderia.'
         : 'Não foi possível consultar a lavanderia.';
+  }
+
+  static String _nextIdempotencyKey() {
+    _commandSequence++;
+    return 'flutter-provider-${DateTime.now().microsecondsSinceEpoch}-$_commandSequence';
+  }
+
+  static String? _trimmedOrNull(String? value) {
+    final String normalized = value?.trim() ?? '';
+    return normalized.isEmpty ? null : normalized;
   }
 }

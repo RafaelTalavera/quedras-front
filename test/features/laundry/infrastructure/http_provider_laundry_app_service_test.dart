@@ -60,6 +60,40 @@ void main() {
       ),
     );
   });
+
+  test('confirma documento con version e idempotencia', () async {
+    final _FakeApiClient client = _FakeApiClient(
+      const ApiResponse(
+        statusCode: 200,
+        body:
+            '{"id":11,"reference":"ENV-11","documentType":"STANDARD_DISPATCH","status":"CONFIRMED","providerId":3,"providerName":"Lavanderia","effectiveAt":"2026-11-03T10:00:00Z","notes":null,"submittedAt":"2026-11-03T10:05:00Z","version":3,"lines":[{"id":1,"itemId":8,"itemName":"Toalha","quantity":5}],"confirmations":[]}',
+      ),
+    );
+
+    final result = await HttpProviderLaundryAppService(
+      apiClient: client,
+    ).acknowledgeDocument(id: 11, version: 2);
+
+    expect(client.method, 'POST');
+    expect(client.path, 'dispatches/11/acknowledgements');
+    expect(client.body, '{"version":2,"notes":null}');
+    expect(client.headers?['Idempotency-Key'], isNotEmpty);
+    expect(result.status, 'CONFIRMED');
+    expect(result.lines.single.itemName, 'Toalha');
+  });
+
+  test('rechaza observacion vacia antes de llamar al backend', () {
+    final _FakeApiClient client = _FakeApiClient(
+      const ApiResponse(statusCode: 500, body: '{}'),
+    );
+    final service = HttpProviderLaundryAppService(apiClient: client);
+
+    expect(
+      () => service.observeDocument(id: 11, version: 2, notes: '  '),
+      throwsArgumentError,
+    );
+    expect(client.method, isNull);
+  });
 }
 
 final class _FakeApiClient implements ApiClient {
@@ -67,10 +101,15 @@ final class _FakeApiClient implements ApiClient {
 
   final ApiResponse response;
   String? path;
+  String? method;
+  String? body;
+  Map<String, String>? headers;
 
   @override
   Future<ApiResponse> get(String path, {Map<String, String>? headers}) async {
+    method = 'GET';
     this.path = path;
+    this.headers = headers;
     return response;
   }
 
@@ -90,7 +129,13 @@ final class _FakeApiClient implements ApiClient {
     String path, {
     Map<String, String>? headers,
     String? body,
-  }) => throw UnimplementedError();
+  }) async {
+    method = 'POST';
+    this.path = path;
+    this.headers = headers;
+    this.body = body;
+    return response;
+  }
 
   @override
   Future<ApiResponse> put(

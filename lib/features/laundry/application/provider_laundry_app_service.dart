@@ -14,4 +14,18 @@ abstract interface class ProviderLaundryAppService {
     int page = 0,
     int size = 50,
   });
+
+  Future<ProviderLaundryDocument> getDocument(int id);
+
+  Future<ProviderLaundryDocument> acknowledgeDocument({
+    required int id,
+    required int version,
+    String? notes,
+  });
+
+  Future<ProviderLaundryDocument> observeDocument({
+    required int id,
+    required int version,
+    required String notes,
+  });
 }

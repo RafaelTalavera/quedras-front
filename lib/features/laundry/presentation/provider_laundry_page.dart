@@ -121,6 +121,7 @@ class _ProviderLaundryPageState extends State<ProviderLaundryPage> {
                     subtitle: _documentType(item.documentType),
                     status: _status(item.status),
                     date: item.effectiveAt,
+                    onTap: () => _openDocument(item.id),
                   ),
                 )
                 .toList(),
@@ -143,6 +144,111 @@ class _ProviderLaundryPageState extends State<ProviderLaundryPage> {
         ],
       ),
     );
+  }
+
+  Future<void> _openDocument(int id) async {
+    late final ProviderLaundryDocument document;
+    try {
+      document = await widget.service.getDocument(id);
+    } on Object catch (error) {
+      if (!mounted) return;
+      _showError(error);
+      return;
+    }
+    if (!mounted) return;
+    final _DocumentDecision? decision = await showDialog<_DocumentDecision>(
+      context: context,
+      builder: (BuildContext context) => _DocumentDialog(document: document),
+    );
+    if (decision == null || !mounted) return;
+
+    String? notes;
+    if (decision == _DocumentDecision.observe) {
+      notes = await _requestObservation();
+      if (notes == null || !mounted) return;
+    }
+    try {
+      if (decision == _DocumentDecision.acknowledge) {
+        await widget.service.acknowledgeDocument(
+          id: document.id,
+          version: document.version,
+        );
+      } else {
+        await widget.service.observeDocument(
+          id: document.id,
+          version: document.version,
+          notes: notes!,
+        );
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            decision == _DocumentDecision.acknowledge
+                ? 'Envio confirmado.'
+                : 'Observação enviada.',
+          ),
+        ),
+      );
+      await _load();
+    } on Object catch (error) {
+      if (!mounted) return;
+      _showError(error);
+    }
+  }
+
+  Future<String?> _requestObservation() async {
+    final TextEditingController controller = TextEditingController();
+    String? validation;
+    final String? result = await showDialog<String>(
+      context: context,
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) =>
+            AlertDialog(
+              title: const Text('Observar envio'),
+              content: TextField(
+                key: const ValueKey('provider-document-observation'),
+                controller: controller,
+                maxLength: 500,
+                maxLines: 4,
+                decoration: InputDecoration(
+                  labelText: 'Motivo da observação',
+                  errorText: validation,
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    final String notes = controller.text.trim();
+                    if (notes.isEmpty) {
+                      setDialogState(
+                        () => validation = 'Informe o motivo da observação.',
+                      );
+                      return;
+                    }
+                    Navigator.pop(context, notes);
+                  },
+                  child: const Text('Enviar observação'),
+                ),
+              ],
+            ),
+      ),
+    );
+    controller.dispose();
+    return result;
+  }
+
+  void _showError(Object error) {
+    final String message = error is ApiException
+        ? error.message
+        : 'Não foi possível concluir a operação.';
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }
 
@@ -263,20 +369,93 @@ class _SummaryTile extends StatelessWidget {
     required this.subtitle,
     required this.status,
     required this.date,
+    this.onTap,
   });
 
   final String title;
   final String subtitle;
   final String status;
   final DateTime date;
+  final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) => Card(
     child: ListTile(
+      onTap: onTap,
       title: Text(title),
       subtitle: Text('$subtitle · ${_date(date)}'),
       trailing: Chip(label: Text(status)),
     ),
+  );
+}
+
+enum _DocumentDecision { acknowledge, observe }
+
+class _DocumentDialog extends StatelessWidget {
+  const _DocumentDialog({required this.document});
+
+  final ProviderLaundryDocument document;
+
+  @override
+  Widget build(BuildContext context) => AlertDialog(
+    title: Text(document.reference),
+    content: SizedBox(
+      width: 620,
+      child: SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: <Widget>[
+            Text(
+              '${_documentType(document.documentType)} · ${_status(document.status)}',
+            ),
+            Text('Data: ${_date(document.effectiveAt)}'),
+            if (document.notes != null) ...<Widget>[
+              const SizedBox(height: 8),
+              Text(document.notes!),
+            ],
+            const Divider(height: 28),
+            Text('Peças', style: Theme.of(context).textTheme.titleMedium),
+            ...document.lines.map(
+              (ProviderLaundryDocumentLine line) => ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text(line.itemName),
+                trailing: Text(_quantity(line.quantity)),
+              ),
+            ),
+            if (document.confirmations.isNotEmpty) ...<Widget>[
+              const Divider(height: 28),
+              Text('Histórico', style: Theme.of(context).textTheme.titleMedium),
+              ...document.confirmations.map(
+                (ProviderLaundryConfirmation item) => ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  title: Text(_status(item.action)),
+                  subtitle: item.notes == null ? null : Text(item.notes!),
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    ),
+    actions: <Widget>[
+      TextButton(
+        onPressed: () => Navigator.pop(context),
+        child: const Text('Fechar'),
+      ),
+      if (document.canDecide) ...<Widget>[
+        OutlinedButton(
+          key: const ValueKey('provider-document-observe'),
+          onPressed: () => Navigator.pop(context, _DocumentDecision.observe),
+          child: const Text('Observar'),
+        ),
+        FilledButton(
+          key: const ValueKey('provider-document-acknowledge'),
+          onPressed: () =>
+              Navigator.pop(context, _DocumentDecision.acknowledge),
+          child: const Text('Confirmar envio'),
+        ),
+      ],
+    ],
   );
 }
 
@@ -293,6 +472,8 @@ String _status(String value) => switch (value) {
   'OBSERVED' => 'Observado',
   'RESOLVED' => 'Resolvido',
   'CONFIRMED_BY_HOTEL' => 'Confirmado pelo hotel',
+  'PROVIDER_CONFIRMED' => 'Confirmado pela lavanderia',
+  'PROVIDER_OBSERVED' => 'Observado pela lavanderia',
   _ => value,
 };
 

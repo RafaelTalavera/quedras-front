@@ -51,6 +51,104 @@ final class ProviderLaundryDocumentSummary {
       );
 }
 
+final class ProviderLaundryDocumentLine {
+  const ProviderLaundryDocumentLine({
+    required this.id,
+    required this.itemId,
+    required this.itemName,
+    required this.quantity,
+  });
+
+  final int id;
+  final int itemId;
+  final String itemName;
+  final double quantity;
+
+  factory ProviderLaundryDocumentLine.fromJson(Map<String, dynamic> json) =>
+      ProviderLaundryDocumentLine(
+        id: _requiredInt(json, 'id'),
+        itemId: _requiredInt(json, 'itemId'),
+        itemName: _requiredString(json, 'itemName'),
+        quantity: _requiredDouble(json, 'quantity'),
+      );
+}
+
+final class ProviderLaundryConfirmation {
+  const ProviderLaundryConfirmation({
+    required this.id,
+    required this.action,
+    this.notes,
+    required this.actorRole,
+    required this.createdAt,
+  });
+
+  final int id;
+  final String action;
+  final String? notes;
+  final String actorRole;
+  final DateTime createdAt;
+
+  factory ProviderLaundryConfirmation.fromJson(Map<String, dynamic> json) =>
+      ProviderLaundryConfirmation(
+        id: _requiredInt(json, 'id'),
+        action: _requiredString(json, 'action'),
+        notes: _optionalString(json['notes']),
+        actorRole: _requiredString(json, 'actorRole'),
+        createdAt: _requiredDateTime(json, 'createdAt'),
+      );
+}
+
+final class ProviderLaundryDocument {
+  const ProviderLaundryDocument({
+    required this.id,
+    required this.reference,
+    required this.documentType,
+    required this.status,
+    required this.providerId,
+    required this.providerName,
+    required this.effectiveAt,
+    this.notes,
+    this.submittedAt,
+    required this.version,
+    required this.lines,
+    required this.confirmations,
+  });
+
+  final int id;
+  final String reference;
+  final String documentType;
+  final String status;
+  final int providerId;
+  final String providerName;
+  final DateTime effectiveAt;
+  final String? notes;
+  final DateTime? submittedAt;
+  final int version;
+  final List<ProviderLaundryDocumentLine> lines;
+  final List<ProviderLaundryConfirmation> confirmations;
+
+  bool get canDecide => status == 'SUBMITTED';
+
+  factory ProviderLaundryDocument.fromJson(Map<String, dynamic> json) =>
+      ProviderLaundryDocument(
+        id: _requiredInt(json, 'id'),
+        reference: _requiredString(json, 'reference'),
+        documentType: _requiredString(json, 'documentType'),
+        status: _requiredString(json, 'status'),
+        providerId: _requiredInt(json, 'providerId'),
+        providerName: _requiredString(json, 'providerName'),
+        effectiveAt: _requiredDateTime(json, 'effectiveAt'),
+        notes: _optionalString(json['notes']),
+        submittedAt: _optionalDateTime(json['submittedAt']),
+        version: _requiredInt(json, 'version'),
+        lines: _parseList(json['lines'], ProviderLaundryDocumentLine.fromJson),
+        confirmations: _parseList(
+          json['confirmations'],
+          ProviderLaundryConfirmation.fromJson,
+        ),
+      );
+}
+
 final class ProviderLaundryReturnSummary {
   const ProviderLaundryReturnSummary({
     required this.id,
@@ -170,4 +268,27 @@ DateTime _requiredDateTime(Map<String, dynamic> json, String key) {
 DateTime? _optionalDateTime(Object? raw) {
   final String value = raw?.toString().trim() ?? '';
   return value.isEmpty ? null : DateTime.tryParse(value);
+}
+
+String? _optionalString(Object? raw) {
+  final String value = raw?.toString().trim() ?? '';
+  return value.isEmpty ? null : value;
+}
+
+List<T> _parseList<T>(Object? raw, T Function(Map<String, dynamic>) parser) {
+  if (raw is! List) {
+    throw const FormatException('value must be a list');
+  }
+  return raw
+      .map<T>((Object? value) {
+        if (value is! Map) {
+          throw const FormatException('item must be an object');
+        }
+        return parser(
+          value.map<String, dynamic>(
+            (Object? key, Object? value) => MapEntry(key.toString(), value),
+          ),
+        );
+      })
+      .toList(growable: false);
 }

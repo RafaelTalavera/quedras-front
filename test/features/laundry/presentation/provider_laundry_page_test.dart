@@ -8,7 +8,11 @@ import 'package:flutter_test/flutter_test.dart';
 void main() {
   testWidgets('muestra bandejas y saldos sin precios', (tester) async {
     await tester.pumpWidget(
-      MaterialApp(home: ProviderLaundryPage(service: _FakeProviderService())),
+      MaterialApp(
+        home: Scaffold(
+          body: ProviderLaundryPage(service: _FakeProviderService()),
+        ),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -32,7 +36,9 @@ void main() {
   testWidgets('muestra error y permite reintentar', (tester) async {
     final service = _FakeProviderService(failFirst: true);
     await tester.pumpWidget(
-      MaterialApp(home: ProviderLaundryPage(service: service)),
+      MaterialApp(
+        home: Scaffold(body: ProviderLaundryPage(service: service)),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -48,6 +54,29 @@ void main() {
       findsOneWidget,
     );
   });
+
+  testWidgets('abre detalle y confirma el documento completo', (tester) async {
+    final service = _FakeProviderService();
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(body: ProviderLaundryPage(service: service)),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('ENV-11'));
+    await tester.pumpAndSettle();
+    expect(find.text('Toalha de banho'), findsOneWidget);
+    expect(find.textContaining(r'R$'), findsNothing);
+    await tester.tap(
+      find.byKey(const ValueKey('provider-document-acknowledge')),
+    );
+    await tester.pumpAndSettle();
+
+    expect(service.acknowledgedId, 11);
+    expect(service.acknowledgedVersion, 1);
+    expect(find.text('Envio confirmado.'), findsOneWidget);
+  });
 }
 
 final class _FakeProviderService implements ProviderLaundryAppService {
@@ -55,6 +84,8 @@ final class _FakeProviderService implements ProviderLaundryAppService {
 
   final bool failFirst;
   bool _failed = false;
+  int? acknowledgedId;
+  int? acknowledgedVersion;
 
   void _maybeFail() {
     if (failFirst && !_failed) {
@@ -124,4 +155,47 @@ final class _FakeProviderService implements ProviderLaundryAppService {
       ),
     ],
   );
+
+  @override
+  Future<ProviderLaundryDocument> getDocument(int id) async =>
+      _document(status: 'SUBMITTED');
+
+  @override
+  Future<ProviderLaundryDocument> acknowledgeDocument({
+    required int id,
+    required int version,
+    String? notes,
+  }) async {
+    acknowledgedId = id;
+    acknowledgedVersion = version;
+    return _document(status: 'CONFIRMED');
+  }
+
+  @override
+  Future<ProviderLaundryDocument> observeDocument({
+    required int id,
+    required int version,
+    required String notes,
+  }) async => _document(status: 'OBSERVED');
+
+  ProviderLaundryDocument _document({required String status}) =>
+      ProviderLaundryDocument(
+        id: 11,
+        reference: 'ENV-11',
+        documentType: 'STANDARD_DISPATCH',
+        status: status,
+        providerId: 3,
+        providerName: 'Lavanderia Demo',
+        effectiveAt: DateTime.utc(2026, 11, 3),
+        version: 1,
+        lines: const <ProviderLaundryDocumentLine>[
+          ProviderLaundryDocumentLine(
+            id: 1,
+            itemId: 8,
+            itemName: 'Toalha de banho',
+            quantity: 5,
+          ),
+        ],
+        confirmations: const <ProviderLaundryConfirmation>[],
+      );
 }
