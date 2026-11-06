@@ -50,12 +50,12 @@ void main() {
     );
   });
 
-  test('crea y edita artÃ­culos con el mismo contrato tipado', () async {
+  test('crea y edita artículos con el mismo contrato tipado', () async {
     final _FakeApiClient client = _FakeApiClient(
       const ApiResponse(
         statusCode: 200,
         body:
-            '{"id":6,"name":"Alfombra de baÃ±o","unitType":"PIECE","currentUnitPrice":9.0,"active":true}',
+            '{"id":6,"name":"Alfombra de baño","unitType":"PIECE","currentUnitPrice":9.0,"active":true}',
       ),
     );
     final HttpLaundryAppService service = HttpLaundryAppService(
@@ -63,7 +63,7 @@ void main() {
     );
     const LaundryItem item = LaundryItem(
       id: 6,
-      name: 'Alfombra de baÃ±o',
+      name: 'Alfombra de baño',
       unitType: LaundryUnitType.piece,
       currentUnitPrice: 9,
       active: true,

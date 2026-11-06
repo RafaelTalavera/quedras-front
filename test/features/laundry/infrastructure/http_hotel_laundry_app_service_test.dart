@@ -98,6 +98,94 @@ void main() {
     expect(result.status, 'DRAFT');
   });
 
+  test('registra estoque inicial con idempotencia', () async {
+    final _FakeApiClient client = _FakeApiClient(
+      const ApiResponse(
+        statusCode: 201,
+        body: '{"id":1,"reference":"OPEN-1","status":"APPROVED","lines":[]}',
+      ),
+    );
+
+    await HttpHotelLaundryAppService(apiClient: client).createOpeningStock(
+      HotelLaundryOpeningStockInput(
+        version: 0,
+        effectiveAt: DateTime.parse('2026-11-03T07:00:00-03:00'),
+        notes: ' Estoque conferido ',
+        lines: const <HotelLaundryDispatchLineInput>[
+          HotelLaundryDispatchLineInput(itemId: 8, quantity: 12),
+        ],
+      ),
+    );
+
+    final Map<String, dynamic> body =
+        jsonDecode(client.body!) as Map<String, dynamic>;
+    expect(client.path, 'opening-stock');
+    expect(client.headers?['Idempotency-Key'], startsWith('flutter-hotel-'));
+    expect(body['effectiveAt'], '2026-11-03T10:00:00.000Z');
+    expect(body['notes'], 'Estoque conferido');
+    expect((body['lines'] as List<dynamic>).single['quantity'], 12.0);
+  });
+
+  test('consulta trazabilidad de inventario por fecha', () async {
+    final _FakeApiClient client = _FakeApiClient(
+      const ApiResponse(
+        statusCode: 200,
+        body:
+            '[{"id":4,"effectiveAt":"2026-11-03T10:00:00Z","itemId":8,"itemName":"Toalha","quantity":12,"movementType":"OPENING_STOCK","notes":"Conteo","createdAt":"2026-11-03T11:00:00Z","createdBy":"admin"}]',
+      ),
+    );
+
+    final movements = await HttpHotelLaundryAppService(
+      apiClient: client,
+    ).listInventoryMovements(date: DateTime(2026, 11, 3));
+
+    expect(client.path, 'inventory/movements?date=2026-11-03');
+    expect(movements.single.createdBy, 'admin');
+    expect(movements.single.movementType, 'OPENING_STOCK');
+  });
+
+  test('retira inventario y da de baja producto con idempotencia', () async {
+    final _FakeApiClient client = _FakeApiClient(
+      const ApiResponse(statusCode: 200, body: '{}'),
+    );
+
+    await HttpHotelLaundryAppService(apiClient: client).retireInventoryItem(
+      HotelLaundryItemRetirementInput(
+        itemId: 8,
+        version: 3,
+        effectiveAt: DateTime.parse('2026-11-03T07:00:00-03:00'),
+        quantity: 5,
+        notes: 'Producto fuera de uso',
+      ),
+    );
+
+    final Map<String, dynamic> body =
+        jsonDecode(client.body!) as Map<String, dynamic>;
+    expect(client.path, 'inventory/items/8/retire');
+    expect(client.headers?['Idempotency-Key'], startsWith('flutter-hotel-'));
+    expect(body['version'], 3);
+    expect(body['quantity'], 5.0);
+    expect(body['notes'], 'Producto fuera de uso');
+  });
+
+  test('consulta saldo disponible con su version para dar de baja', () async {
+    final _FakeApiClient client = _FakeApiClient(
+      const ApiResponse(
+        statusCode: 200,
+        body:
+            '{"page":0,"size":1,"hasNext":false,"items":[{"balanceId":4,"itemId":8,"itemName":"Toalha","unitType":"PIECE","bucket":"HOTEL_AVAILABLE","providerId":null,"providerName":null,"quantity":100,"oldestEffectiveAt":"2026-11-01T10:00:00Z","ageDays":4,"version":3}]}',
+      ),
+    );
+
+    final HotelLaundryStockRow? stock = await HttpHotelLaundryAppService(
+      apiClient: client,
+    ).getAvailableStock(itemId: 8);
+
+    expect(client.path, 'stock?itemId=8&bucket=HOTEL_AVAILABLE&page=0&size=1');
+    expect(stock?.quantity, 100);
+    expect(stock?.version, 3);
+  });
+
   test('confirma devolucion V2 con clasificacion completa', () async {
     final _FakeApiClient client = _FakeApiClient(
       const ApiResponse(

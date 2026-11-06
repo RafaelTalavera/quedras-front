@@ -70,6 +70,62 @@ final class HttpHotelLaundryAppService implements HotelLaundryAppService {
   }
 
   @override
+  Future<List<HotelLaundryOperationalDailyRow>> operationalSummary() =>
+      _getList('operational-summary', HotelLaundryOperationalDailyRow.fromJson);
+
+  @override
+  Future<List<HotelLaundryInventoryMovement>> listInventoryMovements({
+    required DateTime date,
+  }) => _getList(
+    _query('inventory/movements', <String, Object?>{'date': _dateOnly(date)}),
+    HotelLaundryInventoryMovement.fromJson,
+  );
+
+  @override
+  Future<HotelLaundryStockRow?> getAvailableStock({required int itemId}) async {
+    final HotelLaundryResultPage<HotelLaundryStockRow> page =
+        await _getPage<HotelLaundryStockRow>(
+          _query('stock', <String, Object?>{
+            'itemId': itemId,
+            'bucket': 'HOTEL_AVAILABLE',
+            'page': 0,
+            'size': 1,
+          }),
+          HotelLaundryStockRow.fromJson,
+        );
+    return page.items.firstOrNull;
+  }
+
+  @override
+  Future<void> createOpeningStock(HotelLaundryOpeningStockInput input) async {
+    await _postObject<Map<String, dynamic>>(
+      'opening-stock',
+      input.toJson(),
+      (Map<String, dynamic> json) => json,
+    );
+  }
+
+  @override
+  Future<void> retireInventoryItem(
+    HotelLaundryItemRetirementInput input,
+  ) async {
+    await _postObject<Map<String, dynamic>>(
+      'inventory/items/${input.itemId}/retire',
+      input.toJson(),
+      (Map<String, dynamic> json) => json,
+    );
+  }
+
+  @override
+  Future<void> createManualReturn(HotelLaundryManualReturnInput input) async {
+    await _postObject<Map<String, dynamic>>(
+      'returns/manual',
+      input.toJson(),
+      (Map<String, dynamic> json) => json,
+    );
+  }
+
+  @override
   Future<HotelLaundryResultPage<HotelLaundryDocumentSummary>> listDocuments({
     int? providerId,
     String? status,
@@ -165,7 +221,7 @@ final class HttpHotelLaundryAppService implements HotelLaundryAppService {
       rethrow;
     } on FormatException catch (error) {
       throw ApiException(
-        'Resposta invÃ¡lida do servidor.',
+        'Resposta inválida do servidor.',
         kind: ApiErrorKind.invalidResponse,
         method: 'GET',
         path: path,
@@ -173,7 +229,7 @@ final class HttpHotelLaundryAppService implements HotelLaundryAppService {
       );
     } on Exception catch (error) {
       throw ApiException(
-        'NÃ£o foi possÃ­vel conectar ao servidor.',
+        'Não foi possível conectar ao servidor.',
         kind: ApiErrorKind.network,
         method: 'GET',
         path: path,
@@ -236,7 +292,7 @@ final class HttpHotelLaundryAppService implements HotelLaundryAppService {
       );
     } on FormatException catch (error) {
       throw ApiException(
-        'Resposta invÃ¡lida do servidor.',
+        'Resposta inválida do servidor.',
         kind: ApiErrorKind.invalidResponse,
         method: method,
         path: path,
@@ -244,7 +300,7 @@ final class HttpHotelLaundryAppService implements HotelLaundryAppService {
       );
     } on Exception catch (error) {
       throw ApiException(
-        'NÃ£o foi possÃ­vel conectar ao servidor.',
+        'Não foi possível conectar ao servidor.',
         kind: ApiErrorKind.network,
         method: method,
         path: path,
@@ -281,11 +337,18 @@ final class HttpHotelLaundryAppService implements HotelLaundryAppService {
     }
     return response.statusCode == 409
         ? 'Os dados foram modificados. Atualize e tente novamente.'
-        : 'NÃ£o foi possÃ­vel concluir a operaÃ§Ã£o.';
+        : 'Não foi possível concluir a operação.';
   }
 
   static String _nextIdempotencyKey() {
     _commandSequence++;
     return 'flutter-hotel-${DateTime.now().microsecondsSinceEpoch}-$_commandSequence';
+  }
+
+  static String _dateOnly(DateTime value) {
+    final DateTime local = value.toLocal();
+    return '${local.year.toString().padLeft(4, '0')}-'
+        '${local.month.toString().padLeft(2, '0')}-'
+        '${local.day.toString().padLeft(2, '0')}';
   }
 }

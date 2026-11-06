@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../../../core/feedback/app_alerts.dart';
 import '../../../core/network/api_exception.dart';
 import '../application/hotel_laundry_app_service.dart';
 import '../domain/hotel_laundry_models.dart';
@@ -24,6 +26,7 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
   List<HotelLaundryReturnSummary> _returns = const [];
   List<LaundryProvider> _providers = const [];
   List<LaundryItem> _items = const [];
+  List<HotelLaundryOperationalDailyRow> _dailyRows = const [];
 
   @override
   void initState() {
@@ -43,6 +46,7 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
         widget.service.listReturns(status: 'SUBMITTED', size: 50),
         widget.service.listProviders(),
         widget.service.listItems(),
+        widget.service.operationalSummary(),
       ]);
       if (!mounted) return;
       setState(() {
@@ -59,6 +63,7 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
         _items = (results[4] as List<LaundryItem>)
             .where((LaundryItem item) => item.active)
             .toList(growable: false);
+        _dailyRows = results[5] as List<HotelLaundryOperationalDailyRow>;
         _loading = false;
       });
     } on Object catch (error) {
@@ -67,7 +72,7 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
         _loading = false;
         _error = error is ApiException
             ? error.message
-            : 'NÃ£o foi possÃ­vel carregar a lavanderia.';
+            : 'Não foi possível carregar a lavanderia.';
       });
     }
   }
@@ -118,6 +123,12 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
                     icon: const Icon(Icons.local_shipping_outlined),
                     label: const Text('Enviar'),
                   ),
+                  FilledButton.tonalIcon(
+                    key: const ValueKey('hotel-laundry-receive'),
+                    onPressed: _saving ? null : _showManualReturn,
+                    icon: const Icon(Icons.move_to_inbox_outlined),
+                    label: const Text('Receber da lavanderia'),
+                  ),
                   OutlinedButton.icon(
                     key: const ValueKey('hotel-laundry-rewash'),
                     onPressed: _saving ? null : () => _showDispatch(true),
@@ -130,6 +141,24 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
                     icon: const Icon(Icons.storefront_outlined),
                     label: const Text('Lavanderias'),
                   ),
+                  OutlinedButton.icon(
+                    key: const ValueKey('hotel-laundry-opening-stock'),
+                    onPressed: _saving ? null : _showOpeningStock,
+                    icon: const Icon(Icons.inventory_2_outlined),
+                    label: const Text('Estoque inicial'),
+                  ),
+                  OutlinedButton.icon(
+                    key: const ValueKey('hotel-laundry-inventory-history'),
+                    onPressed: _saving ? null : _showInventoryHistory,
+                    icon: const Icon(Icons.manage_search_outlined),
+                    label: const Text('Consultar estoque'),
+                  ),
+                  OutlinedButton.icon(
+                    key: const ValueKey('hotel-laundry-retire-item'),
+                    onPressed: _saving ? null : _showItemRetirement,
+                    icon: const Icon(Icons.remove_shopping_cart_outlined),
+                    label: const Text('Dar de baixa'),
+                  ),
                 ],
               ),
             ],
@@ -139,29 +168,73 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
             spacing: 12,
             runSpacing: 12,
             children: <Widget>[
-              _MetricCard('DisponÃ­vel', totals.hotelAvailable),
-              _MetricCard('Na lavanderia', totals.providerProcessing),
-              _MetricCard('Relavagem no hotel', totals.hotelRewashQueue),
-              _MetricCard('Relavagem externa', totals.providerRewash),
-              _MetricCard('Faltante', totals.missing),
-              _MetricCard('Danificado', totals.damaged),
+              _MetricCard(
+                'En lavandería',
+                totals.providerProcessing + totals.providerRewash,
+              ),
+              _MetricCard(
+                'Recibido de lavandería',
+                _dailyRows.fold<double>(
+                  0,
+                  (double total, HotelLaundryOperationalDailyRow row) =>
+                      total + row.receivedQuantity,
+                ),
+              ),
+              _MetricCard('En hotel para relavado', totals.hotelRewashQueue),
             ],
           ),
           const SizedBox(height: 28),
           Text(
-            'DevoluÃ§Ãµes para confirmar (${_returns.length})',
+            'Movimientos por prenda y día',
+            style: Theme.of(context).textTheme.titleLarge,
+          ),
+          const SizedBox(height: 10),
+          if (_dailyRows.isEmpty)
+            const Card(
+              child: ListTile(title: Text('No hay movimientos registrados.')),
+            )
+          else
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                key: const ValueKey('hotel-laundry-daily-summary'),
+                columns: const <DataColumn>[
+                  DataColumn(label: Text('Fecha')),
+                  DataColumn(label: Text('Prenda')),
+                  DataColumn(label: Text('Enviado'), numeric: true),
+                  DataColumn(label: Text('Recibido'), numeric: true),
+                  DataColumn(label: Text('Relavado'), numeric: true),
+                ],
+                rows: _dailyRows
+                    .map(
+                      (HotelLaundryOperationalDailyRow row) => DataRow(
+                        cells: <DataCell>[
+                          DataCell(Text(_date(row.date))),
+                          DataCell(Text(row.itemName)),
+                          DataCell(Text(_number(row.sentQuantity))),
+                          DataCell(Text(_number(row.receivedQuantity))),
+                          DataCell(Text(_number(row.rewashedQuantity))),
+                        ],
+                      ),
+                    )
+                    .toList(growable: false),
+              ),
+            ),
+          const SizedBox(height: 28),
+          Text(
+            'Devoluções para confirmar (${_returns.length})',
             style: Theme.of(context).textTheme.titleLarge,
           ),
           const SizedBox(height: 10),
           if (_returns.isEmpty)
             const Card(
-              child: ListTile(title: Text('Nenhuma devoluÃ§Ã£o pendente.')),
+              child: ListTile(title: Text('Nenhuma devolução pendente.')),
             )
           else
             ..._returns.map(
               (HotelLaundryReturnSummary item) => Card(
                 child: ListTile(
-                  title: Text('${item.reference} Â· ${item.providerName}'),
+                  title: Text('${item.reference} · ${item.providerName}'),
                   subtitle: Text(_dateTime(item.effectiveAt)),
                   trailing: FilledButton(
                     key: ValueKey('hotel-laundry-confirm-${item.id}'),
@@ -183,10 +256,19 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
             ..._documents.map(
               (HotelLaundryDocumentSummary item) => Card(
                 child: ListTile(
-                  title: Text('${item.reference} Â· ${item.providerName}'),
+                  title: Text('${item.reference} · ${item.providerName}'),
                   subtitle: Text(
-                    '${_documentType(item.documentType)} Â· ${_status(item.status)} Â· ${_dateTime(item.effectiveAt)}',
+                    '${_documentType(item.documentType)} · ${_status(item.status)} · ${_dateTime(item.effectiveAt)}',
                   ),
+                  trailing: item.status == 'DRAFT'
+                      ? FilledButton(
+                          key: ValueKey('hotel-laundry-retry-${item.id}'),
+                          onPressed: _saving
+                              ? null
+                              : () => _retryDocumentSubmission(item),
+                          child: const Text('Tentar envio novamente'),
+                        )
+                      : null,
                 ),
               ),
             ),
@@ -218,6 +300,7 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
             item.id: TextEditingController(),
         };
     int providerId = _providers.first.id;
+    DateTime effectiveAt = DateTime.now();
     final TextEditingController notes = TextEditingController();
     final bool? confirmed = await showDialog<bool>(
       context: context,
@@ -250,15 +333,42 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
                         }),
                       ),
                       const SizedBox(height: 12),
+                      OutlinedButton.icon(
+                        key: const ValueKey('hotel-dispatch-date'),
+                        onPressed: () async {
+                          final DateTime now = DateTime.now();
+                          final DateTime? selected = await showDatePicker(
+                            context: context,
+                            initialDate: effectiveAt,
+                            firstDate: DateTime(2000),
+                            lastDate: DateTime(now.year, now.month, now.day),
+                            helpText: 'Fecha de la transacción',
+                          );
+                          if (selected == null) return;
+                          setDialogState(() {
+                            effectiveAt = DateTime(
+                              selected.year,
+                              selected.month,
+                              selected.day,
+                              effectiveAt.hour,
+                              effectiveAt.minute,
+                            );
+                          });
+                        },
+                        icon: const Icon(Icons.calendar_today_outlined),
+                        label: Text('Fecha: ${_date(effectiveAt)}'),
+                      ),
+                      const SizedBox(height: 12),
                       ..._items.map(
                         (LaundryItem item) => Padding(
                           padding: const EdgeInsets.only(bottom: 8),
                           child: TextField(
                             key: ValueKey('hotel-dispatch-item-${item.id}'),
                             controller: quantities[item.id],
-                            keyboardType: const TextInputType.numberWithOptions(
-                              decimal: true,
-                            ),
+                            keyboardType: TextInputType.number,
+                            inputFormatters: <TextInputFormatter>[
+                              FilteringTextInputFormatter.digitsOnly,
+                            ],
                             decoration: InputDecoration(
                               labelText:
                                   '${item.name} (${item.unitType.label})',
@@ -271,7 +381,7 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
                         controller: notes,
                         maxLength: 500,
                         decoration: const InputDecoration(
-                          labelText: 'ObservaÃ§Ãµes',
+                          labelText: 'Observações',
                         ),
                       ),
                     ],
@@ -322,13 +432,476 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
             input: HotelLaundryDispatchInput(
               version: 0,
               providerId: providerId,
-              effectiveAt: DateTime.now(),
+              effectiveAt: effectiveAt,
               notes: noteValue,
               lines: lines,
             ),
           );
       await widget.service.submitDocument(id: draft.id, version: draft.version);
     });
+  }
+
+  Future<void> _showOpeningStock() async {
+    if (_items.isEmpty) {
+      _message('Cadastre ao menos um item ativo.');
+      return;
+    }
+    final DateTime? effectiveAt = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      helpText: 'Fecha del stock inicial',
+    );
+    if (effectiveAt == null || !mounted) return;
+    final Map<int, TextEditingController> quantities =
+        <int, TextEditingController>{
+          for (final LaundryItem item in _items)
+            item.id: TextEditingController(),
+        };
+    final TextEditingController notes = TextEditingController();
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => AlertDialog(
+        title: const Text('Estoque inicial'),
+        content: SizedBox(
+          width: 520,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: <Widget>[
+                ListTile(
+                  key: const ValueKey('hotel-opening-date'),
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.calendar_today_outlined),
+                  title: const Text('Fecha del stock'),
+                  subtitle: Text(_date(effectiveAt)),
+                ),
+                const Text(
+                  'Informe a quantidade disponível no hotel para cada item.',
+                ),
+                const SizedBox(height: 12),
+                ..._items.map(
+                  (LaundryItem item) => Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: TextField(
+                      key: ValueKey('hotel-opening-item-${item.id}'),
+                      controller: quantities[item.id],
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: InputDecoration(
+                        labelText: '${item.name} (${item.unitType.label})',
+                        hintText: '0',
+                      ),
+                    ),
+                  ),
+                ),
+                TextField(
+                  key: const ValueKey('hotel-opening-notes'),
+                  controller: notes,
+                  maxLength: 500,
+                  decoration: const InputDecoration(labelText: 'Observações'),
+                ),
+              ],
+            ),
+          ),
+        ),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          FilledButton(
+            key: const ValueKey('hotel-opening-save'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Salvar estoque'),
+          ),
+        ],
+      ),
+    );
+    final List<HotelLaundryDispatchLineInput> lines = _items
+        .map(
+          (LaundryItem item) => HotelLaundryDispatchLineInput(
+            itemId: item.id,
+            quantity: _quantity(quantities[item.id]?.text),
+          ),
+        )
+        .toList(growable: false);
+    for (final TextEditingController controller in quantities.values) {
+      controller.dispose();
+    }
+    final String noteValue = notes.text;
+    notes.dispose();
+    if (confirmed != true) return;
+    if (!lines.any((HotelLaundryDispatchLineInput line) => line.quantity > 0)) {
+      _message('Informe ao menos uma quantidade positiva.');
+      return;
+    }
+    await _command(
+      () => widget.service.createOpeningStock(
+        HotelLaundryOpeningStockInput(
+          version: 0,
+          effectiveAt: effectiveAt,
+          notes: noteValue,
+          lines: lines,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showInventoryHistory() async {
+    final DateTime? date = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      helpText: 'Fecha de consulta',
+    );
+    if (date == null || !mounted) return;
+    try {
+      final List<HotelLaundryInventoryMovement> movements = await widget.service
+          .listInventoryMovements(date: date);
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (BuildContext context) => AlertDialog(
+          title: Text('Trazabilidad · ${_date(date)}'),
+          content: SizedBox(
+            width: 760,
+            child: movements.isEmpty
+                ? const Text('No hay movimientos para la fecha consultada.')
+                : SingleChildScrollView(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        key: const ValueKey('hotel-inventory-history-table'),
+                        columns: const <DataColumn>[
+                          DataColumn(label: Text('Ítem')),
+                          DataColumn(label: Text('Total'), numeric: true),
+                          DataColumn(label: Text('Fecha de transacción')),
+                          DataColumn(label: Text('Movimiento')),
+                        ],
+                        rows: movements
+                            .map(
+                              (HotelLaundryInventoryMovement row) => DataRow(
+                                cells: <DataCell>[
+                                  DataCell(Text(row.itemName)),
+                                  DataCell(Text(_number(row.quantity.abs()))),
+                                  DataCell(Text(_dateTime(row.effectiveAt))),
+                                  DataCell(Text(_inventoryAction(row))),
+                                ],
+                              ),
+                            )
+                            .toList(growable: false),
+                      ),
+                    ),
+                  ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      );
+    } on Object catch (error) {
+      if (!mounted) return;
+      await AppAlerts.error(
+        context,
+        title: 'No fue posible consultar',
+        message: error is ApiException
+            ? error.message
+            : 'No fue posible consultar el inventario.',
+      );
+    }
+  }
+
+  Future<void> _showItemRetirement() async {
+    if (_items.isEmpty) {
+      _message('No hay productos activos para dar de baja.');
+      return;
+    }
+    LaundryItem selectedItem = _items.first;
+    final DateTime? effectiveAt = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      helpText: 'Fecha de retiro',
+    );
+    if (effectiveAt == null || !mounted) return;
+    final TextEditingController quantity = TextEditingController();
+    final TextEditingController notes = TextEditingController();
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) =>
+            AlertDialog(
+              title: const Text('Dar de baja producto'),
+              content: SizedBox(
+                width: 520,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: <Widget>[
+                    DropdownButtonFormField<LaundryItem>(
+                      key: const ValueKey('hotel-retire-item'),
+                      initialValue: selectedItem,
+                      decoration: const InputDecoration(labelText: 'Producto'),
+                      items: _items
+                          .map(
+                            (LaundryItem item) => DropdownMenuItem<LaundryItem>(
+                              value: item,
+                              child: Text(item.name),
+                            ),
+                          )
+                          .toList(growable: false),
+                      onChanged: (LaundryItem? item) {
+                        if (item != null) {
+                          setDialogState(() => selectedItem = item);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      key: const ValueKey('hotel-retire-quantity'),
+                      controller: quantity,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      decoration: const InputDecoration(
+                        labelText: 'Cantidad a retirar del inventario',
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      key: const ValueKey('hotel-retire-notes'),
+                      controller: notes,
+                      maxLength: 500,
+                      decoration: const InputDecoration(
+                        labelText: 'Motivo de la baja (obligatorio)',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: <Widget>[
+                TextButton(
+                  onPressed: () => Navigator.pop(context, false),
+                  child: const Text('Cancelar'),
+                ),
+                FilledButton(
+                  key: const ValueKey('hotel-retire-save'),
+                  onPressed: () => Navigator.pop(context, true),
+                  child: const Text('Retirar y dar de baja'),
+                ),
+              ],
+            ),
+      ),
+    );
+    final double quantityValue = _quantity(quantity.text);
+    final String notesValue = notes.text.trim();
+    quantity.dispose();
+    notes.dispose();
+    if (confirmed != true) return;
+    if (quantityValue <= 0 || notesValue.isEmpty) {
+      _message('Informe una cantidad positiva y el motivo de la baja.');
+      return;
+    }
+    await _command(() async {
+      final HotelLaundryStockRow? stock = await widget.service
+          .getAvailableStock(itemId: selectedItem.id);
+      if (stock == null || stock.quantity < quantityValue) {
+        throw ApiException(
+          'Estoque disponível insuficiente. Disponível: '
+          '${_number(stock?.quantity ?? 0)}.',
+          kind: ApiErrorKind.http,
+          statusCode: 409,
+        );
+      }
+      await widget.service.retireInventoryItem(
+        HotelLaundryItemRetirementInput(
+          itemId: selectedItem.id,
+          version: stock.version,
+          effectiveAt: effectiveAt,
+          quantity: quantityValue,
+          notes: notesValue,
+        ),
+      );
+    });
+  }
+
+  Future<void> _showManualReturn() async {
+    if (_providers.isEmpty || _items.isEmpty) {
+      _message('Cadastre ao menos uma lavanderia e uma peça ativa.');
+      return;
+    }
+    int providerId = _providers.first.id;
+    DateTime effectiveAt = DateTime.now();
+    final Map<int, TextEditingController> clean = <int, TextEditingController>{
+      for (final LaundryItem item in _items) item.id: TextEditingController(),
+    };
+    final Map<int, TextEditingController> dirty = <int, TextEditingController>{
+      for (final LaundryItem item in _items) item.id: TextEditingController(),
+    };
+    final TextEditingController notes = TextEditingController();
+    final bool? confirmed = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext context) => StatefulBuilder(
+        builder: (BuildContext context, StateSetter setDialogState) => AlertDialog(
+          title: const Text('Receber da lavanderia'),
+          content: SizedBox(
+            width: 620,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: <Widget>[
+                  DropdownButtonFormField<int>(
+                    initialValue: providerId,
+                    decoration: const InputDecoration(labelText: 'Lavandería'),
+                    items: _providers
+                        .map(
+                          (LaundryProvider provider) => DropdownMenuItem<int>(
+                            value: provider.id,
+                            child: Text(provider.name),
+                          ),
+                        )
+                        .toList(growable: false),
+                    onChanged: (int? value) => setDialogState(() {
+                      if (value != null) providerId = value;
+                    }),
+                  ),
+                  const SizedBox(height: 12),
+                  OutlinedButton.icon(
+                    key: const ValueKey('hotel-receive-date'),
+                    onPressed: () async {
+                      final DateTime now = DateTime.now();
+                      final DateTime? selected = await showDatePicker(
+                        context: context,
+                        initialDate: effectiveAt,
+                        firstDate: DateTime(2000),
+                        lastDate: DateTime(now.year, now.month, now.day),
+                        helpText: 'Fecha de recepción',
+                      );
+                      if (selected == null) return;
+                      setDialogState(() {
+                        effectiveAt = DateTime(
+                          selected.year,
+                          selected.month,
+                          selected.day,
+                          effectiveAt.hour,
+                          effectiveAt.minute,
+                        );
+                      });
+                    },
+                    icon: const Icon(Icons.calendar_today_outlined),
+                    label: Text('Fecha: ${_date(effectiveAt)}'),
+                  ),
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Registre las prendas limpias recibidas y las que quedan en el hotel para relavado.',
+                  ),
+                  const SizedBox(height: 12),
+                  ..._items.map(
+                    (LaundryItem item) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: Row(
+                        children: <Widget>[
+                          Expanded(child: Text(item.name)),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              key: ValueKey('hotel-receive-clean-${item.id}'),
+                              controller: clean[item.id],
+                              keyboardType: TextInputType.number,
+                              inputFormatters: <TextInputFormatter>[
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              decoration: const InputDecoration(
+                                labelText: 'Limpias',
+                                hintText: '0',
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: TextField(
+                              key: ValueKey('hotel-receive-dirty-${item.id}'),
+                              controller: dirty[item.id],
+                              keyboardType: TextInputType.number,
+                              inputFormatters: <TextInputFormatter>[
+                                FilteringTextInputFormatter.digitsOnly,
+                              ],
+                              decoration: const InputDecoration(
+                                labelText: 'Para relavado',
+                                hintText: '0',
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  TextField(
+                    controller: notes,
+                    maxLength: 500,
+                    decoration: const InputDecoration(
+                      labelText: 'Observaciones',
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          actions: <Widget>[
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancelar'),
+            ),
+            FilledButton(
+              key: const ValueKey('hotel-receive-save'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Registrar recepción'),
+            ),
+          ],
+        ),
+      ),
+    );
+    await Future<void>.delayed(const Duration(milliseconds: 250));
+    final List<HotelLaundryManualReturnLineInput> lines = _items
+        .map(
+          (LaundryItem item) => HotelLaundryManualReturnLineInput(
+            itemId: item.id,
+            acceptedClean: _quantity(clean[item.id]?.text),
+            returnedDirty: _quantity(dirty[item.id]?.text),
+          ),
+        )
+        .where((line) => line.acceptedClean + line.returnedDirty > 0)
+        .toList(growable: false);
+    for (final TextEditingController controller in <TextEditingController>[
+      ...clean.values,
+      ...dirty.values,
+    ]) {
+      controller.dispose();
+    }
+    final String noteValue = notes.text;
+    notes.dispose();
+    if (confirmed != true) return;
+    if (lines.isEmpty) {
+      _message('Informe ao menos uma quantidade positiva.');
+      return;
+    }
+    await _command(
+      () => widget.service.createManualReturn(
+        HotelLaundryManualReturnInput(
+          providerId: providerId,
+          effectiveAt: effectiveAt,
+          notes: noteValue,
+          lines: lines,
+        ),
+      ),
+    );
   }
 
   Future<void> _showReturn(HotelLaundryReturnSummary summary) async {
@@ -349,7 +922,7 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
                   (ProviderLaundryReturnLine line) => ListTile(
                     title: Text(line.itemName),
                     subtitle: Text(
-                      'Limpo: ${_number(line.declaredClean)} Â· Retido: ${_number(line.declaredRetained)}',
+                      'Limpo: ${_number(line.declaredClean)} · Retido: ${_number(line.declaredRetained)}',
                     ),
                   ),
                 )
@@ -364,7 +937,7 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
           FilledButton(
             key: const ValueKey('hotel-return-confirm'),
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Confirmar classificaÃ§Ã£o'),
+            child: const Text('Confirmar classificação'),
           ),
         ],
       ),
@@ -393,19 +966,34 @@ class _HotelLaundryPageState extends State<HotelLaundryPage> {
     );
   }
 
+  Future<void> _retryDocumentSubmission(
+    HotelLaundryDocumentSummary document,
+  ) => _command(
+    () => widget.service.submitDocument(
+      id: document.id,
+      version: document.version,
+    ),
+  );
+
   Future<void> _command(Future<void> Function() action) async {
     setState(() => _saving = true);
     try {
       await action();
       if (!mounted) return;
-      _message('OperaÃ§Ã£o concluÃ­da.');
+      await AppAlerts.success(
+        context,
+        title: 'Operação concluída',
+        message: 'A operação foi registrada corretamente.',
+      );
       await _load();
     } on Object catch (error) {
       if (!mounted) return;
-      _message(
-        error is ApiException
+      await AppAlerts.error(
+        context,
+        title: 'Não foi possível registrar',
+        message: error is ApiException
             ? error.message
-            : 'NÃ£o foi possÃ­vel concluir a operaÃ§Ã£o.',
+            : 'Não foi possível concluir a operação.',
       );
     } finally {
       if (mounted) setState(() => _saving = false);
@@ -717,6 +1305,13 @@ String _number(double value) => value == value.roundToDouble()
     : value.toStringAsFixed(3).replaceFirst(RegExp(r'0+$'), '');
 String _dateTime(DateTime value) =>
     '${value.toLocal().day.toString().padLeft(2, '0')}/${value.toLocal().month.toString().padLeft(2, '0')}/${value.toLocal().year}';
+String _date(DateTime value) => _dateTime(value);
+String _inventoryAction(HotelLaundryInventoryMovement movement) =>
+    switch (movement.movementType) {
+      'ITEM_RETIREMENT' || 'WITHDRAWAL' => 'Dado de baja',
+      'ADJUSTMENT' when movement.quantity < 0 => 'Dado de baja',
+      _ => 'Agregado',
+    };
 String _documentType(String value) =>
     value == 'REWASH_DISPATCH' ? 'Relavagem' : 'Envio';
 String _status(String value) => switch (value) {

@@ -11,6 +11,14 @@ abstract interface class HotelLaundryAppService {
   );
   Future<List<LaundryItem>> listItems();
   Future<HotelLaundryStockTotals> dashboard({int? providerId});
+  Future<List<HotelLaundryOperationalDailyRow>> operationalSummary();
+  Future<List<HotelLaundryInventoryMovement>> listInventoryMovements({
+    required DateTime date,
+  });
+  Future<HotelLaundryStockRow?> getAvailableStock({required int itemId});
+  Future<void> createOpeningStock(HotelLaundryOpeningStockInput input);
+  Future<void> retireInventoryItem(HotelLaundryItemRetirementInput input);
+  Future<void> createManualReturn(HotelLaundryManualReturnInput input);
   Future<HotelLaundryResultPage<HotelLaundryDocumentSummary>> listDocuments({
     int? providerId,
     String? status,

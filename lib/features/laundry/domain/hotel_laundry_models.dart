@@ -45,6 +45,56 @@ final class HotelLaundryStockTotals {
       );
 }
 
+final class HotelLaundryOperationalDailyRow {
+  const HotelLaundryOperationalDailyRow({
+    required this.date,
+    required this.itemId,
+    required this.itemName,
+    required this.unitType,
+    required this.sentQuantity,
+    required this.receivedQuantity,
+    required this.rewashedQuantity,
+  });
+
+  final DateTime date;
+  final int itemId;
+  final String itemName;
+  final String unitType;
+  final double sentQuantity;
+  final double receivedQuantity;
+  final double rewashedQuantity;
+
+  factory HotelLaundryOperationalDailyRow.fromJson(Map<String, dynamic> json) =>
+      HotelLaundryOperationalDailyRow(
+        date: _date(json, 'date'),
+        itemId: _int(json, 'itemId'),
+        itemName: _string(json, 'itemName'),
+        unitType: _string(json, 'unitType'),
+        sentQuantity: _double(json, 'sentQuantity'),
+        receivedQuantity: _double(json, 'receivedQuantity'),
+        rewashedQuantity: _double(json, 'rewashedQuantity'),
+      );
+}
+
+final class HotelLaundryStockRow {
+  const HotelLaundryStockRow({
+    required this.itemId,
+    required this.quantity,
+    required this.version,
+  });
+
+  final int itemId;
+  final double quantity;
+  final int version;
+
+  factory HotelLaundryStockRow.fromJson(Map<String, dynamic> json) =>
+      HotelLaundryStockRow(
+        itemId: _int(json, 'itemId'),
+        quantity: _double(json, 'quantity'),
+        version: _int(json, 'version'),
+      );
+}
+
 final class HotelLaundryDocumentSummary {
   const HotelLaundryDocumentSummary({
     required this.id,
@@ -132,6 +182,89 @@ final class HotelLaundryDispatchLineInput {
   };
 }
 
+final class HotelLaundryOpeningStockInput {
+  const HotelLaundryOpeningStockInput({
+    required this.version,
+    required this.effectiveAt,
+    this.notes,
+    required this.lines,
+  });
+
+  final int version;
+  final DateTime effectiveAt;
+  final String? notes;
+  final List<HotelLaundryDispatchLineInput> lines;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'version': version,
+    'effectiveAt': effectiveAt.toUtc().toIso8601String(),
+    'notes': _trimmed(notes),
+    'lines': lines
+        .map((HotelLaundryDispatchLineInput line) => line.toJson())
+        .toList(growable: false),
+  };
+}
+
+final class HotelLaundryInventoryMovement {
+  const HotelLaundryInventoryMovement({
+    required this.id,
+    required this.effectiveAt,
+    required this.itemId,
+    required this.itemName,
+    required this.quantity,
+    required this.movementType,
+    this.notes,
+    required this.createdAt,
+    required this.createdBy,
+  });
+
+  final int id;
+  final DateTime effectiveAt;
+  final int itemId;
+  final String itemName;
+  final double quantity;
+  final String movementType;
+  final String? notes;
+  final DateTime createdAt;
+  final String createdBy;
+
+  factory HotelLaundryInventoryMovement.fromJson(Map<String, dynamic> json) =>
+      HotelLaundryInventoryMovement(
+        id: _int(json, 'id'),
+        effectiveAt: _date(json, 'effectiveAt'),
+        itemId: _int(json, 'itemId'),
+        itemName: _string(json, 'itemName'),
+        quantity: _double(json, 'quantity'),
+        movementType: _string(json, 'movementType'),
+        notes: _trimmed(json['notes']?.toString()),
+        createdAt: _date(json, 'createdAt'),
+        createdBy: _string(json, 'createdBy'),
+      );
+}
+
+final class HotelLaundryItemRetirementInput {
+  const HotelLaundryItemRetirementInput({
+    required this.itemId,
+    required this.version,
+    required this.effectiveAt,
+    required this.quantity,
+    required this.notes,
+  });
+
+  final int itemId;
+  final int version;
+  final DateTime effectiveAt;
+  final double quantity;
+  final String notes;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'version': version,
+    'effectiveAt': effectiveAt.toUtc().toIso8601String(),
+    'quantity': quantity,
+    'notes': notes.trim(),
+  };
+}
+
 final class HotelLaundryDispatchInput {
   const HotelLaundryDispatchInput({
     required this.version,
@@ -196,6 +329,54 @@ final class HotelLaundryReturnConfirmationInput {
     'lines': lines
         .map((HotelLaundryReturnClassificationInput line) => line.toJson())
         .toList(growable: false),
+  };
+}
+
+final class HotelLaundryManualReturnLineInput {
+  const HotelLaundryManualReturnLineInput({
+    required this.itemId,
+    required this.acceptedClean,
+    required this.returnedDirty,
+  });
+
+  final int itemId;
+  final double acceptedClean;
+  final double returnedDirty;
+
+  Map<String, Object> toJson() => <String, Object>{
+    'itemId': itemId,
+    'declaredClean': acceptedClean + returnedDirty,
+    'declaredRetained': 0,
+    'acceptedClean': acceptedClean,
+    'returnedDirty': returnedDirty,
+    'retained': 0,
+    'missing': 0,
+    'damaged': 0,
+  };
+}
+
+final class HotelLaundryManualReturnInput {
+  const HotelLaundryManualReturnInput({
+    required this.providerId,
+    required this.effectiveAt,
+    this.notes,
+    required this.lines,
+  });
+
+  final int providerId;
+  final DateTime effectiveAt;
+  final String? notes;
+  final List<HotelLaundryManualReturnLineInput> lines;
+
+  Map<String, Object?> toJson() => <String, Object?>{
+    'version': 0,
+    'providerId': providerId,
+    'effectiveAt': effectiveAt.toUtc().toIso8601String(),
+    'notes': _trimmed(notes),
+    'correctionNotes': lines.any((line) => line.returnedDirty > 0)
+        ? 'Registro manual de prendas recibidas para relavado'
+        : null,
+    'lines': lines.map((line) => line.toJson()).toList(growable: false),
   };
 }
 

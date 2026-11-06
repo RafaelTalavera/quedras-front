@@ -310,7 +310,7 @@ void main() {
     expect(service.listCalls, 2);
   });
 
-  testWidgets('administra listado, bÃºsqueda y filtro de artÃ­culos', (
+  testWidgets('administra listado, búsqueda y filtro de artículos', (
     WidgetTester tester,
   ) async {
     final _FakeLaundryService service = _FakeLaundryService(
@@ -318,8 +318,8 @@ void main() {
     );
     await _pumpLaundry(tester, service);
     await _openItems(tester);
-    expect(find.text('Toalla de baÃ±o'), findsOneWidget);
-    expect(find.text('SÃ¡bana individual'), findsOneWidget);
+    expect(find.text('Toalla de baño'), findsOneWidget);
+    expect(find.text('Sábana individual'), findsOneWidget);
     expect(find.text('Inativo'), findsOneWidget);
 
     await tester.enterText(
@@ -327,8 +327,8 @@ void main() {
       'toalla',
     );
     await tester.pump();
-    expect(find.text('Toalla de baÃ±o'), findsOneWidget);
-    expect(find.text('SÃ¡bana individual'), findsNothing);
+    expect(find.text('Toalla de baño'), findsOneWidget);
+    expect(find.text('Sábana individual'), findsNothing);
 
     await tester.enterText(
       find.byKey(const ValueKey<String>('laundry-item-search')),
@@ -341,11 +341,11 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('Inativos').last);
     await tester.pumpAndSettle();
-    expect(find.text('Toalla de baÃ±o'), findsNothing);
-    expect(find.text('SÃ¡bana individual'), findsOneWidget);
+    expect(find.text('Toalla de baño'), findsNothing);
+    expect(find.text('Sábana individual'), findsOneWidget);
   });
 
-  testWidgets('valida y crea un artÃ­culo evitando doble envÃ­o', (
+  testWidgets('valida y crea un artículo evitando doble envío', (
     WidgetTester tester,
   ) async {
     final Completer<void> gate = Completer<void>();
@@ -358,7 +358,7 @@ void main() {
     expect(tester.widget<FilledButton>(save).onPressed, isNull);
     await tester.enterText(
       find.byKey(const ValueKey<String>('laundry-item-name')),
-      '  Alfombra de baÃ±o  ',
+      '  Alfombra de baño  ',
     );
     await tester.enterText(
       find.byKey(const ValueKey<String>('laundry-item-price')),
@@ -375,16 +375,14 @@ void main() {
     await tester.pump();
     await tester.tap(save, warnIfMissed: false);
     expect(service.createCalls, 1);
-    expect(service.lastItem?.name, 'Alfombra de baÃ±o');
+    expect(service.lastItem?.name, 'Alfombra de baño');
     expect(service.lastItem?.currentUnitPrice, 8.5);
     gate.complete();
     await tester.pumpAndSettle();
     expect(find.text('Item criado.'), findsOneWidget);
   });
 
-  testWidgets('edita y confirma la desactivaciÃ³n', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('edita y confirma la desactivación', (WidgetTester tester) async {
     final _FakeLaundryService service = _FakeLaundryService(
       items: <LaundryItem>[_activeItem],
     );
@@ -437,9 +435,7 @@ void main() {
     );
   });
 
-  testWidgets('cierra ediciÃ³n y recarga ante 404', (
-    WidgetTester tester,
-  ) async {
+  testWidgets('cierra edición y recarga ante 404', (WidgetTester tester) async {
     final _FakeLaundryService service = _FakeLaundryService(
       items: <LaundryItem>[_activeItem],
       itemError: const ApiException(
@@ -465,7 +461,7 @@ void main() {
     expect(find.textContaining('não existe mais'), findsOneWidget);
   });
 
-  testWidgets('nuevo envÃ­o muestra exclusivamente artÃ­culos activos', (
+  testWidgets('nuevo envío muestra exclusivamente artículos activos', (
     WidgetTester tester,
   ) async {
     final _FakeLaundryService service = _FakeLaundryService(
@@ -474,11 +470,11 @@ void main() {
     await _pumpLaundry(tester, service);
     await tester.tap(find.textContaining('Novo env'));
     await tester.pumpAndSettle();
-    expect(find.text('Toalla de baÃ±o'), findsOneWidget);
-    expect(find.text('SÃ¡bana individual'), findsNothing);
+    expect(find.text('Toalla de baño'), findsOneWidget);
+    expect(find.text('Sábana individual'), findsNothing);
   });
 
-  testWidgets('cantidad inicia en cero y responde a los botones mÃ¡s y menos', (
+  testWidgets('cantidad inicia en cero y responde a los botones más y menos', (
     WidgetTester tester,
   ) async {
     final _FakeLaundryService service = _FakeLaundryService(
@@ -561,7 +557,7 @@ void main() {
     expect(tester.widget<TextFormField>(quantity).controller?.text, '0');
   });
 
-  testWidgets('nuevo envÃ­o permite seleccionar una fecha anterior', (
+  testWidgets('nuevo envío permite seleccionar una fecha anterior', (
     WidgetTester tester,
   ) async {
     final _FakeLaundryService service = _FakeLaundryService(
@@ -707,14 +703,14 @@ void main() {
 
 const LaundryItem _activeItem = LaundryItem(
   id: 1,
-  name: 'Toalla de baÃ±o',
+  name: 'Toalla de baño',
   unitType: LaundryUnitType.piece,
   currentUnitPrice: 4.5,
   active: true,
 );
 const LaundryItem _inactiveItem = LaundryItem(
   id: 2,
-  name: 'SÃ¡bana individual',
+  name: 'Sábana individual',
   unitType: LaundryUnitType.piece,
   currentUnitPrice: 7,
   active: false,
