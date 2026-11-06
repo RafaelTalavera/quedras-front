@@ -19,7 +19,8 @@ El frontend solo configura la URL HTTP del backend por:
 - `Configuracoes`
 
 Notas de alcance:
-- La UI visible al operador sale en portugues de Brasil (`pt-BR`).
+- La UI visible al operador usa siempre portugues de Brasil (`pt-BR`) como idioma predeterminado y unico. Esto incluye etiquetas, validaciones, errores, confirmaciones, documentos y reportes generados por el frontend.
+- El codigo, las pruebas, los recursos y la documentacion se mantienen en UTF-8 para preservar correctamente los acentos y caracteres del portugues.
 - `Quadras` concentra agenda diaria y nueva reserva dentro del mismo modulo.
 - `Massagens` y `Tours e Viagens` quedaron preparados en frontend y pendientes de contrato backend dedicado.
 

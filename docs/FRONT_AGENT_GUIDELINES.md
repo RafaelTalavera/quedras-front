@@ -15,6 +15,14 @@
 - Si el usuario pide agregar algo nuevo, eso no autoriza a quitar o sustituir lo ya existente.
 - Si el usuario pide mover una seccion o cambiar una visualizacion, el agente debe asumir primero una solucion conservadora que mantenga las acciones actuales, salvo instruccion explicita en sentido contrario.
 
+## Regla critica de idioma y codificacion
+- Toda salida visible del software debe estar redactada en portugues de Brasil (`pt-BR`), que es el idioma predeterminado y unico de la interfaz.
+- Esta regla incluye titulos, etiquetas, botones, ayudas, validaciones, mensajes de error, confirmaciones, estados, documentos y reportes generados por el frontend.
+- Los nombres tecnicos internos, contratos HTTP y valores de enums enviados al backend no deben traducirse salvo que exista un cambio coordinado de contrato.
+- Los archivos de codigo, pruebas, recursos y documentacion deben conservarse en UTF-8 para representar correctamente caracteres como `ã`, `ç`, `á`, `é`, `í`, `ó` y `ú`.
+- Antes de cerrar un cambio con textos visibles, se debe comprobar que no existan secuencias de codificacion corrupta como `Ã`, `Â` o `�` en los archivos modificados.
+- Las pruebas de UI deben usar y validar el texto `pt-BR` correcto; no deben normalizar, omitir ni reproducir caracteres corruptos.
+
 ## Regla de consulta obligatoria
 - Consultar antes de cambiar acciones principales del `hero`, botones de navegacion, CTA, formularios, filtros, tabs, modales o accesos operativos.
 - Consultar antes de tocar textos funcionales si el usuario no pidio copywriting.
