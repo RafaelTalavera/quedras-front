@@ -52,9 +52,12 @@ void main() {
 
     await tester.tap(find.byKey(const Key('maintenance-notification-bell')));
     await tester.pumpAndSettle();
+    expect(find.text('Seus pendentes'), findsOneWidget);
+    expect(find.text('Marcar tudo como lido'), findsOneWidget);
     expect(find.text('Manutencao atrasada'), findsOneWidget);
+    expect(find.text('Ver ordem'), findsOneWidget);
 
-    await tester.tap(find.text('Manutencao atrasada'));
+    await tester.tap(find.text('Ver ordem'));
     await tester.pumpAndSettle();
 
     expect(service.readIds, <int>[7]);
@@ -114,6 +117,64 @@ void main() {
     expect(opened?.id, 8);
     expect(opened?.orderId, 11);
     expect(service.readIds, contains(8));
+  });
+
+  testWidgets('marca todos los pendientes como leidos desde la bandeja', (
+    WidgetTester tester,
+  ) async {
+    final _NotificationService service = _NotificationService();
+    service.notifications.add(
+      MaintenanceNotificationModel(
+        id: 8,
+        orderId: 11,
+        notificationType: MaintenanceNotificationType.dueToStart,
+        status: MaintenanceNotificationStatus.unread,
+        title: 'Ordem pronta para iniciar',
+        body: 'Quarto 104 - Revisar tomada',
+        dueAt: DateTime(2026, 10, 29, 9),
+        readAt: null,
+        resolvedAt: null,
+        dismissedAt: null,
+        createdAt: DateTime(2026, 10, 29, 9, 0, 1),
+      ),
+    );
+    final StreamController<ScheduleSyncEvent> syncEvents =
+        StreamController<ScheduleSyncEvent>.broadcast();
+    addTearDown(syncEvents.close);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: MaintenanceNotificationBell(
+            service: service,
+            syncEvents: syncEvents.stream,
+            onOpenNotification: (_) {},
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byKey(const Key('maintenance-notification-bell')));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byKey(const ValueKey<String>('notification-menu-7')),
+      findsOneWidget,
+    );
+    expect(
+      find.byKey(const ValueKey<String>('notification-menu-8')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey<String>('unread-dot-7')), findsOneWidget);
+    expect(find.byKey(const ValueKey<String>('unread-dot-8')), findsOneWidget);
+
+    await tester.tap(find.byKey(const Key('mark-all-notifications-read')));
+    await tester.pumpAndSettle();
+
+    expect(service.readIds, <int>[7, 8]);
+    expect(find.text('Marcar tudo como lido'), findsNothing);
+    expect(find.byKey(const ValueKey<String>('unread-dot-7')), findsNothing);
+    expect(find.byKey(const ValueKey<String>('unread-dot-8')), findsNothing);
   });
 }
 

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/sync/schedule_sync_event.dart';
+import '../../../core/theme/costa_norte_brand.dart';
 import '../application/maintenance_app_service.dart';
 import '../domain/maintenance_models.dart';
 
@@ -222,6 +223,8 @@ class _MaintenanceNotificationDialogState
   List<MaintenanceNotificationModel> _items =
       const <MaintenanceNotificationModel>[];
   final Set<int> _busyIds = <int>{};
+  final Set<int> _locallyReadIds = <int>{};
+  bool _markingAllRead = false;
   StreamSubscription<ScheduleSyncEvent>? _syncSubscription;
 
   @override
@@ -274,6 +277,7 @@ class _MaintenanceNotificationDialogState
     try {
       if (notification.status == MaintenanceNotificationStatus.unread) {
         await widget.service.markNotificationRead(notification.id);
+        _locallyReadIds.add(notification.id);
       }
       if (mounted) Navigator.of(context).pop(notification);
     } catch (error) {
@@ -283,6 +287,54 @@ class _MaintenanceNotificationDialogState
           _error = error.toString().replaceFirst('Bad state: ', '');
         });
       }
+    }
+  }
+
+  bool _isUnread(MaintenanceNotificationModel notification) {
+    return notification.status == MaintenanceNotificationStatus.unread &&
+        !_locallyReadIds.contains(notification.id);
+  }
+
+  Future<void> _markRead(MaintenanceNotificationModel notification) async {
+    if (_busyIds.contains(notification.id) || !_isUnread(notification)) return;
+    setState(() => _busyIds.add(notification.id));
+    try {
+      await widget.service.markNotificationRead(notification.id);
+      if (mounted) {
+        setState(() {
+          _busyIds.remove(notification.id);
+          _locallyReadIds.add(notification.id);
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() {
+          _busyIds.remove(notification.id);
+          _error = error.toString().replaceFirst('Bad state: ', '');
+        });
+      }
+    }
+  }
+
+  Future<void> _markAllRead() async {
+    if (_markingAllRead) return;
+    final List<MaintenanceNotificationModel> unreadItems = _items
+        .where(_isUnread)
+        .toList();
+    if (unreadItems.isEmpty) return;
+    setState(() {
+      _markingAllRead = true;
+      _error = null;
+    });
+    try {
+      for (final MaintenanceNotificationModel item in unreadItems) {
+        await widget.service.markNotificationRead(item.id);
+        _locallyReadIds.add(item.id);
+      }
+    } catch (error) {
+      _error = error.toString().replaceFirst('Bad state: ', '');
+    } finally {
+      if (mounted) setState(() => _markingAllRead = false);
     }
   }
 
@@ -314,89 +366,220 @@ class _MaintenanceNotificationDialogState
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('Notificacoes de manutencao'),
-      content: SizedBox(
-        width: 560,
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : Column(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  if (_error != null)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
+    final Size screen = MediaQuery.sizeOf(context);
+    return Dialog(
+      insetPadding: const EdgeInsets.all(20),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: 680,
+          maxHeight: screen.height * 0.86,
+        ),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 24, 12, 12),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: <Widget>[
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: <Widget>[
+                    Expanded(
                       child: Text(
-                        _error!,
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
+                        'Seus pendentes',
+                        style: Theme.of(context).textTheme.headlineSmall,
+                      ),
+                    ),
+                    if (_items.any(_isUnread))
+                      TextButton(
+                        key: const Key('mark-all-notifications-read'),
+                        onPressed: _markingAllRead ? null : _markAllRead,
+                        child: _markingAllRead
+                            ? const SizedBox.square(
+                                dimension: 18,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text('Marcar tudo como lido'),
+                      ),
+                    IconButton(
+                      tooltip: 'Fechar',
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close_rounded),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              if (_error != null)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+                  child: Row(
+                    children: <Widget>[
+                      Expanded(
+                        child: Text(
+                          _error!,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                          ),
                         ),
                       ),
-                    ),
-                  if (_items.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 30),
-                      child: Text('Nenhuma notificacao disponivel.'),
-                    )
-                  else
-                    Flexible(
-                      child: ListView.separated(
-                        shrinkWrap: true,
-                        itemCount: _items.length,
-                        separatorBuilder: (_, _) => const Divider(height: 1),
-                        itemBuilder: (BuildContext context, int index) {
-                          final MaintenanceNotificationModel item =
-                              _items[index];
-                          final bool busy = _busyIds.contains(item.id);
-                          return ListTile(
-                            key: ValueKey<String>(
-                              'maintenance-notification-${item.id}',
+                      TextButton(
+                        onPressed: _load,
+                        child: const Text('Tentar novamente'),
+                      ),
+                    ],
+                  ),
+                ),
+              Flexible(
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: CostaNorteBrand.mist,
+                    borderRadius: BorderRadius.circular(22),
+                  ),
+                  child: _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _items.isEmpty
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 48),
+                            child: Text('Nenhum pendente no momento.'),
+                          ),
+                        )
+                      : ListView.separated(
+                          shrinkWrap: true,
+                          padding: const EdgeInsets.symmetric(vertical: 10),
+                          itemCount: _items.length,
+                          separatorBuilder: (_, _) => const Divider(
+                            height: 1,
+                            indent: 24,
+                            endIndent: 24,
+                          ),
+                          itemBuilder: (BuildContext context, int index) =>
+                              _buildPendingItem(_items[index]),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPendingItem(MaintenanceNotificationModel item) {
+    final bool busy = _busyIds.contains(item.id);
+    final bool unread = _isUnread(item);
+    final bool overdue =
+        item.notificationType == MaintenanceNotificationType.overdue;
+    final Color accent = overdue
+        ? CostaNorteBrand.error
+        : CostaNorteBrand.royalBlue;
+    return Padding(
+      key: ValueKey<String>('maintenance-notification-${item.id}'),
+      padding: const EdgeInsets.fromLTRB(24, 20, 16, 20),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: <Widget>[
+          Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: accent,
+              borderRadius: BorderRadius.circular(15),
+            ),
+            child: Icon(
+              overdue ? Icons.warning_amber_rounded : Icons.schedule_rounded,
+              color: Colors.white,
+            ),
+          ),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: <Widget>[
+                    if (unread) ...<Widget>[
+                      Container(
+                        key: ValueKey<String>('unread-dot-${item.id}'),
+                        width: 10,
+                        height: 10,
+                        margin: const EdgeInsets.only(top: 6, right: 10),
+                        decoration: const BoxDecoration(
+                          color: CostaNorteBrand.error,
+                          shape: BoxShape.circle,
+                        ),
+                      ),
+                    ],
+                    Expanded(
+                      child: Text(
+                        item.title,
+                        style: Theme.of(context).textTheme.titleMedium
+                            ?.copyWith(
+                              fontWeight: unread
+                                  ? FontWeight.w800
+                                  : FontWeight.w600,
                             ),
-                            leading: Icon(
-                              item.notificationType ==
-                                      MaintenanceNotificationType.overdue
-                                  ? Icons.warning_amber_rounded
-                                  : Icons.schedule_rounded,
-                            ),
-                            title: Text(
-                              item.title,
-                              style: TextStyle(
-                                fontWeight:
-                                    item.status ==
-                                        MaintenanceNotificationStatus.unread
-                                    ? FontWeight.w700
-                                    : FontWeight.w500,
-                              ),
-                            ),
-                            subtitle: Text(item.body),
-                            onTap: busy ? null : () => _open(item),
-                            trailing: IconButton(
-                              tooltip: 'Descartar',
-                              onPressed: busy ? null : () => _dismiss(item),
-                              icon: busy
-                                  ? const SizedBox.square(
-                                      dimension: 18,
-                                      child: CircularProgressIndicator(
-                                        strokeWidth: 2,
-                                      ),
-                                    )
-                                  : const Icon(Icons.close_rounded),
-                            ),
-                          );
-                        },
                       ),
                     ),
-                ],
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(item.body),
+                const SizedBox(height: 14),
+                OutlinedButton(
+                  onPressed: busy ? null : () => _open(item),
+                  child: const Text('Ver ordem'),
+                ),
+              ],
+            ),
+          ),
+          if (busy)
+            const Padding(
+              padding: EdgeInsets.all(12),
+              child: SizedBox.square(
+                dimension: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
               ),
+            )
+          else
+            PopupMenuButton<_NotificationAction>(
+              key: ValueKey<String>('notification-menu-${item.id}'),
+              tooltip: 'Mais opções',
+              onSelected: (_NotificationAction action) {
+                switch (action) {
+                  case _NotificationAction.open:
+                    unawaited(_open(item));
+                  case _NotificationAction.markRead:
+                    unawaited(_markRead(item));
+                  case _NotificationAction.dismiss:
+                    unawaited(_dismiss(item));
+                }
+              },
+              itemBuilder: (BuildContext context) =>
+                  <PopupMenuEntry<_NotificationAction>>[
+                    const PopupMenuItem<_NotificationAction>(
+                      value: _NotificationAction.open,
+                      child: Text('Ver ordem'),
+                    ),
+                    if (unread)
+                      const PopupMenuItem<_NotificationAction>(
+                        value: _NotificationAction.markRead,
+                        child: Text('Marcar como lido'),
+                      ),
+                    const PopupMenuItem<_NotificationAction>(
+                      value: _NotificationAction.dismiss,
+                      child: Text('Descartar'),
+                    ),
+                  ],
+            ),
+        ],
       ),
-      actions: <Widget>[
-        if (_error != null)
-          TextButton(onPressed: _load, child: const Text('Tentar novamente')),
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Fechar'),
-        ),
-      ],
     );
   }
 }
+
+enum _NotificationAction { open, markRead, dismiss }
