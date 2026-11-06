@@ -85,6 +85,8 @@ const List<String> _courtTimeSlots = <String>[
   '21:00',
   '21:30',
   '22:00',
+  '22:30',
+  '23:00',
 ];
 
 enum TennisRentalSection { selectedDay, monthlyAgenda, summary }
@@ -1158,54 +1160,62 @@ class _TennisRentalPageState extends State<TennisRentalPage>
             child: Center(child: CircularProgressIndicator()),
           )
         else
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: SizedBox(
-              width: 1040,
-              child: Column(
-                children: <Widget>[
-                  const _TimelineHourHeader(),
-                  ...days.map((DateTime day) {
-                    final List<CourtBooking> bookings = _bookings
-                        .where(
-                          (CourtBooking item) =>
-                              _sameDay(item.bookingDate, day) &&
-                              _matchesTimelineFilter(item),
-                        )
-                        .toList();
-                    return _TimelineDayRow(
-                      day: day,
-                      selected: _sameDay(day, _selectedDate),
-                      bookings: bookings,
-                      onDayTap: () async {
-                        setState(() => _selectedDate = day);
-                        onDialogRefresh();
-                        await _load(showLoading: false);
-                        onDialogRefresh();
-                      },
-                      onBookingTap: _openBookingActionDialog,
-                      onBookingMove: _openDraggedBookingEdit,
-                      onEmptySlotDoubleTap: (int startMinutes) {
-                        final TimeOfDay start = TimeOfDay(
-                          hour: startMinutes ~/ 60,
-                          minute: startMinutes % 60,
-                        );
-                        unawaited(
-                          _openCreateDialog(
-                            proposedDate: day,
-                            proposedStartTime: start,
-                            proposedEndTime: TimeOfDay(
-                              hour: (startMinutes + 60) ~/ 60,
-                              minute: (startMinutes + 60) % 60,
+          LayoutBuilder(
+            builder: (BuildContext context, BoxConstraints constraints) {
+              const double labelWidth = 108;
+              final double timelineWidth = constraints.maxWidth - labelWidth;
+              return SizedBox(
+                width: constraints.maxWidth,
+                child: Column(
+                  children: <Widget>[
+                    _TimelineHourHeader(
+                      labelWidth: labelWidth,
+                      timelineWidth: timelineWidth,
+                    ),
+                    ...days.map((DateTime day) {
+                      final List<CourtBooking> bookings = _bookings
+                          .where(
+                            (CourtBooking item) =>
+                                _sameDay(item.bookingDate, day) &&
+                                _matchesTimelineFilter(item),
+                          )
+                          .toList();
+                      return _TimelineDayRow(
+                        labelWidth: labelWidth,
+                        timelineWidth: timelineWidth,
+                        day: day,
+                        selected: _sameDay(day, _selectedDate),
+                        bookings: bookings,
+                        onDayTap: () async {
+                          setState(() => _selectedDate = day);
+                          onDialogRefresh();
+                          await _load(showLoading: false);
+                          onDialogRefresh();
+                        },
+                        onBookingTap: _openBookingActionDialog,
+                        onBookingMove: _openDraggedBookingEdit,
+                        onEmptySlotDoubleTap: (int startMinutes) {
+                          final TimeOfDay start = TimeOfDay(
+                            hour: startMinutes ~/ 60,
+                            minute: startMinutes % 60,
+                          );
+                          unawaited(
+                            _openCreateDialog(
+                              proposedDate: day,
+                              proposedStartTime: start,
+                              proposedEndTime: TimeOfDay(
+                                hour: (startMinutes + 60) ~/ 60,
+                                minute: (startMinutes + 60) % 60,
+                              ),
                             ),
-                          ),
-                        );
-                      },
-                    );
-                  }),
-                ],
-              ),
-            ),
+                          );
+                        },
+                      );
+                    }),
+                  ],
+                ),
+              );
+            },
           ),
       ],
     );
@@ -2868,10 +2878,13 @@ class _TimelineLegend extends StatelessWidget {
 }
 
 class _TimelineHourHeader extends StatelessWidget {
-  const _TimelineHourHeader();
+  const _TimelineHourHeader({
+    required this.labelWidth,
+    required this.timelineWidth,
+  });
 
-  static const double _labelWidth = 108;
-  static const double _timelineWidth = 932;
+  final double labelWidth;
+  final double timelineWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -2879,12 +2892,17 @@ class _TimelineHourHeader extends StatelessWidget {
       height: 34,
       child: Row(
         children: <Widget>[
-          const SizedBox(width: _labelWidth),
+          SizedBox(width: labelWidth),
           SizedBox(
-            width: _timelineWidth,
+            width: timelineWidth,
             child: Stack(
               children: List<Widget>.generate(18, (int index) {
-                final double left = index * (_timelineWidth / 17);
+                final double left = index * (timelineWidth / 17);
+                final bool showLabel =
+                    timelineWidth >= 760 || index.isEven || index == 17;
+                if (!showLabel) {
+                  return const SizedBox.shrink();
+                }
                 return Positioned(
                   left: index == 17 ? left - 34 : left,
                   top: 4,
@@ -2904,6 +2922,8 @@ class _TimelineHourHeader extends StatelessWidget {
 
 class _TimelineDayRow extends StatelessWidget {
   const _TimelineDayRow({
+    required this.labelWidth,
+    required this.timelineWidth,
     required this.day,
     required this.selected,
     required this.bookings,
@@ -2913,11 +2933,11 @@ class _TimelineDayRow extends StatelessWidget {
     required this.onEmptySlotDoubleTap,
   });
 
-  static const double _labelWidth = 108;
-  static const double _timelineWidth = 932;
   static const int _openingMinutes = 6 * 60;
   static const int _totalMinutes = 17 * 60;
 
+  final double labelWidth;
+  final double timelineWidth;
   final DateTime day;
   final bool selected;
   final List<CourtBooking> bookings;
@@ -2940,7 +2960,7 @@ class _TimelineDayRow extends StatelessWidget {
       child: Row(
         children: <Widget>[
           SizedBox(
-            width: _labelWidth,
+            width: labelWidth,
             child: InkWell(
               onTap: onDayTap,
               borderRadius: BorderRadius.circular(12),
@@ -2964,7 +2984,7 @@ class _TimelineDayRow extends StatelessWidget {
             ),
           ),
           SizedBox(
-            width: _timelineWidth,
+            width: timelineWidth,
             height: 52,
             child: Builder(
               builder: (BuildContext timelineContext) {
@@ -2986,7 +3006,7 @@ class _TimelineDayRow extends StatelessWidget {
                             _openingMinutes + _totalMinutes - duration;
                         final int rawMinutes =
                             _openingMinutes +
-                            (localX / _timelineWidth * _totalMinutes).round();
+                            (localX / timelineWidth * _totalMinutes).round();
                         final int snappedMinutes =
                             ((rawMinutes / 30).round() * 30).clamp(
                               _openingMinutes,
@@ -3020,7 +3040,7 @@ class _TimelineDayRow extends StatelessWidget {
                                     final int rawMinutes =
                                         _openingMinutes +
                                         (details.localPosition.dx /
-                                                _timelineWidth *
+                                                timelineWidth *
                                                 _totalMinutes)
                                             .round();
                                     final int snappedMinutes =
@@ -3045,7 +3065,7 @@ class _TimelineDayRow extends StatelessWidget {
                               ),
                               ...List<Widget>.generate(18, (int index) {
                                 return Positioned(
-                                  left: index * (_timelineWidth / 17),
+                                  left: index * (timelineWidth / 17),
                                   top: 0,
                                   bottom: 0,
                                   child: Container(
@@ -3076,10 +3096,10 @@ class _TimelineDayRow extends StatelessWidget {
       booking.endTime,
     ).clamp(_openingMinutes, _openingMinutes + _totalMinutes);
     final double left =
-        (start - _openingMinutes) / _totalMinutes * _timelineWidth;
-    final double width = ((end - start) / _totalMinutes * _timelineWidth).clamp(
+        (start - _openingMinutes) / _totalMinutes * timelineWidth;
+    final double width = ((end - start) / _totalMinutes * timelineWidth).clamp(
       4,
-      _timelineWidth - left,
+      timelineWidth - left,
     );
     final Color color = booking.status == CourtBookingStatus.cancelled
         ? CostaNorteBrand.error

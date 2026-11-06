@@ -72,6 +72,47 @@ void main() {
     },
   );
 
+  testWidgets('TennisRentalPage permite finalizar una reserva a las 23:00', (
+    WidgetTester tester,
+  ) async {
+    final _FakeCourtAppService service = _FakeCourtAppService();
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: TennisRentalPage(
+            courtAppService: service,
+            scheduleSyncService: ScheduleSyncService(
+              baseUrl: 'http://localhost/api/v1/',
+              authorizationHeaderProvider: () => null,
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('Lancar reserva'));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Fin'));
+    await tester.pumpAndSettle();
+    final Finder endTimeField = find.ancestor(
+      of: find.text('Fin'),
+      matching: find.byType(DropdownButtonFormField<String>),
+    );
+    final DropdownButton<String> endTimeDropdown = tester.widget(
+      find.descendant(
+        of: endTimeField,
+        matching: find.byType(DropdownButton<String>),
+      ),
+    );
+    final List<String?> endTimes = endTimeDropdown.items!
+        .map((DropdownMenuItem<String> item) => item.value)
+        .toList();
+
+    expect(endTimes, containsAll(<String>['22:30', '23:00']));
+  });
+
   testWidgets(
     'TennisRentalPage filtra la agenda al seleccionar una referencia de estado',
     (WidgetTester tester) async {
